@@ -1,0 +1,158 @@
+---
+name: brazil-payment-rails
+description: >-
+  Use when code accepts, sends, refunds or reconciles payments in Brazil, or integrates a
+  Brazilian PSP, acquirer or bank. Covers Pix (keys, static and dynamic QR codes, txid and
+  end-to-end id, devolucao and MED, over and under payment), boleto (linha digitavel,
+  registration, D+1 clearing, return files, late interest and fines), card installments and
+  receivables, CPF and CNPJ validation including the alphanumeric CNPJ from July 2026,
+  business-day calendars, electronic invoices (NF-e, NFS-e) and the Portuguese-to-English
+  vocabulary engineers meet in PSP docs. Triggers on a Pix or boleto feature, a Brazilian
+  checkout, an acquirer or PSP integration, a reconciliation of a Brazilian account. Not for tax
+  rates, IOF or fiscal rules, which an accountant confirms.
+license: MIT
+metadata:
+  author: Felipe Alvarenga
+  version: 0.1.0
+---
+
+# Brazil payment rails
+
+Brazil has three rails that behave differently: Pix settles in seconds and refunds by
+reference, boleto clears on the next business day through a return file, cards pay the merchant
+in monthly installments. Code written for US card flows gets all three wrong. This skill gives
+the engineering facts and the vocabulary; the fiscal and tax rules stay with an accountant.
+
+## When to use
+
+- A checkout, billing or payout feature for the Brazilian market.
+- An integration with a PSP, acquirer, bank or Banking-as-a-Service provider in Brazil.
+- Reconciliation of Pix, boleto or card settlements against a Brazilian account.
+- Validation or storage of CPF and CNPJ.
+- Issuing invoices (NF-e, NFS-e) after a sale.
+
+## Rules
+
+### Pix
+
+1. **Store the `txid` and the end-to-end id (`endToEndId`).** You choose the `txid` for a
+   dynamic charge (`cobrança`); the system assigns the 32-character end-to-end id starting
+   with `E` when the payment settles. Reconciliation and refunds use these, not the payer's
+   name or amount.
+2. **Dynamic QR for amounts you control; static QR only when you accept surprises.** A dynamic
+   QR (`cobrança imediata` or `com vencimento`) carries the amount, an expiry and your `txid`.
+   A static QR can be paid any number of times for any amount; if you use one, handle over,
+   under and repeated payments explicitly.
+3. **Pix is near-final but refundable.** A refund is a `devolução` against the original end-to-end
+   id, full or partial, typically allowed for up to 90 days (the PSP's rule applies). Fraud
+   disputes go through MED (Mecanismo Especial de Devolução), initiated by the payer's
+   institution; design for a received Pix to be clawed back under MED.
+4. **Receive through webhooks, confirm through the API.** The PSP notifies a received Pix;
+   confirm the charge status by `txid` before fulfilling (see `webhook-handling`). Expired
+   charges that still get paid must be refunded or reconciled by policy, not ignored.
+5. **Pix keys are addresses, not identities.** A key is a CPF, CNPJ, email, phone or random
+   key (EVP). Validate the format, resolve it through your PSP, and show the resolved name to the
+   user before sending. Never infer the account holder from the key format.
+
+### Boleto
+
+6. **A boleto is pending until the return confirms it.** Payment can happen at any bank; your
+   bank or PSP confirms it in the return file (CNAB 240 or 400) or by webhook, usually on the
+   next business day (D+1). Fulfil on confirmation, never on issuance.
+7. **Store `nosso número` and the `linha digitável`.** `Nosso número` is your reference at the
+   bank; the `linha digitável` (47 digits for bank boletos, 48 for utility `arrecadação`) is
+   what the payer types. Match the return by `nosso número`.
+8. **Due date, fine and interest are fields, computed by rule.** `Vencimento` follows the
+   business-day calendar. After it, `multa` (a one-time fine) and `juros de mora` (daily
+   interest) apply as the contract and the registration say; the bank enforces what was
+   registered. Partial payment, discount and expiry (`baixa`) are registration settings, not
+   runtime surprises.
+9. **Registered boletos have a lifecycle.** `registrado`, `pago`, `baixado`, `vencido`,
+   `protestado` where used. Model the states; the return file transitions them.
+
+### Cards and receivables
+
+10. **Installments are receivables, not cash.** `Parcelado sem juros` means the customer pays
+    in N installments and the merchant typically receives one installment per month (D+30 each),
+    minus MDR, unless it anticipates them for a fee (`antecipação de recebíveis`). The ledger
+    holds a receivable schedule per sale; cash arrives per installment.
+11. **Chargebacks and `estornos` are different.** An `estorno` is a refund you initiate; a
+    chargeback is a dispute through the card network with its own deadlines and evidence
+    rules. Separate states, separate accounts.
+
+### Identity, calendars, invoices
+
+12. **Validate CPF and CNPJ with the check-digit algorithm; mask them in UIs.** CPF has 11
+    digits. CNPJ has 14 positions and, for registrations issued from July 2026, the first 12
+    can contain letters; the check digits use the character's ASCII value minus 48. Do not
+    assume digits only, do not strip letters, do not store with formatting.
+13. **Use the national business-day calendar.** Boleto due dates, D+1 clearing and settlement
+    dates follow national bank holidays (the ANBIMA calendar is the common source). Pix runs
+    24/7 and ignores it. Keep the calendar as data with a yearly update.
+14. **Invoices are events with access keys.** NF-e (goods) and NFS-e (services, municipal,
+    moving to a national standard) are issued after a sale under the company's fiscal policy.
+    Store the XML and the 44-digit access key (`chave de acesso`), model cancellation windows,
+    and link the invoice to the payment and the ledger entry. The policy itself (when to issue,
+    which taxes) comes from the accountant.
+
+### Vocabulary
+
+| Portuguese | English | Note |
+|---|---|---|
+| cobrança | charge, payment request | Pix `cobrança` is a dynamic QR |
+| devolução | Pix refund | By end-to-end id |
+| estorno | refund, reversal | Cards and general use |
+| chargeback | chargeback | Network dispute |
+| compensação | clearing | Boleto D+1 |
+| baixa | write-off, settlement, cancellation | Boleto lifecycle |
+| nosso número | our number | Bank-side boleto reference |
+| linha digitável | typeable line | 47 or 48 digits |
+| vencimento | due date | Business days |
+| multa / juros de mora | fine / late interest | After due date |
+| antecipação de recebíveis | receivables anticipation | Fee to get installments early |
+| adquirente / subadquirente | acquirer / sub-acquirer (payment facilitator) | |
+| conciliação | reconciliation | |
+| arquivo retorno / remessa | return file / remittance file | CNAB 240, 400 |
+
+## How to apply
+
+1. For each rail in the change, write the state machine and the reference fields from the
+   rules above before touching the PSP SDK.
+2. Pick the PSP sandbox and record real payloads for: Pix paid, Pix expired then paid, Pix
+   refunded, boleto issued, boleto paid late, boleto expired, card installment sale, chargeback.
+3. Implement webhooks per `webhook-handling`, money per `money-arithmetic`, ledger per
+   `double-entry-ledger`, reconciliation per `reconciliation`.
+4. Add CPF and CNPJ validators with test vectors that include alphanumeric CNPJ.
+5. Load the business-day calendar as data and test a due date that falls on a holiday.
+
+## Tests the change must include
+
+- Pix: a paid webhook for an expired charge triggers the refund or the exception path, by
+  policy; a duplicate `endToEndId` is processed once; a partial `devolução` updates the
+  balance correctly.
+- Static QR: overpayment and double payment produce the configured outcome, never a silent
+  credit.
+- Boleto: issuance does not fulfil; the return file does; a payment after `vencimento`
+  includes `multa` and `juros` as registered; `nosso número` matching handles leading zeros.
+- Cards: a 10-installment sale creates a 10-row receivable schedule that sums to the net
+  amount; anticipation re-schedules it with the fee as a separate line.
+- CPF and CNPJ: valid and invalid check digits; alphanumeric CNPJ accepted; formatted input
+  normalized.
+- Calendar: a due date on a national holiday moves to the next business day.
+
+## Review checklist
+
+- Which reference ids are stored for each rail, and are they unique?
+- What happens when a Pix arrives for an expired or already paid charge?
+- Does anything fulfil a boleto before the return?
+- Where is the receivable schedule for installment sales, and how does anticipation change it?
+- Does the CNPJ validator accept letters?
+- Where does the holiday calendar come from, and when was it last updated?
+
+## References
+
+- Banco Central do Brasil: Pix regulation and the Pix API specification (`cobrança`, `devolução`, MED); the BR Code (EMV-based QR) specification.
+- FEBRABAN: boleto layout, `linha digitável`, CNAB 240 and 400 standards.
+- Receita Federal: CPF and CNPJ check-digit algorithms; alphanumeric CNPJ from July 2026.
+- ANBIMA: national bank holiday calendar.
+- Portal da Nota Fiscal Eletrônica and the national NFS-e program.

@@ -61,6 +61,10 @@ agente receberia e expectativas que um avaliador confere na transcrição. Quatr
 vetores: arquivos pytest com uma implementação de referência, executáveis contra o seu código
 por uma variável de ambiente. Veja [evals/README.md](evals/README.md).
 
+Execute avaliações com e sem a skill com `python3 scripts/run_evals.py --skill money-arithmetic`.
+Para todas as skills, use `--all --budget 144`; o limite padrão é 80 sessões, incluindo avaliadores.
+Use `--agent fake` para exercitar o runner sem modelo. Evals reais nunca rodam no CI.
+
 ## Escopo
 
 São práticas de engenharia, não aconselhamento contábil, fiscal ou jurídico. Onde uma regra

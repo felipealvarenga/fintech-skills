@@ -11,10 +11,10 @@ way production fintech systems do. Every skill ships evals and test vectors that
 
 <!-- generated:headline -->
 **Measured.** The same 91 prompts ran on `claude-sonnet-5-5` with and without the skills (skills at
-`ee4f998`), and a separate session of the same model graded each transcript against expectations written before
+`ae8adc1`), and a separate session of the same model graded each transcript against expectations written before
 the run. The score is the share of expectations the grader marked passed; the agent's code is read, not
-executed. **With the skills, 72%. Without them, 27%** (267 against 99 of 370). Per skill,
-method and raw transcripts: [evals/results/20261108T053526Z-ee4f998](evals/results/20261108T053526Z-ee4f998/summary.md). The prompts are development prompts: the skills were revised against
+executed. **With the skills, 78%. Without them, 26%** (289 against 95 of 370). Per skill,
+method and raw transcripts: [evals/results/20261108T143507Z-ae8adc1](evals/results/20261108T143507Z-ae8adc1/summary.md). The prompts are development prompts: the skills were revised against
 earlier runs' failures on these same prompts, and a held-out set is the next step.
 <!-- /generated:headline -->
 
@@ -83,21 +83,21 @@ in 8 files, 4 critical, each with file, line, rule, fix and test. Sonnet 5.5, 7 
 <!-- generated:skills-table -->
 | Skill | Use when | With / without | Vectors |
 |---|---|---|---|
-| [fintech-audit](skills/fintech-audit/SKILL.md)† | Auditing a repo or a PR that touches money; the entry point | 77% / 50% | py |
-| [money-arithmetic](skills/money-arithmetic/SKILL.md) | Storing, adding, allocating, converting, rounding or formatting amounts | 83% / 33% | py, ts |
-| [double-entry-ledger](skills/double-entry-ledger/SKILL.md) | Any table that answers "how much does X hold or owe" | 82% / 32% | py, ts |
-| [idempotent-payments](skills/idempotent-payments/SKILL.md) | Creating, capturing, refunding or paying out money; calling a processor | 93% / 25% | py, ts |
-| [webhook-handling](skills/webhook-handling/SKILL.md) | Receiving callbacks from processors, banks and PSPs | 69% / 7% | py, ts |
-| [reconciliation](skills/reconciliation/SKILL.md) | Comparing ledger, processor and bank records of the same money | 72% / 24% | py |
-| [accounting-sync](skills/accounting-sync/SKILL.md) | Pushing to or reading from QuickBooks, Xero, NetSuite, Omie, Conta Azul | 64% / 14% | py |
-| [transaction-classification](skills/transaction-classification/SKILL.md) | Categorizing transactions with rules, ML or an LLM, especially auto-posting | 56% / 22% | py |
-| [pii-and-card-data](skills/pii-and-card-data/SKILL.md) | Collecting, logging, displaying or exporting personal, bank or card data | 67% / 41% | py |
-| [audit-trail](skills/audit-trail/SKILL.md) | Any mutation of money, limits, permissions or customer data; agent actions | 78% / 22% | py |
-| [interest-and-amortization](skills/interest-and-amortization/SKILL.md) | Interest, installments, schedules, accruals, effective rates | 68% / 18% | py |
-| [brazil-payment-rails](skills/brazil-payment-rails/SKILL.md) | Pix, boleto, card installments, CPF and CNPJ, NF-e in Brazil | 69% / 17% | py, ts |
-| [money-tests](skills/money-tests/SKILL.md) | Writing or reviewing tests for any of the above | 60% / 40% | py |
+| [fintech-audit](skills/fintech-audit/SKILL.md)† | Auditing a repo or a PR that touches money; the entry point | 77% / 37% | py |
+| [money-arithmetic](skills/money-arithmetic/SKILL.md) | Storing, adding, allocating, converting, rounding or formatting amounts | 83% / 37% | py, ts |
+| [double-entry-ledger](skills/double-entry-ledger/SKILL.md) | Any table that answers "how much does X hold or owe" | 79% / 39% | py, ts |
+| [idempotent-payments](skills/idempotent-payments/SKILL.md) | Creating, capturing, refunding or paying out money; calling a processor | 86% / 21% | py, ts |
+| [webhook-handling](skills/webhook-handling/SKILL.md) | Receiving callbacks from processors, banks and PSPs | 86% / 7% | py, ts |
+| [reconciliation](skills/reconciliation/SKILL.md) | Comparing ledger, processor and bank records of the same money | 76% / 17% | py |
+| [accounting-sync](skills/accounting-sync/SKILL.md) | Pushing to or reading from QuickBooks, Xero, NetSuite, Omie, Conta Azul | 79% / 14% | py |
+| [transaction-classification](skills/transaction-classification/SKILL.md) | Categorizing transactions with rules, ML or an LLM, especially auto-posting | 100% / 19% | py |
+| [pii-and-card-data](skills/pii-and-card-data/SKILL.md) | Collecting, logging, displaying or exporting personal, bank or card data | 63% / 37% | py |
+| [audit-trail](skills/audit-trail/SKILL.md) | Any mutation of money, limits, permissions or customer data; agent actions | 70% / 22% | py |
+| [interest-and-amortization](skills/interest-and-amortization/SKILL.md) | Interest, installments, schedules, accruals, effective rates | 68% / 21% | py |
+| [brazil-payment-rails](skills/brazil-payment-rails/SKILL.md) | Pix, boleto, card installments, CPF and CNPJ, NF-e in Brazil | 55% / 17% | py, ts |
+| [money-tests](skills/money-tests/SKILL.md) | Writing or reviewing tests for any of the above | 93% / 43% | py |
 
-One run per prompt. A cell of about 28 expectations carries about ±16 points (95% Wilson interval); the pack-level numbers carry about ±5. † fintech-audit was measured without the lint it runs: the eval sandbox has no shell, so its row and the sample report (produced with a shell) are not the same setup.
+One run per prompt. A cell of about 28 expectations carries about ±15 points (95% Wilson interval); the pack-level numbers carry about ±4. † fintech-audit was measured without the lint it runs: the eval sandbox has no shell, so its row and the sample report (produced with a shell) are not the same setup.
 <!-- /generated:skills-table -->
 
 Each `SKILL.md` has the same shape: when to use, numbered rules, how to apply, what to do when the
@@ -118,6 +118,7 @@ Old folders are never edited. Method and flags: [evals/README.md](evals/README.m
 |---|---|---|---|---|---|
 | [20261108T035910Z-c7e767e](evals/results/20261108T035910Z-c7e767e/summary.md) | `c7e767e` | `claude-sonnet-5-5` | 62% | 25% | 36.8 |
 | [20261108T053526Z-ee4f998](evals/results/20261108T053526Z-ee4f998/summary.md) | `ee4f998` | `claude-sonnet-5-5` | 72% | 27% | 45.4 |
+| [20261108T143507Z-ae8adc1](evals/results/20261108T143507Z-ae8adc1/summary.md) | `ae8adc1` | `claude-sonnet-5-5` | 78% | 26% | 52.4 |
 
 In 1 of the 91 with-skill sessions of the latest run the agent never opened the skill; that session counts against the skills.
 <!-- /generated:runs -->
@@ -145,8 +146,8 @@ next; the run summaries record what changed and why.
 
 <!-- generated:cut-rule -->
 The cut rule stated before the first run: a skill that does not move its own evals by at least 10 points
-is folded or removed. In the latest run the lowest lift was 20.0 points (money-tests) and the highest
-67.9 (idempotent-payments). One cell's noise is about ±16 points, so the rule is applied over repeated runs, not one.
+is folded or removed. In the latest run the lowest lift was 25.9 points (pii-and-card-data) and the highest
+81.5 (transaction-classification). One cell's noise is about ±15 points, so the rule is applied over repeated runs, not one.
 <!-- /generated:cut-rule -->
 
 ## Contributing

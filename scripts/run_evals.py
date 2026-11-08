@@ -208,9 +208,22 @@ def static_checks(expectation, files):
     return checks
 
 
+def parse_verdicts(text):
+    """The grader's answer is a JSON array, sometimes wrapped in a ```json fence or prose."""
+    text = (text or "").strip()
+    fenced = re.search(r"```(?:json)?\s*(.*?)```", text, re.S)
+    if fenced:
+        text = fenced.group(1).strip()
+    elif not text.startswith("["):
+        start, end = text.find("["), text.rfind("]")
+        if start != -1 and end > start:
+            text = text[start:end + 1]
+    return json.loads(text)
+
+
 def combine_verdicts(expectations, files, grader, error=None):
     try:
-        verdicts = json.loads(grader["final_answer"]) if not error else []
+        verdicts = parse_verdicts(grader["final_answer"]) if not error else []
         if not isinstance(verdicts, list):
             raise ValueError()
     except (ValueError, TypeError):

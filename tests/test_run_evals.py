@@ -553,3 +553,12 @@ def test_malformed_usage_flow(role, usage, tmp_path, monkeypatch):
     summary = (run_dir / "summary.md").read_text()
     assert "| money-tests | with | n/a | 0 | 0 | 30 |" in summary
     assert f"Planned sessions: 28; started sessions: {14 if role == 'subject' else 28}" in summary
+
+
+def test_parse_verdicts_accepts_fenced_json_and_prose():
+    from scripts.run_evals import parse_verdicts
+    fenced = "```json\n[{\"passed\": true, \"evidence\": \"ok\"}]\n```"
+    assert parse_verdicts(fenced) == [{"passed": True, "evidence": "ok"}]
+    prose = "Here are the verdicts:\n[{\"passed\": false, \"evidence\": \"no\"}]\nDone."
+    assert parse_verdicts(prose) == [{"passed": False, "evidence": "no"}]
+    assert parse_verdicts("[]") == []

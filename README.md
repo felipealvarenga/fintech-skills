@@ -9,6 +9,11 @@ fintech systems do. Every skill ships with an eval and with test vectors that ru
 
 [Português](README.pt-BR.md)
 
+**Measured.** The same 91 prompts ran on Sonnet 5.5 with and without the skills, and a second
+model graded the transcripts against expectations written before the run. **With the skills, 62%
+of expectations passed. Without them, 25%** (230 against 94 of 370). Per skill, method and raw
+transcripts: [evals/results/20261108T035910Z-c7e767e](evals/results/20261108T035910Z-c7e767e/summary.md).
+
 ## Why
 
 Agents write payment code fast and wrong in the same ways people do: floats for amounts, a
@@ -65,21 +70,21 @@ Audit this repository's money code with fintech-skills.
 [Sample report](skills/fintech-audit/evals/sample-report.md) on the planted fixture: 12 findings in 8 files,
 4 critical, each with file, line, rule, fix and test. Sonnet 5.5, 7 turns, USD 0.21, no code changed.
 
-| Skill | Use when | Vectors |
-|---|---|---|
-| [fintech-audit](skills/fintech-audit/SKILL.md) | Auditing a repo or a PR that touches money; the entry point | yes |
-| [money-arithmetic](skills/money-arithmetic/SKILL.md) | Storing, adding, allocating, converting, rounding or formatting amounts | yes |
-| [double-entry-ledger](skills/double-entry-ledger/SKILL.md) | Any table that answers "how much does X hold or owe" | yes |
-| [idempotent-payments](skills/idempotent-payments/SKILL.md) | Creating, capturing, refunding or paying out money; calling a processor | yes |
-| [webhook-handling](skills/webhook-handling/SKILL.md) | Receiving callbacks from processors, banks and PSPs | yes |
-| [reconciliation](skills/reconciliation/SKILL.md) | Comparing ledger, processor and bank records of the same money | yes |
-| [accounting-sync](skills/accounting-sync/SKILL.md) | Pushing to or reading from QuickBooks, Xero, NetSuite, Omie, Conta Azul | yes |
-| [transaction-classification](skills/transaction-classification/SKILL.md) | Categorizing transactions with rules, ML or an LLM, especially auto-posting | yes |
-| [pii-and-card-data](skills/pii-and-card-data/SKILL.md) | Collecting, logging, displaying or exporting personal, bank or card data | yes |
-| [audit-trail](skills/audit-trail/SKILL.md) | Any mutation of money, limits, permissions or customer data; agent actions | yes |
-| [interest-and-amortization](skills/interest-and-amortization/SKILL.md) | Interest, installments, schedules, accruals, effective rates | yes |
-| [brazil-payment-rails](skills/brazil-payment-rails/SKILL.md) | Pix, boleto, card installments, CPF and CNPJ, NF-e in Brazil | yes |
-| [money-tests](skills/money-tests/SKILL.md) | Writing or reviewing tests for any of the above | yes |
+| Skill | Use when | With / without | Vectors |
+|---|---|---|---|
+| [fintech-audit](skills/fintech-audit/SKILL.md) | Auditing a repo or a PR that touches money; the entry point | 77% / 33% | yes |
+| [money-arithmetic](skills/money-arithmetic/SKILL.md) | Storing, adding, allocating, converting, rounding or formatting amounts | 73% / 37% | yes |
+| [double-entry-ledger](skills/double-entry-ledger/SKILL.md) | Any table that answers "how much does X hold or owe" | 75% / 39% | yes |
+| [idempotent-payments](skills/idempotent-payments/SKILL.md) | Creating, capturing, refunding or paying out money; calling a processor | 61% / 21% | yes |
+| [webhook-handling](skills/webhook-handling/SKILL.md) | Receiving callbacks from processors, banks and PSPs | 59% / 14% | yes |
+| [reconciliation](skills/reconciliation/SKILL.md) | Comparing ledger, processor and bank records of the same money | 69% / 17% | yes |
+| [accounting-sync](skills/accounting-sync/SKILL.md) | Pushing to or reading from QuickBooks, Xero, NetSuite, Omie, Conta Azul | 54% / 14% | yes |
+| [transaction-classification](skills/transaction-classification/SKILL.md) | Categorizing transactions with rules, ML or an LLM, especially auto-posting | 56% / 15% | yes |
+| [pii-and-card-data](skills/pii-and-card-data/SKILL.md) | Collecting, logging, displaying or exporting personal, bank or card data | 63% / 37% | yes |
+| [audit-trail](skills/audit-trail/SKILL.md) | Any mutation of money, limits, permissions or customer data; agent actions | 48% / 26% | yes |
+| [interest-and-amortization](skills/interest-and-amortization/SKILL.md) | Interest, installments, schedules, accruals, effective rates | 54% / 21% | yes |
+| [brazil-payment-rails](skills/brazil-payment-rails/SKILL.md) | Pix, boleto, card installments, CPF and CNPJ, NF-e in Brazil | 52% / 17% | yes |
+| [money-tests](skills/money-tests/SKILL.md) | Writing or reviewing tests for any of the above | 67% / 37% | yes |
 
 Each `SKILL.md` has the same shape: when to use, numbered rules, how to apply, tests the change
 must include, review checklist, anti-patterns with fixes, references.
@@ -90,6 +95,13 @@ Every skill has `evals/evals.json` in the format used by Anthropic's `skill-crea
 an agent would receive, and expectations a grader checks in the transcript. Every skill also ships
 vectors: pytest files with a reference implementation, runnable against your own code through
 an environment variable. See [evals/README.md](evals/README.md).
+
+The graded run of 2026-11-08 (`claude-sonnet-5-5` as subject and grader, one run per prompt per
+condition, 370 expectations per condition) is in
+[evals/results/20261108T035910Z-c7e767e](evals/results/20261108T035910Z-c7e767e/summary.md): numbers per skill and per eval,
+the exact `claude` invocation, every transcript and every file the agent wrote. In 6 of the 91
+with-skill sessions the agent never opened the skill; those sessions count against the skills.
+Each new run goes in a new folder and old results are never edited.
 
 ```sh
 python scripts/validate.py       # frontmatter, evals, manifest
@@ -108,8 +120,10 @@ The skills link to them instead of duplicating them.
 
 Written by Felipe Alvarenga from production work on credit, payments and accounting
 integrations in Brazil and the US, drafted and iterated with Claude Code. The vectors run on every
-push. The rubric evals run before each release and their results are published under
-`evals/results/` with the model and the run id.
+push. The graded evals run before each release, with and without the skills, and the results are
+published under `evals/results/<run-id>/` with the models, the git sha and the transcripts. A
+skill that does not move its own evals by at least 10 points gets folded or removed; after the
+first run the lowest lift was 22 points (audit-trail) and the highest 52 (reconciliation).
 
 ## Contributing
 

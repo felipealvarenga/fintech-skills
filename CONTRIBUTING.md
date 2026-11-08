@@ -21,7 +21,8 @@ Rules for a skill:
 - No tax rates, statutory rounding or legal conclusions. Say that an accountant or lawyer confirms
   those, and keep the engineering part.
 - No real customer data, account numbers or identifiers in examples or vectors.
-- At least three evals, each with concrete expectations a grader can check in a transcript.
+- At least six evals (`scripts/validate.py` checks), one of them adversarial (the prompt asks for
+  the unsafe thing), each with concrete expectations a grader can check in a transcript.
 - Plain English. Short sentences. Tables for comparisons.
 
 Changing a vector is a reviewed change with a reason in the pull request.

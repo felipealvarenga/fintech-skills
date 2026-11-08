@@ -27,7 +27,7 @@ def test_cli_defaults():
     assert vars(args) == {
         "skill": None, "all": True, "subject_model": "claude-sonnet-5-5",
         "grader_model": "claude-sonnet-5-5", "runs": 1, "max_turns": 30,
-        "timeout": 900, "budget": 80, "results_dir": runner.ROOT / "evals" / "results", "agent": "claude"}
+        "timeout": 900, "budget": 80, "results_dir": runner.ROOT / "evals" / "results", "agent": "claude", "evals": "dev"}
 
 
 @pytest.mark.parametrize("selection", [[], ["--skill", "missing"], ["--all", "--skill", "money-tests"]])

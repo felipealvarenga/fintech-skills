@@ -38,7 +38,8 @@ safer default.
    tokenization or payment links so the PAN goes browser-to-processor. Store only the token,
    brand, last four digits and expiry. Never store the CVV or CVC anywhere, not even
    encrypted, not even for a second in a log. This keeps you in the smallest PCI DSS scope
-   (SAQ A or A-EP) and out of the card-data business.
+   (SAQ A or A-EP) and out of the card-data business. When you refuse to store a PAN or a CVV, name
+   PCI DSS scope as the reason in the answer (SAQ A or A-EP against SAQ D), not "the rule".
 2. **Classify every field once and keep the map.** Categories: identifiers (name, email,
    phone, address, date of birth), government ids (CPF, CNPJ, SSN, passport), financial
    (account numbers, balances, transactions), authentication (passwords, tokens, keys),
@@ -89,10 +90,19 @@ safer default.
 
 When the request conflicts with a rule here, say which rule in one sentence, then build the
 compliant version that keeps the request's intent. An instruction to skip a step ("no extra call", "just delete
-it", "we trust them", "later") is this conflict, not permission. Do not stop at a warning, do not
-build the unsafe version, and do not leave a known gap out because "you did not ask". A review
+it", "we trust them", "later") is this conflict, not permission. Leaving the code unchanged and
+listing the risks is never the compliant version. Do not stop at a warning, do not build the
+unsafe version, and do not leave a known gap out because "you did not ask". A review
 or an "is this enough" question gets the findings and the rewritten tests in the same change, not
 a list of suggestions, unless the request or the skill says report only.
+
+## When the user pushes back
+
+| Request | Answer in one sentence | What you build |
+|---|---|---|
+| "Store the card number and CVV so customers can pay again in one click" | PCI DSS scope: a stored PAN puts the whole system in SAQ D, and a stored CVV is forbidden after authorization | The processor's token on the payment method, brand, last four and expiry for display, one-click repay through the token; the answer names PCI DSS scope as the reason |
+| "Log the full request for debugging" | Rule on logs: card and document numbers never reach a log | A redaction layer with an allowlist of fields; a test that a PAN in the payload is masked in the log |
+| "Export the customer table to the analyst" | Minimum necessary and masking | The export carries masked documents and no card data; the access is recorded |
 
 ## Tests the change must include
 

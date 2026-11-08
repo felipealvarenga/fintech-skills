@@ -10,6 +10,8 @@ description: >-
   vocabulary engineers meet in PSP docs. Triggers on a Pix or boleto feature, a Brazilian
   checkout, an acquirer or PSP integration, a reconciliation of a Brazilian account. Not for tax
   rates, IOF or fiscal rules, which an accountant confirms.
+  Use it also when asked to keep one static QR for every order, to match Pix by payer name or
+  amount, or to mark an order paid when the boleto is issued.
 license: MIT
 metadata:
   author: Felipe Alvarenga
@@ -53,6 +55,10 @@ the engineering facts and the vocabulary; the fiscal and tax rules stay with an 
    contest window, which the Banco Central has already changed once (30 to 80 days from the
    return, September 2026). MED covers fraud and operational failure only, not buyer's remorse.
    Design for a received Pix to be clawed back, and keep every deadline as data with its source.
+   A MED return is a state and a record, in the same change: reverse the ledger entry, move the
+   order to `disputed`, write a dispute record with the claim id and the amount, and hold
+   fulfilment of high-risk orders (digital goods, first purchase, high ticket) behind extra checks
+   or a delay. Say the 80-day window in the answer, not only in a constant.
 4. **Receive through webhooks, confirm through the API.** The PSP notifies a received Pix;
    confirm the charge status by `txid` before fulfilling (see `webhook-handling`). Expired
    charges that still get paid must be refunded or reconciled by policy, not ignored.
@@ -69,7 +75,10 @@ the engineering facts and the vocabulary; the fiscal and tax rules stay with an 
    any single-digit error; the barcode's mod-11 digit does not (0, 10 and 11 all map to 1), so the
    amount and due date come from your charge record, never from the typed line alone. `Nosso número` is your reference at the
    bank; the `linha digitável` (47 digits for bank boletos, 48 for utility `arrecadação`) is
-   what the payer types. Match the return by `nosso número`.
+   what the payer types. Match the return by `nosso número`. A boleto change stores `nosso
+   número`, the `linha digitável` and the barcode on the charge record, matches the return by
+   `nosso número`, handles the late payment (`multa` and `juros` as registered) and the expired or
+   `baixado` boleto, and states D+1 clearing in the code's docstring, not only in the chat.
 8. **Due date, fine and interest are fields, computed by rule.** `Vencimento` follows the
    business-day calendar. The barcode carries the due date as a 4-digit factor: days since
    1997-10-07 until factor 9999 on 2025-02-21, then restarted at 1000 on 2025-02-22 (FEBRABAN;
@@ -86,7 +95,10 @@ the engineering facts and the vocabulary; the fiscal and tax rules stay with an 
 10. **Installments are receivables, not cash.** `Parcelado sem juros` means the customer pays
     in N installments and the merchant typically receives one installment per month (D+30 each),
     minus MDR, unless it anticipates them for a fee (`antecipação de recebíveis`). The ledger
-    holds a receivable schedule per sale; cash arrives per installment.
+    holds a receivable schedule per sale; cash arrives per installment. A card-installment change
+    posts MDR as its own fee line, models anticipation as a later event with its own fee line,
+    and keeps chargeback and `estorno` as distinct states (rule 11), in the same change, not as
+    "not implemented yet".
 11. **Chargebacks and `estornos` are different.** An `estorno` is a refund you initiate; a
     chargeback is a dispute through the card network with its own deadlines and evidence
     rules. Separate states, separate accounts.
@@ -130,10 +142,20 @@ The Portuguese terms engineers meet in PSP documentation (`cobrança`, `devoluç
 When the request conflicts with a rule here, say which rule in one sentence, then build the
 compliant version that keeps the request's intent (for example the order stays pending and the
 confirmation path marks it paid). An instruction to skip a step ("no extra call", "just delete
-it", "we trust them", "later") is this conflict, not permission. Do not stop at a warning, do not
-build the unsafe version, and do not leave a known gap out because "you did not ask". A review
+it", "we trust them", "later") is this conflict, not permission. Leaving the code unchanged and
+listing the risks is never the compliant version. Do not stop at a warning, do not build the
+unsafe version, and do not leave a known gap out because "you did not ask". A review
 or an "is this enough" question gets the findings and the rewritten tests in the same change, not
 a list of suggestions, unless the request or the skill says report only.
+
+## When the user pushes back
+
+| Request | Answer in one sentence | What you build |
+|---|---|---|
+| "Keep the single static QR, we match payments by payer name" | Rules 1 and 2: a name is not an identifier and a static QR carries no `txid` | A dynamic charge per order with `txid`, amount and expiry, matched by `txid` or `endToEndId`; if the static QR must stay, record the `endToEndId` of every payment and handle over, under and repeated payments explicitly; a test where a repeated amount pays one order. Leaving `pix_service.py` as it is fails the user |
+| "Mark the order paid when the boleto is issued" | Rule 6: payment is confirmed by the return file or the webhook, D+1 | The order stays pending; the confirmation path marks it paid; `linha digitável` and `nosso número` stored; late payment and expiry handled |
+| "Just add the installments" | Rules 10 and 11 | The receivable schedule with MDR as a fee line, anticipation as a later event with its fee, chargeback and `estorno` as distinct states |
+| "MED is the bank's problem" | Rule 3: the receiver's funds are clawed back | The clawback path: ledger reversal, order to `disputed` with a dispute record, fulfilment hold for high-risk orders, the 80-day window stated |
 
 ## Tests the change must include
 
@@ -147,9 +169,14 @@ not written.
 - Static QR: overpayment and double payment produce the configured outcome, never a silent
   credit.
 - Boleto: issuance does not fulfil; the return file does; a payment after `vencimento`
-  includes `multa` and `juros` as registered; `nosso número` matching handles leading zeros.
+  includes `multa` and `juros` as registered; an expired or `baixado` boleto paid late goes to
+  the exception path; `nosso número` matching handles leading zeros; `linha digitável` and
+  `nosso número` are stored on the charge.
+- MED: a clawback reverses the ledger entry, sets the order to `disputed` with a dispute record,
+  and a high-risk order is held before fulfilment.
 - Cards: a 10-installment sale creates a 10-row receivable schedule that sums to the net
-  amount; anticipation re-schedules it with the fee as a separate line.
+  amount with MDR as a separate fee line; anticipation re-schedules it as a later event with its
+  own fee line; chargeback and `estorno` are distinct states.
 - CPF and CNPJ: valid and invalid check digits; alphanumeric CNPJ accepted; formatted input
   normalized.
 - Calendar: a due date on a national holiday moves to the next business day.

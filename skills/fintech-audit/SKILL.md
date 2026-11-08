@@ -94,8 +94,9 @@ Rules for the report:
 
 When the request conflicts with a rule here, say which rule in one sentence, then build the
 compliant version that keeps the request's intent. An instruction to skip a step ("no extra call", "just delete
-it", "we trust them", "later") is this conflict, not permission. Do not stop at a warning, do not
-build the unsafe version, and do not leave a known gap out because "you did not ask". This skill
+it", "we trust them", "later") is this conflict, not permission. Leaving the code unchanged and
+listing the risks is never the compliant version. Do not stop at a warning, do not build the
+unsafe version, and do not leave a known gap out because "you did not ask". This skill
 reports and does not edit; the rewrite rule in the domain skills applies when the user asks for a
 review of code they own.
 

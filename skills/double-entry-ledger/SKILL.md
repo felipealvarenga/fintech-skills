@@ -95,8 +95,9 @@ credit 4010 Revenue 5.00. Debits 100.00, credits 100.00.
 
 When the request conflicts with a rule here, say which rule in one sentence, then build the
 compliant version that keeps the request's intent. An instruction to skip a step ("no extra call", "just delete
-it", "we trust them", "later") is this conflict, not permission. Do not stop at a warning, do not
-build the unsafe version, and do not leave a known gap out because "you did not ask". A review
+it", "we trust them", "later") is this conflict, not permission. Leaving the code unchanged and
+listing the risks is never the compliant version. Do not stop at a warning, do not build the
+unsafe version, and do not leave a known gap out because "you did not ask". A review
 or an "is this enough" question gets the findings and the rewritten tests in the same change, not
 a list of suggestions, unless the request or the skill says report only.
 

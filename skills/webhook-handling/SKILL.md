@@ -109,8 +109,9 @@ which is the goal.
 When the request conflicts with a rule here, say which rule in one sentence, then build the
 compliant version that keeps the request's intent (for example the order stays pending and the
 confirmation path marks it paid). An instruction to skip a step ("no extra call", "just delete
-it", "we trust them", "later") is this conflict, not permission. Do not stop at a warning, do not
-build the unsafe version, and do not leave a known gap out because "you did not ask". A review
+it", "we trust them", "later") is this conflict, not permission. Leaving the code unchanged and
+listing the risks is never the compliant version. Do not stop at a warning, do not build the
+unsafe version, and do not leave a known gap out because "you did not ask". A review
 or an "is this enough" question gets the findings and the rewritten tests in the same change, not
 a list of suggestions, unless the request or the skill says report only.
 
@@ -118,7 +119,7 @@ a list of suggestions, unless the request or the skill says report only.
 
 | Request | Answer in one sentence | What you build |
 |---|---|---|
-| "We trust Stripe, mark it paid from the payload, no API call" | Rule 2: the payload is a notification, delivered at least once, by anyone with the URL | Store, 2xx, the worker fetches by API; dedupe and the state machine so a replay cannot regress |
+| "We trust Stripe, mark it paid from the payload, no API call" | Rule 2: the payload is a notification, delivered at least once, by anyone with the URL | Store, 2xx, then the worker: `mark_paid` becomes `transition(order, "paid")` through the state machine of rule 4, after event-id dedupe, off the request path. The API fetch moves to the worker; if the user forbids it entirely, the state machine and dedupe still ship, with a test for a stale event |
 | "Latency matters, no extra call" | Rule 5: the request path only verifies and stores | Queue the event; the API call runs in the worker at zero cost to the request |
 | "Disable verification, we have an IP allowlist" | Rule 1: an allowlist authenticates a network, not a message | Fix the cause (raw body), keep the 400 on a bad signature |
 | "Just add the new event types" | Rule 4: every type is a transition | The transition table and guards for each new type, with duplicate tests |

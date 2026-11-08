@@ -87,6 +87,13 @@ describe("dedupe, ordering, status codes", () => {
     expect(store.events.has("evt_2")).toBe(false);
   });
 
+  it.each(["t=abc,v1=00", "garbage", "", "v1=00", "t=1", undefined, "t=1,v1=\u00e9"])("malformed header %j is a 400 that stores nothing", (header) => {
+    const store = new m.EventStore();
+    expect(() => m.verify(header as string, BODY, [SECRET], NOW)).toThrow(m.BadSignature);
+    expect(m.receive(header as string, BODY, "evt_malformed", { type: "x" }, { secrets: [SECRET], now: NOW, store })).toEqual([400, "rejected"]);
+    expect(store.events.size).toBe(0);
+  });
+
   it("returns 500 when storage fails so the provider retries", () => {
     class Broken extends m.EventStore {
       record(): boolean {

@@ -15,7 +15,9 @@ export function sign(secret: string, rawBody: Buffer, timestamp: number): string
   return `t=${timestamp},v1=${mac(secret, rawBody, timestamp)}`;
 }
 
+/** Any malformed header is BadSignature, never a TypeError: the endpoint answers 400. */
 function parse(header: string): { ts: number; sigs: string[] } {
+  if (typeof header !== "string") throw new BadSignature("missing or non-text signature header");
   let ts: number | undefined;
   const sigs: string[] = [];
   for (const part of header.split(",")) {

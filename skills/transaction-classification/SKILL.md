@@ -36,6 +36,11 @@ any classifier in production: a holdout, numbers per class, a gate, and a feedba
 1. **Build the holdout before the model.** A labeled set reviewed by an accountant or the
    customer, stratified by merchant, amount band, account type and tenant. It never enters a
    prompt, a fine-tune or a rule. Keep it versioned.
+   When no labeled data exists yet, the change still creates `holdout.jsonl` with the schema
+   (`id, description, amount_minor, account, label, labeled_by, labeled_at`), seeded from the
+   transactions at hand with `label` null where nobody has labeled yet, and `eval_holdout.py`
+   that computes precision, recall and coverage per class from it. An empty holdout that the
+   code reads beats a plan for one.
 2. **Report per-class precision, recall and coverage, plus cost.** Coverage is the share of
    transactions the system decides on its own. A model change is a pull request that shows the
    new numbers next to the old ones on the same holdout, with cost per thousand transactions
@@ -52,6 +57,11 @@ any classifier in production: a holdout, numbers per class, a gate, and a feedba
    target precision per class; propose for review below it. Never auto-post splits, transfers
    across the customer's own accounts, amounts above a per-tenant limit, or categories the
    accountant marked as review-only.
+   The thresholds live in `thresholds.json`, written by `calibrate.py`: for each class, the
+   lowest cutoff whose precision on the holdout meets the target (0.98 for auto-posting unless
+   the accountant sets another). The gate reads that file; a constant in code with a "calibrate
+   later" comment is the anti-pattern. Until the holdout has labels, `calibrate.py` writes 1.0
+   for every class, so nothing auto-posts by accident.
 6. **The output is structured and validated.** Category id from the allowed chart, confidence,
    short rationale, and the fields used. Validate the id against the chart; an unknown or
    disallowed id becomes "uncategorized, review". Free-text category names are never accepted.
@@ -59,6 +69,10 @@ any classifier in production: a holdout, numbers per class, a gate, and a feedba
    changes a category, store the example with the original decision. When the same payee is
    corrected twice, propose a rule. Correction rate per class is the live accuracy signal and
    goes on the dashboard.
+   This is three small functions in the first change, not a later phase:
+   `record_correction(tx_id, from_id, to_id, user, at)` appends to the corrections store,
+   `correction_rate(window)` returns the rate per class, and `propose_rules()` emits a rule
+   when the same normalized payee was corrected to the same category twice.
 8. **Descriptions are data, not instructions.** Merchant names and memos are untrusted text.
    The prompt frames them as data, the output is structured, and a test injects "ignore previous
    instructions" into a memo and asserts the category is still validated and unaffected.
@@ -89,7 +103,20 @@ any classifier in production: a holdout, numbers per class, a gate, and a feedba
 
 When the request conflicts with a rule here, say which rule in one sentence, then build the
 compliant version that keeps the request's intent (for example the order stays pending and the
-confirmation path marks it paid). Do not stop at a warning, and do not build the unsafe version.
+confirmation path marks it paid). An instruction to skip a step ("no extra call", "just delete
+it", "we trust them", "later") is this conflict, not permission. Do not stop at a warning, do not
+build the unsafe version, and do not leave a known gap out because "you did not ask". A review
+or an "is this enough" question gets the findings and the rewritten code and tests in the same
+change, not a list of suggestions.
+
+## When the user pushes back
+
+| Request | Answer in one sentence | What you build |
+|---|---|---|
+| "Accuracy looks fine in our manual checks, ship it" | Rule 2: twenty hand-checked rows give no per-class numbers | The holdout file, `eval_holdout.py`, `calibrate.py` and the correction capture; the gate at 1.0 until the numbers exist |
+| "Lower the threshold to 0.6, the queue is too big" | Rule 5: one global cut trades precision you cannot see | Per-class thresholds from `calibrate.py`. With precision at one cutoff only, show which classes already clear the target, which never auto-post, and what the curve needs (confidence per holdout row). Report coverage gained and precision cost per class, "unknown" where the curve is missing |
+| "We switched the model, is it better?" | Rule 2: a model change is a side-by-side table on the same holdout | `eval_models.py`: precision, recall and coverage per class, cost per thousand and p50 latency, both models side by side. Run it when a client exists; otherwise deliver the harness and the table it fills. Say when the holdout is too small (under about 30 rows per class). Recalibrate the thresholds before auto-posting resumes: the new model's confidence is on a different scale |
+| "Just add the customer rules" | Rules 3 and 7 | Rules on the normalized payee, before the model, `propose_rules()` from repeated corrections, and the rule's name in the decision record |
 
 ## Tests the change must include
 
@@ -101,6 +128,14 @@ not written.
   any auto-post class drops below its target.
 - Deterministic layers: a user rule beats the model; an approved repeat beats the model; a
   transfer pair is labeled transfer on both sides.
+- Pairing over the whole sample file: the transfer pair is labeled transfer on both sides and
+  every other line stays unpaired.
+- Normalization: two store numbers of one merchant (`UBER *TRIP 8841`, `UBER *TRIP 9920`)
+  normalize to the same key, and one rule matches both.
+- Corrections: two corrections of the same payee produce one rule proposal; the correction
+  rate per class is computed from the store.
+- Calibration: on a small synthetic holdout, `calibrate.py` picks the lowest cutoff per class
+  that meets the precision target and writes 1.0 for a class without labels.
 - Gate: a low-confidence decision goes to review and is never posted.
 - Validation: an invalid category id from the model becomes uncategorized with review.
 - Injection: a memo with instructions does not change the output or bypass validation.

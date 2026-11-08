@@ -84,7 +84,11 @@ Idempotency is not a header; it is a property of every money-moving path, inboun
 
 When the request conflicts with a rule here, say which rule in one sentence, then build the
 compliant version that keeps the request's intent (for example the order stays pending and the
-confirmation path marks it paid). Do not stop at a warning, and do not build the unsafe version.
+confirmation path marks it paid). An instruction to skip a step ("no extra call", "just delete
+it", "we trust them", "later") is this conflict, not permission. Do not stop at a warning, do not
+build the unsafe version, and do not leave a known gap out because "you did not ask". A review
+or an "is this enough" question gets the findings and the rewritten code and tests in the same
+change, not a list of suggestions.
 
 ## Tests the change must include
 

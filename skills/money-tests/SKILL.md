@@ -51,6 +51,13 @@ actually has (drift, lost cents, double charges, wrong dates, wrong order) make 
    Stryker for JavaScript and TypeScript, PIT for Java) on the money modules. The kill rate is
    the health number for the suite. A suite that kills fewer than 80% of mutants in the money
    module is a to-do list, not a safety net. Report the number in the pull request.
+   Kill rate is killed divided by killed plus survived; errors and timeouts are excluded from
+   both sides and reported apart. The 80% gate lives in CI (parse the tool's results, fail
+   under the threshold), not in prose. When the session cannot run the tool, still write the
+   config and the gate, read the module and name the mutants most likely to survive (`<` for
+   `<=`, the rounding mode, a sign flip, the remainder going to the wrong share) with the
+   assertion that kills each, and put the run command and the slot for the number in the pull
+   request description. "Run it and tell me" is not a deliverable.
 6. **Synthetic data, deterministic, with edges.** Generators produce valid identifiers
    (Luhn-valid test cards from the processor, CPF and CNPJ with correct check digits, including
    alphanumeric CNPJ), and amounts that include 0, 1 minor unit, the maximum, negatives where
@@ -58,14 +65,24 @@ actually has (drift, lost cents, double charges, wrong dates, wrong order) make 
 7. **Inject the clock.** No test reads the wall clock. Cases: month end, 29 February, the last
    second of a day in the bank's timezone, a daylight-saving transition, a holiday, a year
    boundary. Settlement dates and due dates are computed from the injected clock and a calendar
-   fixture.
+   fixture. Test helpers obey the rule too: a staleness check on a recorded fixture takes `now`
+   as a parameter or fixture.
 8. **Idempotency and concurrency are tested, not assumed.** Same request twice; two requests
    that start together behind a barrier; a fault injected between persisting the intent and
    calling the processor; a processor that times out and then reports success. Each ends with
    exactly one charge and a consistent record.
+   The fake processor is a test double you write in the test change, even when the production
+   client does not exist yet. It takes a script and counts charges per idempotency key:
+   `ok`, `timeout_after_charge` (records the charge, then raises the timeout),
+   `timeout_before_charge`, `http_4xx`, `http_5xx`, `decline`. Assertions are counts: one
+   charge after timeout-then-retry, one call on a 4xx, the retry cap on repeated 5xx, then the
+   error surfaces.
 9. **Record processor fixtures; replay them in CI.** Contract tests run against the sandbox on
    a schedule and record responses. Unit and integration tests replay the recordings. A
-   recording older than a set age fails the scheduled job, not the pull request.
+   recording older than a set age fails the scheduled job, not the pull request. Write the
+   scheduled job (a cron workflow that runs the contract test, re-records and commits the
+   fixture) with the replay tests; a hand-written fixture nobody refreshes is the live sandbox
+   with extra steps.
 10. **CI gates that mean something.** Required: vectors, properties, invariants, redaction
     test, idempotency tests. Reported: mutation kill rate and its trend. Not a gate: line
     coverage. Every bug fix adds the test that would have caught it, and the test is shown
@@ -86,7 +103,21 @@ actually has (drift, lost cents, double charges, wrong dates, wrong order) make 
 
 When the request conflicts with a rule here, say which rule in one sentence, then build the
 compliant version that keeps the request's intent (for example the order stays pending and the
-confirmation path marks it paid). Do not stop at a warning, and do not build the unsafe version.
+confirmation path marks it paid). An instruction to skip a step ("no extra call", "just delete
+it", "we trust them", "later") is this conflict, not permission. Do not stop at a warning, do not
+build the unsafe version, and do not leave a known gap out because "you did not ask". A review
+or an "is this enough" question gets the findings and the rewritten code and tests in the same
+change, not a list of suggestions.
+
+## When the user pushes back, or asks for an opinion
+
+| Request | Answer in one sentence | What you build |
+|---|---|---|
+| "Coverage is 95%, is that enough?" | Rule 10: coverage says a line ran, not that a wrong amount fails a test | Answer the three checklist questions (lost cent, rounding mode, double charge after a timeout) by pointing at a test or saying none exists. List the missing classes: invariants, idempotency and timeout, date edges (month end, leap day, timezone boundary, holiday). Propose the kill rate as the number. Write the first missing tests |
+| "Review these tests" | Rules 2 and 7: a tautology and a wall-clock read | The rewritten test file in the change: exact integer vectors, the sum-of-principal invariant, a leap-year and a month-end case, the clock injected. Findings without the rewrite are half a review |
+| "Delete the flaky test" | Rule 1: a flaky property test is a bug report | Seed the generator, make its inputs valid, and check whether the failures were a real defect |
+| "Set up mutation testing and tell me the number" | Rule 5 | Config, CI gate, the kill-rate definition, the likely survivors with their killing assertions, the pull request text with the run command and the slot for the number |
+| "The sandbox makes tests flaky" | Rule 9 | Recorded fixtures for unit tests, the scheduled contract job that re-records and fails on staleness, a fake processor for faults, the clock injected |
 
 ## Tests the change must include
 
@@ -98,9 +129,14 @@ not written.
 - Frozen vectors for every public function that returns an amount or a date.
 - One golden table for any schedule or multi-row computation.
 - An invariant test over random operations for any ledger or state machine.
-- A mutation run with the kill rate in the pull request description.
+- A mutation config with its CI gate, and the kill rate in the pull request description (or
+  the run command and the slot for the number when the tool could not run).
 - Date edge cases: month end, leap day, holiday, timezone boundary.
 - Idempotency: duplicate request, concurrent request, timeout then success.
+- Timeout after the processor charged, then the same key again: exactly one charge.
+- A 4xx is not retried (one call); a 5xx is retried up to the cap, then the error surfaces.
+- A crash between persisting the intent and calling the processor: the retry completes with
+  one charge.
 - Reference vectors: `skills/money-tests/evals/vectors/test_money_tests.py` with
   `MONEYTESTS_SOLUTION` pointing at your module (a linter for money-test smells, kill-rate math).
 

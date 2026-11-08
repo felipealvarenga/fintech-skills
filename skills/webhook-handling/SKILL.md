@@ -37,11 +37,21 @@ which is the goal.
 2. **The payload is a notification, not the truth.** For any decision that moves money or
    changes a customer-visible status, fetch the object from the provider API by id and act on
    that state. The payload tells you something changed; the API tells you what it is now.
+   The fetch runs in the worker (rule 5), so it adds nothing to the request path; "latency
+   matters" is an argument for the queue, not for skipping the check. If the user still forbids
+   the API call, the compliant minimum is rule 3 plus rule 4: dedupe by event id and a state
+   machine that cannot regress. Never write `mark_paid(payload...)` with neither.
 3. **Dedupe by event id, in the database.** Insert the event id into a table with a unique
    index before processing. A duplicate insert means the event was seen: acknowledge and stop.
 4. **Expect events out of order.** `captured` may arrive before `authorized`. Design handlers
    around the object's current state (rule 2), not the sequence of events. A handler that
    receives an older state than the one already recorded does nothing.
+   If the codebase has no payment state machine, write a minimal one in the same change: the
+   states (`pending`, `paid`, `partially_refunded`, `refunded`, `disputed`, `failed`), the
+   allowed transitions as a table, and one `transition(order, to)` function that rejects any
+   move not in the table and ignores a state at or behind the current one. Every handled event
+   type maps to one transition through that function. Do not call `mark_refunded` or any other
+   function that does not exist in the repository.
 5. **Store, acknowledge, then process.** Persist the raw event and return 2xx within a few
    seconds. Process from a queue or a worker. Slow handlers cause provider timeouts, which cause
    retries, which cause duplicates.
@@ -51,15 +61,21 @@ which is the goal.
 7. **Secrets are per endpoint and rotate without downtime.** Keep two active secrets during
    rotation; verify against both; remove the old one after the provider confirms. Secrets live
    in the secret manager, never in the repo or in logs.
-8. **Replay is a feature.** A command or admin action re-processes a stored event by id, in
-   staging and in production, with an audit record of who replayed what and why. This is how
-   you recover from a handler bug without asking the provider to resend.
+8. **Replay is a feature, built with the handler.** `replay(event_id, actor, reason)` re-runs
+   the stored raw event through the same worker function used on first delivery, in staging and
+   in production. `actor` and `reason` are required. Each call writes a row to
+   `webhook_replays(event_id, actor, reason, replayed_at, outcome)`. A replay of an event already
+   `processed` is a no-op recorded as `skipped`, unless `force=True`, which also needs a reason.
+   This is how you recover from a handler bug without asking the provider to resend, so it ships
+   in the same change as the handler, not later.
 9. **One endpoint per provider and per environment.** Test-mode and live-mode events never
    share a URL or a secret. The handler refuses an event whose mode does not match the
    environment.
-10. **Monitor lag and failures.** Track provider timestamp to processed timestamp per event
-    type, processing failures per type, and unknown event types. Alert on lag above the SLA and
-    on any failure rate above a small threshold.
+10. **Monitor lag and failures, in the same change.** Record per event type: lag (processed
+    timestamp minus the provider's `created` timestamp), processing failures, and unknown types.
+    The minimum is a `webhook_metrics()` function or table the dashboard reads, plus the two
+    alert thresholds (lag above the SLA, failure rate above a small percentage) in config.
+    `log.exception` alone is not monitoring.
 
 ## How to apply
 
@@ -71,15 +87,32 @@ which is the goal.
    payload, status, processed at, error. Insert before anything else.
 4. Return 2xx right after the insert. Hand the event id to a worker.
 5. In the worker, fetch the object by API, compare with the recorded state, apply the change
-   through the same state machine the rest of the system uses (see `idempotent-payments`).
+   through the same state machine the rest of the system uses (see `idempotent-payments`), or
+   through the minimal one from rule 4 when none exists.
 6. Write the tests in the **Tests** section. Use the provider's CLI or fixtures to produce
    signed payloads.
-7. Add the replay command and the lag dashboard before shipping.
+7. Add `replay()` with its audit table and `webhook_metrics()` in the same change. A handler
+   without them is not finished.
 
 
 When the request conflicts with a rule here, say which rule in one sentence, then build the
 compliant version that keeps the request's intent (for example the order stays pending and the
-confirmation path marks it paid). Do not stop at a warning, and do not build the unsafe version.
+confirmation path marks it paid). An instruction to skip a step ("no extra call", "just delete
+it", "we trust them", "later") is this conflict, not permission. Do not stop at a warning, do not
+build the unsafe version, and do not leave a known gap out because "you did not ask". A review
+or an "is this enough" question gets the findings and the rewritten code and tests in the same
+change, not a list of suggestions.
+
+## When the user pushes back
+
+| Request | Answer in one sentence | What you build |
+|---|---|---|
+| "We trust Stripe, mark it paid from the payload, no API call" | Rule 2: the payload is a notification, delivered at least once, by anyone with the URL | Store, 2xx, the worker fetches by API; dedupe and the state machine so a replay cannot regress |
+| "Latency matters, no extra call" | Rule 5: the request path only verifies and stores | Queue the event; the API call runs in the worker at zero cost to the request |
+| "Disable verification, we have an IP allowlist" | Rule 1: an allowlist authenticates a network, not a message | Fix the cause (raw body), keep the 400 on a bad signature |
+| "Just add the new event types" | Rule 4: every type is a transition | The transition table and guards for each new type, with duplicate tests |
+| "Replay and metrics can come later" | Rules 8 and 10 ship with the handler | `replay()` with the audit table and `webhook_metrics()` in this change |
+| "I did not ask about duplicates" | Rule 3 applies to every handler that changes money state | Dedupe and the tests, every time |
 
 ## Tests the change must include
 
@@ -97,6 +130,9 @@ not written.
 - Handler raises during processing: event marked failed and retryable; the provider got 2xx;
   the replay command processes it after the fix.
 - Live-mode event on the test endpoint: refused.
+- Replay of an already processed event: no-op, an audit row with outcome `skipped`, who and why.
+- Replay of a failed event after the fix: processed once, audit row with outcome `processed`.
+- `webhook_metrics()` reports lag and failures per type after one processed and one failed event.
 - Reference vectors: `skills/webhook-handling/evals/vectors/test_webhooks.py` with
   `WEBHOOK_SOLUTION` pointing at your module (signature, tolerance, rotation, dedupe, order).
   TypeScript: `webhooks.test.ts` with `WEBHOOK_SOLUTION_TS`.

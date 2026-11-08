@@ -76,6 +76,11 @@ which is the goal.
    signed payloads.
 7. Add the replay command and the lag dashboard before shipping.
 
+
+When the request conflicts with a rule here, say which rule in one sentence, then build the
+compliant version that keeps the request's intent (for example the order stays pending and the
+confirmation path marks it paid). Do not stop at a warning, and do not build the unsafe version.
+
 ## Tests the change must include
 
 - Invalid signature: 400, nothing stored, nothing processed.

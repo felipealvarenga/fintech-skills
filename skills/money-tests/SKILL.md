@@ -82,6 +82,11 @@ actually has (drift, lost cents, double charges, wrong dates, wrong order) make 
    edge cases.
 6. Add the idempotency tests with a fake processor that can time out and fail on command.
 
+
+When the request conflicts with a rule here, say which rule in one sentence, then build the
+compliant version that keeps the request's intent (for example the order stays pending and the
+confirmation path marks it paid). Do not stop at a warning, and do not build the unsafe version.
+
 ## Tests the change must include
 
 - At least one property test with a fixed seed and 200 or more cases.

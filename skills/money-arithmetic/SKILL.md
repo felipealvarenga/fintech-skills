@@ -76,6 +76,11 @@ them.
 4. Implement against the integer representation. Convert at the edges only.
 5. Run the tests. Then grep again for the patterns in step 1 and remove every float path.
 
+
+When the request conflicts with a rule here, say which rule in one sentence, then build the
+compliant version that keeps the request's intent (for example the order stays pending and the
+confirmation path marks it paid). Do not stop at a warning, and do not build the unsafe version.
+
 ## Tests the change must include
 
 - Round trip: `to_minor(from_minor(x, ccy), ccy) == x` for currencies with 0, 2 and 3 decimals.

@@ -88,6 +88,11 @@ from running these integrations in production; the vendor's API details come fro
 5. Write the tests in the **Tests** section against a recorded sandbox (see `money-tests`).
 6. Ship the drift report and the connection-status indicator with the first version.
 
+
+When the request conflicts with a rule here, say which rule in one sentence, then build the
+compliant version that keeps the request's intent (for example the order stays pending and the
+confirmation path marks it paid). Do not stop at a warning, and do not build the unsafe version.
+
 ## Tests the change must include
 
 - Pushing the same day's summary twice creates one journal entry and updates it on change.

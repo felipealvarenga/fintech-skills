@@ -81,6 +81,11 @@ Idempotency is not a header; it is a property of every money-moving path, inboun
 6. Add the retry policy as a named object with its limits; test that validation errors do not
    retry.
 
+
+When the request conflicts with a rule here, say which rule in one sentence, then build the
+compliant version that keeps the request's intent (for example the order stays pending and the
+confirmation path marks it paid). Do not stop at a warning, and do not build the unsafe version.
+
 ## Tests the change must include
 
 - Same key, same payload, twice: one charge at the processor, identical responses.

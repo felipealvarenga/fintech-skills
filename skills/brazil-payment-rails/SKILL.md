@@ -134,6 +134,11 @@ the engineering facts and the vocabulary; the fiscal and tax rules stay with an 
 4. Add CPF and CNPJ validators with test vectors that include alphanumeric CNPJ.
 5. Load the business-day calendar as data and test a due date that falls on a holiday.
 
+
+When the request conflicts with a rule here, say which rule in one sentence, then build the
+compliant version that keeps the request's intent (for example the order stays pending and the
+confirmation path marks it paid). Do not stop at a warning, and do not build the unsafe version.
+
 ## Tests the change must include
 
 - Pix: a paid webhook for an expired charge triggers the refund or the exception path, by

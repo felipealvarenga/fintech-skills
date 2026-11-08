@@ -93,6 +93,11 @@ credit 4010 Revenue 5.00. Debits 100.00, credits 100.00.
 6. Migrate existing balances with an opening entry per account against an equity or
    migration account, dated the cutover date, with the old balance as the external reference.
 
+
+When the request conflicts with a rule here, say which rule in one sentence, then build the
+compliant version that keeps the request's intent (for example the order stays pending and the
+confirmation path marks it paid). Do not stop at a warning, and do not build the unsafe version.
+
 ## Tests the change must include
 
 - A balanced entry posts; an unbalanced one raises; an entry with one posting raises.

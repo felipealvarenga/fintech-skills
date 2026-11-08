@@ -126,28 +126,51 @@ def project_files(project):
             if p.relative_to(project).parts[0] != ".claude" and p.is_file() and not p.is_symlink()}
 
 
+def skill_folders():
+    return {p.name: p for p in sorted((ROOT / "skills").iterdir()) if p.is_dir()}
+
+
+def fixture_target(skill, name):
+    path = Path(name)
+    source = skill / path
+    if (path.is_absolute() or ".." in path.parts or path.parts[:2] != ("evals", "files")
+            or len(path.parts) < 3 or not source.is_file()
+            or not source.resolve().is_relative_to(skill.resolve())):
+        raise ValueError(f"invalid or missing eval file: {name}")
+    relative = path.relative_to("evals/files")
+    return Path("src") / relative if len(relative.parts) == 1 else Path(*relative.parts[1:])
+
+
+def install_skill(skill, project):
+    installed = []
+    for source in sorted(skill.rglob("*")):
+        relative = source.relative_to(skill)
+        if (not source.is_file() or "__pycache__" in relative.parts
+                or (relative.parts[0] == "evals" and relative.parts[:2] != ("evals", "vectors"))):
+            continue
+        target = project / ".claude/skills" / skill.name / relative
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(source, target)
+        installed.append(target.relative_to(project).as_posix())
+    return installed
+
+
 def install_project(skill, evaluation, project, condition):
-    sources = []
+    sources = {}
     for name in evaluation.get("files", []):
-        path = Path(name)
-        source = skill / path
-        if path.is_absolute() or ".." in path.parts or not source.is_file() or not source.resolve().is_relative_to(skill.resolve()):
-            raise ValueError(f"invalid or missing eval file: {name}")
-        sources.append((path, source))
-    for path, source in sources:
+        target = fixture_target(skill, name)
+        if target in sources:
+            raise ValueError(f"duplicate eval file target: {target}")
+        sources[target] = skill / name
+    for path, source in sources.items():
         target = project / path
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(source, target)
     installed = []
     if condition == "with":
-        for source in sorted(skill.rglob("*")):
-            relative = source.relative_to(skill)
-            if not source.is_file() or relative.as_posix() == "evals/evals.json" or "__pycache__" in relative.parts:
-                continue
-            target = project / ".claude/skills" / skill.name / relative
-            target.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copyfile(source, target)
-            installed.append(target.relative_to(project).as_posix())
+        pack = skill_folders().values() if skill.name == "fintech-audit" else [skill]
+        for folder in pack:
+            installed.extend(install_skill(folder, project))
     return installed
 
 
@@ -291,7 +314,7 @@ def eval_main(argv=None):
     args = parser.parse_args(argv)
     if min(args.runs, args.max_turns, args.timeout, args.budget) <= 0:
         parser.error("runs, max-turns, timeout and budget must be positive")
-    available = {p.name: p for p in sorted((ROOT / "skills").iterdir()) if p.is_dir()}
+    available = skill_folders()
     names = list(available) if args.all else list(dict.fromkeys(args.skill))
     if any(name not in available for name in names):
         parser.error("unknown skill: " + ", ".join(name for name in names if name not in available))

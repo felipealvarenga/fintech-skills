@@ -42,10 +42,10 @@ def test_selection(selection, tmp_path, monkeypatch):
 
 
 @pytest.mark.parametrize("selection,budget,prompts,subjects,total,allowed", [
-    (["--all"], 80, 36, 72, 144, False),
-    (["--all"], 144, 36, 72, 144, True),
-    (["--skill", "money-tests"], 80, 3, 6, 12, True),
-    (["--skill", "money-tests", "--skill", "money-arithmetic"], 80, 6, 12, 24, True),
+    (["--all"], 80, 91, 182, 364, False),
+    (["--all"], 364, 91, 182, 364, True),
+    (["--skill", "money-tests"], 80, 7, 14, 28, True),
+    (["--skill", "money-tests", "--skill", "money-arithmetic"], 80, 14, 28, 56, True),
 ])
 def test_budget_plan(selection, budget, prompts, subjects, total, allowed, tmp_path, monkeypatch, capsys):
     calls = []
@@ -58,7 +58,7 @@ def test_budget_plan(selection, budget, prompts, subjects, total, allowed, tmp_p
     assert result == (0 if allowed else 1)
     assert len(calls) == (total if allowed else 0)
     if not allowed:
-        assert "144" in output.err and "--budget" in output.err
+        assert "364" in output.err and "--budget" in output.err
         assert list(tmp_path.iterdir()) == []
 
 
@@ -80,24 +80,37 @@ def test_existing_run(tmp_path, monkeypatch, capsys):
     assert list(directory.iterdir()) == [directory / "summary.md"]
 
 
-@pytest.mark.parametrize("name,has_vectors", [("money-arithmetic", True), ("accounting-sync", False)])
-def test_installed_projects(name, has_vectors, runner_args, tmp_path, monkeypatch):
+@pytest.mark.parametrize("name,skill_names", [
+    ("money-arithmetic", ["money-arithmetic"]),
+    ("fintech-audit", ["accounting-sync", "audit-trail", "brazil-payment-rails", "double-entry-ledger",
+                       "fintech-audit", "idempotent-payments", "interest-and-amortization", "money-arithmetic",
+                       "money-tests", "pii-and-card-data", "reconciliation", "transaction-classification",
+                       "webhook-handling"]),
+])
+def test_installed_projects(name, skill_names, runner_args, tmp_path, monkeypatch):
     projects = []
     original = runner.fake_session
-    expected = {p.relative_to(runner.ROOT / "skills" / name).as_posix(): p.read_bytes()
-                for p in (runner.ROOT / "skills" / name).rglob("*")
-                if p.is_file() and p.relative_to(runner.ROOT / "skills" / name).as_posix() != "evals/evals.json"
-                and "__pycache__" not in p.relative_to(runner.ROOT / "skills" / name).parts}
+    expected = {p.relative_to(runner.ROOT / "skills").as_posix(): p.read_bytes()
+                for skill_name in skill_names for p in (runner.ROOT / "skills" / skill_name).rglob("*")
+                if p.is_file() and "__pycache__" not in p.parts
+                and ("evals" not in p.parts or "vectors" in p.parts)}
     def inspect(role, project, prompt):
         assert not project.resolve().is_relative_to(runner.ROOT)
         projects.append(project)
         if role == "subject":
-            installed = {p.relative_to(project / ".claude/skills" / name).as_posix(): p.read_bytes()
-                         for p in (project / ".claude/skills" / name).rglob("*") if p.is_file()}
+            installed = {p.relative_to(project / ".claude/skills").as_posix(): p.read_bytes()
+                         for p in (project / ".claude/skills").rglob("*") if p.is_file()}
             assert installed == (expected if len(projects) == 1 else {})
-            assert (project / ".claude/skills" / name / "SKILL.md").exists() == (len(projects) == 1)
-            assert not (project / ".claude/skills" / name / "evals/evals.json").exists()
-            assert (project / ".claude/skills" / name / "evals/vectors").exists() == (has_vectors and len(projects) == 1)
+            assert sorted(p.split("/")[0] for p in installed if p.endswith("/SKILL.md")) == (skill_names if len(projects) == 1 else [])
+            assert not any(p.endswith("evals.json") or "/evals/files/" in p or p.endswith("sample-report.md") for p in installed)
+            if len(projects) == 1:
+                assert "money-arithmetic/evals/vectors/test_money.py" in installed
+                if name == "fintech-audit":
+                    assert len([p for p in installed if p.endswith("/SKILL.md")]) == 13
+                    assert "fintech-audit/scripts/money_lint.py" in installed
+                    assert "fintech-audit/evals/vectors/test_lint.py" in installed
+                else:
+                    assert len([p for p in installed if p.endswith("/SKILL.md")]) == 1
             if len(projects) != 1:
                 assert not (project / ".claude").exists()
             assert runner.project_files(project) == {}
@@ -110,12 +123,13 @@ def test_installed_projects(name, has_vectors, runner_args, tmp_path, monkeypatc
         record, count = runner.evaluate_prompt(runner_args, runner.ROOT / "skills" / name,
                                               evaluation, condition, 1, tmp_path)
         assert count == 2
-        assert bool(record["installed_paths"]) == (condition == "with")
+        assert record["installed_paths"] == ([".claude/skills/" + p for p in sorted(expected)] if condition == "with" else [])
     assert len(set(projects)) == 4
     assert all(not project.exists() for project in projects)
 
 
-@pytest.mark.parametrize("name", ["/absolute.txt", "../escape.txt", "nested/../escape.txt", "missing.txt"])
+@pytest.mark.parametrize("name", ["/absolute.txt", "../escape.txt", "evals/files/../escape.txt",
+                                 "evals/files/missing.txt", "SKILL.md"])
 def test_invalid_input_files(name, runner_args, tmp_path, monkeypatch):
     calls, projects = [], []
     original = runner.install_project
@@ -214,11 +228,51 @@ def test_capture(verbose, runner_args, tmp_path, monkeypatch):
     assert all(str(p) not in json.dumps(record) for p in project_paths)
 
 
+@pytest.mark.parametrize("condition", ["with", "without"])
+@pytest.mark.parametrize("skill,source,target", [
+    ("money-arithmetic", "evals/files/api_amount.py", "src/api_amount.py"),
+    ("fintech-audit", "evals/files/audit-fixture/src/billing.py", "src/billing.py"),
+    ("fintech-audit", "evals/files/audit-fixture/README.md", "README.md"),
+])
+def test_fixture_placement(condition, skill, source, target, runner_args, tmp_path, monkeypatch):
+    original = runner.fake_session
+    inputs = []
+    def inspect(role, project, prompt):
+        if role == "subject":
+            inputs.append(runner.project_files(project))
+        return original(role, project, prompt)
+    monkeypatch.setattr(runner, "fake_session", inspect)
+    folder = runner.ROOT / "skills" / skill
+    record, count = runner.evaluate_prompt(runner_args, folder, {
+        "id": 1, "prompt": "Synthetic", "files": [source], "expectations": ["Explains"]}, condition, 1, tmp_path)
+    assert inputs == [{target: (folder / source).read_bytes()}]
+    assert count == 2
+    assert [v["status"] for v in record["verdicts"]] == ["passed"]
+
+
+@pytest.mark.parametrize("files", [
+    ["evals/files/input.py", "evals/files/fixture/src/input.py"],
+    ["evals/files/input.py", "evals/files/input.py"],
+])
+def test_duplicate_input_files(files, runner_args, tmp_path, monkeypatch):
+    skill = tmp_path / "synthetic-skill"
+    (skill / "evals/files/fixture/src").mkdir(parents=True)
+    (skill / "evals/files/input.py").write_text("flat")
+    (skill / "evals/files/fixture/src/input.py").write_text("tree")
+    calls = []
+    monkeypatch.setattr(runner, "fake_session", lambda *a: calls.append(a))
+    record, count = runner.evaluate_prompt(runner_args, skill, {
+        "id": 1, "prompt": "Synthetic", "files": files, "expectations": ["First", "Second"]}, "with", 1, tmp_path)
+    assert count == 0 and calls == []
+    assert [v["status"] for v in record["verdicts"]] == ["error", "error"]
+    assert [v["evidence"] for v in record["verdicts"]] == ["duplicate eval file target: src/input.py"] * 2
+
+
 def test_fixture_changes(runner_args, tmp_path, monkeypatch):
     skill = tmp_path / "synthetic-skill"
-    (skill / "nested").mkdir(parents=True)
-    (skill / "nested/input.txt").write_text("original")
-    (skill / "unchanged.txt").write_text("unchanged")
+    (skill / "evals/files/fixture/nested").mkdir(parents=True)
+    (skill / "evals/files/fixture/nested/input.txt").write_text("original")
+    (skill / "evals/files/unchanged.txt").write_text("unchanged")
     (skill / "SKILL.md").write_text("Synthetic")
     (skill / "evals/vectors/__pycache__").mkdir(parents=True)
     (skill / "evals/vectors/__pycache__/reference.pyc").write_bytes(b"synthetic cache")
@@ -233,10 +287,10 @@ def test_fixture_changes(runner_args, tmp_path, monkeypatch):
     monkeypatch.setattr(runner, "fake_session", change)
     for condition in ("with", "without"):
         record, _ = runner.evaluate_prompt(runner_args, skill, {
-            "id": 1, "prompt": "Synthetic", "files": ["nested/input.txt", "unchanged.txt"], "expectations": ["Explains"]}, condition, 1, tmp_path)
+            "id": 1, "prompt": "Synthetic", "files": ["evals/files/fixture/nested/input.txt", "evals/files/unchanged.txt"], "expectations": ["Explains"]}, condition, 1, tmp_path)
         assert [f["path"] for f in record["files"]] == ["nested/input.txt", "test_generated.py"]
         assert (tmp_path / record["files"][0]["raw_path"]).read_text() == "changed"
-    assert inputs == [{"nested/input.txt": b"original", "unchanged.txt": b"unchanged"}] * 2
+    assert inputs == [{"nested/input.txt": b"original", "src/unchanged.txt": b"unchanged"}] * 2
 
 
 def test_grader_payload(runner_args, tmp_path, monkeypatch):
@@ -300,8 +354,8 @@ def test_static_classification():
     checks = [runner.static_checks(expectation, [])
               for path in (runner.ROOT / "skills").glob("*/evals/evals.json")
               for evaluation in json.loads(path.read_text())["evals"] for expectation in evaluation["expectations"]]
-    assert sum(bool(c) for c in checks) == 18
-    advice = json.loads((runner.ROOT / "skills/money-tests/evals/evals.json").read_text())["evals"][1]
+    assert sum(c["kind"] == "test_file" for items in checks for c in items) == 58
+    advice = next(e for e in json.loads((runner.ROOT / "skills/money-tests/evals/evals.json").read_text())["evals"] if e["id"] == 2)
     assert [runner.static_checks(e, []) for e in advice["expectations"]] == [[], [], [], []]
 
 
@@ -376,9 +430,9 @@ def test_full_fake_flow(tmp_path, monkeypatch):
     assert data["skill"] == "money-arithmetic" and data["git_sha"] == "abcdef0123456789"
     assert data["skills_dirty"] is False
     assert ".claude/skills/money-arithmetic/SKILL.md" in data["installed_paths"]
-    assert len(data["records"]) == 12
+    assert len(data["records"]) == 28
     assert [(r["eval_id"], r["condition"], r["run"]) for r in data["records"]] == [
-        (e, c, n) for e in (1, 2, 3) for c in ("with", "without") for n in (1, 2)]
+        (e, c, n) for e in (1, 2, 3, 4, 5, 6, 7) for c in ("with", "without") for n in (1, 2)]
     for record in data["records"]:
         assert record["subject"]["final_answer"] == "Fake answer in <project>"
         assert all(v["status"] == "passed" and v["evidence"] for v in record["verdicts"])
@@ -396,11 +450,11 @@ def test_full_fake_flow(tmp_path, monkeypatch):
         assert json.dumps(payload["transcript"])[1:-1] not in skill_json
     summary = (run_dir / "summary.md").read_text()
     assert summary.startswith("# FAKE evaluation (no model judgments)\n")
-    assert "Planned sessions: 24; started sessions: 24" in summary
+    assert "Planned sessions: 56; started sessions: 56" in summary
     raw_size = sum(p.stat().st_size for p in (run_dir / "raw").rglob("*") if p.is_file())
     assert f"Raw size: {raw_size} bytes" in summary
-    assert "| money-arithmetic | with | 100.0% | 28 | 0 | 0 | 0 | 108 | 42 |" in summary
-    assert "| all-skills | without | 100.0% | 28 | 0 | 0 | 0 | 108 | 42 |" in summary
+    assert "| money-arithmetic | with | 100.0% | 60 | 0 | 0 | 0 | 252 | 98 |" in summary
+    assert "| all-skills | without | 100.0% | 60 | 0 | 0 | 0 | 252 | 98 |" in summary
 
 
 @pytest.mark.parametrize("statuses,expected", [
@@ -492,10 +546,10 @@ def test_malformed_usage_flow(role, usage, tmp_path, monkeypatch):
     assert runner.eval_main(["--skill", "money-tests", "--agent", "fake", "--results-dir", str(tmp_path)]) == 0
     run_dir, = tmp_path.iterdir()
     data = json.loads((run_dir / "money-tests.json").read_text())
-    assert len(data["records"]) == 6
+    assert len(data["records"]) == 14
     for record in data["records"]:
         assert record[role]["error"] == "invalid session usage"
         assert all(v["status"] == "error" and v["evidence"] == "invalid session usage" for v in record["verdicts"])
     summary = (run_dir / "summary.md").read_text()
-    assert "| money-tests | with | n/a | 0 | 0 | 13 |" in summary
-    assert f"Planned sessions: 12; started sessions: {6 if role == 'subject' else 12}" in summary
+    assert "| money-tests | with | n/a | 0 | 0 | 30 |" in summary
+    assert f"Planned sessions: 28; started sessions: {14 if role == 'subject' else 28}" in summary

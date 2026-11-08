@@ -70,7 +70,7 @@ an environment variable. See [evals/README.md](evals/README.md).
 
 ```sh
 python scripts/validate.py       # frontmatter, evals, manifest
-python -m pytest -q skills       # vectors against the references
+python -m pytest -q              # vectors against the references
 ```
 
 ## Scope

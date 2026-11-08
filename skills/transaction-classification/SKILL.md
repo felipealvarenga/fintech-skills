@@ -93,6 +93,10 @@ confirmation path marks it paid). Do not stop at a warning, and do not build the
 
 ## Tests the change must include
 
+Write these tests in the same change, as a test file, even when you cannot run them (no shell,
+no dependencies installed); say in one line that they are unrun. A test listed as a next step is
+not written.
+
 - Holdout evaluation runs in CI or on a schedule and fails the pull request when precision for
   any auto-post class drops below its target.
 - Deterministic layers: a user rule beats the model; an approved repeat beats the model; a

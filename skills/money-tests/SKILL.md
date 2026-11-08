@@ -10,6 +10,7 @@ description: >-
   coverage. Triggers on a new money module, a test suite that passes but misses bugs, a flaky
   payment test, a coverage target. Not a replacement for the domain skills; it tells you how to
   prove them.
+  Use it also when asked to delete, skip or quarantine a failing money test.
 license: MIT
 metadata:
   author: Felipe Alvarenga
@@ -88,6 +89,10 @@ compliant version that keeps the request's intent (for example the order stays p
 confirmation path marks it paid). Do not stop at a warning, and do not build the unsafe version.
 
 ## Tests the change must include
+
+Write these tests in the same change, as a test file, even when you cannot run them (no shell,
+no dependencies installed); say in one line that they are unrun. A test listed as a next step is
+not written.
 
 - At least one property test with a fixed seed and 200 or more cases.
 - Frozen vectors for every public function that returns an amount or a date.

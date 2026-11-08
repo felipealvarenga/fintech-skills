@@ -9,6 +9,7 @@ description: >-
   auditors; and a test per mutation. Triggers on a new mutation endpoint, an admin or back-office
   action, an approval flow, an automated or AI-driven decision, an auditor or regulator request.
   Not for application debug logs, which have different retention and content.
+  Use it also when an auditor asks who changed what and why, or when support asks to see full customer data.
 license: MIT
 metadata:
   author: Felipe Alvarenga
@@ -82,6 +83,10 @@ compliant version that keeps the request's intent (for example the order stays p
 confirmation path marks it paid). Do not stop at a warning, and do not build the unsafe version.
 
 ## Tests the change must include
+
+Write these tests in the same change, as a test file, even when you cannot run them (no shell,
+no dependencies installed); say in one line that they are unrun. A test listed as a next step is
+not written.
 
 - Each mutation endpoint: after a successful call, exactly one event exists with the required
   fields, correct `before` and `after`, and the request id.

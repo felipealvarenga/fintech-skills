@@ -81,6 +81,10 @@ confirmation path marks it paid). Do not stop at a warning, and do not build the
 
 ## Tests the change must include
 
+Write these tests in the same change, as a test file, even when you cannot run them (no shell,
+no dependencies installed); say in one line that they are unrun. A test listed as a next step is
+not written.
+
 - Reference match beats a date match when both are possible.
 - Date window: inside matches, one day outside does not.
 - Two identical amounts on each side produce two matches, not one line matched twice.

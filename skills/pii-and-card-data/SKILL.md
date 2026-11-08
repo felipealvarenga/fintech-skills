@@ -10,6 +10,7 @@ description: >-
   LGPD, GDPR and PCI DSS. Triggers on a new form or schema field, a log statement near a payment,
   a CSV export, an analytics event, a support tool. Not legal advice on which regulation applies;
   counsel confirms that.
+  Use it also when asked to seed staging from production data or to show a full document or card number.
 license: MIT
 metadata:
   author: Felipe Alvarenga
@@ -92,6 +93,10 @@ compliant version that keeps the request's intent (for example the order stays p
 confirmation path marks it paid). Do not stop at a warning, and do not build the unsafe version.
 
 ## Tests the change must include
+
+Write these tests in the same change, as a test file, even when you cannot run them (no shell,
+no dependencies installed); say in one line that they are unrun. A test listed as a next step is
+not written.
 
 - Redaction: a captured log from a sample payment and a sample signup contains no PAN, CVV,
   token, password, full CPF or full email.

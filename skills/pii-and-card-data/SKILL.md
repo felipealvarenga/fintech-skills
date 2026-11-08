@@ -97,6 +97,8 @@ safer default.
 - Masking: UI and export fixtures show last four only.
 - Deletion job: a deleted customer's rows are gone from primary tables and the search index.
 - Generators produce valid check digits and never a real-looking sequence from production.
+- Reference vectors: `skills/pii-and-card-data/evals/vectors/test_pii.py` with `PII_SOLUTION`
+  pointing at your module (allowlist redaction, scanner, Luhn, generators, masking, schema lint).
 
 ## Review checklist
 

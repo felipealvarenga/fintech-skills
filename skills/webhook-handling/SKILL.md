@@ -88,6 +88,8 @@ which is the goal.
 - Handler raises during processing: event marked failed and retryable; the provider got 2xx;
   the replay command processes it after the fix.
 - Live-mode event on the test endpoint: refused.
+- Reference vectors: `skills/webhook-handling/evals/vectors/test_webhooks.py` with
+  `WEBHOOK_SOLUTION` pointing at your module (signature, tolerance, rotation, dedupe, order).
 
 ## Review checklist
 

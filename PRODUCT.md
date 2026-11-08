@@ -14,8 +14,8 @@ do. Twelve skills at v0: money arithmetic, double-entry ledger, idempotent payme
 handling, reconciliation, accounting sync, transaction classification, PII and card data, audit
 trail, interest and amortization, Brazil payment rails, money tests.
 
-Each skill is a folder with `SKILL.md` and `evals/evals.json`. Skills whose output is a number
-also ship `evals/vectors/`: a pytest file with a reference implementation, runnable against any
+Each skill is a folder with `SKILL.md` and `evals/evals.json`. Every skill also ships
+`evals/vectors/`: a pytest file with a reference implementation, runnable against any
 implementation through an environment variable.
 
 ## Who it serves
@@ -27,7 +27,7 @@ implementation through an environment variable.
 
 ## Where we are going
 
-1. v0 (done): twelve skills, evals in the skill-creator format, four vector suites, CI.
+1. v0 (done): twelve skills, evals in the skill-creator format, twelve vector suites, CI.
 2. Measured: an eval runner that executes every eval prompt with and without the skill in a
    fresh agent session, grades the expectations, and records results per run with the model,
    the pass rates, tokens and duration. Results are published in the repository.

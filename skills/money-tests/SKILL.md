@@ -91,6 +91,8 @@ actually has (drift, lost cents, double charges, wrong dates, wrong order) make 
 - A mutation run with the kill rate in the pull request description.
 - Date edge cases: month end, leap day, holiday, timezone boundary.
 - Idempotency: duplicate request, concurrent request, timeout then success.
+- Reference vectors: `skills/money-tests/evals/vectors/test_money_tests.py` with
+  `MONEYTESTS_SOLUTION` pointing at your module (a linter for money-test smells, kill-rate math).
 
 ## Review checklist
 

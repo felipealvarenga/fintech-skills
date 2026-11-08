@@ -87,6 +87,8 @@ and complete enough to replay the story without the people who were there.
 - Agent action: `actor_type = agent` and `on_behalf_of` set; approver event separate from
   execution event.
 - Export: a fixture object produces the documented schema.
+- Reference vectors: `skills/audit-trail/evals/vectors/test_audit.py` with `AUDIT_SOLUTION`
+  pointing at your module (same-transaction events, sequences, masking, agents, hash chain).
 
 ## Review checklist
 

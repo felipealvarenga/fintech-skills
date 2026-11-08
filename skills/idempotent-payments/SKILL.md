@@ -93,6 +93,8 @@ Idempotency is not a header; it is a property of every money-moving path, inboun
 - A 400 from the processor is not retried; a 503 is retried with backoff up to the limit.
 - An event is emitted exactly once per state change through the outbox; a redelivered event is
   a no-op for the consumer.
+- Reference vectors: `skills/idempotent-payments/evals/vectors/test_idempotency.py` with
+  `IDEMPOTENCY_SOLUTION` pointing at your module (store, state machine, timeout, retries).
 
 ## Review checklist
 

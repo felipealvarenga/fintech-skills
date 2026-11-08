@@ -9,11 +9,11 @@ teste que rodam no CI.
 
 <!-- generated:headline -->
 **Medido.** Os mesmos 91 prompts rodaram no `claude-sonnet-5-5` com e sem as skills (skills em
-`ae8adc1`), e uma sessão separada do mesmo modelo avaliou cada transcrição contra expectativas escritas antes
+`fa81209`), e uma sessão separada do mesmo modelo avaliou cada transcrição contra expectativas escritas antes
 da execução. A nota é a fração das expectativas que o avaliador marcou como atendidas; o código do agente é
-lido, não executado. **Com as skills, 78%. Sem elas, 26%** (289 contra 95 de 370). Por skill,
-método e transcrições brutas: [evals/results/20261108T143507Z-ae8adc1](evals/results/20261108T143507Z-ae8adc1/summary.md). Esses prompts são prompts de desenvolvimento: as skills foram revisadas
-contra as falhas das execuções anteriores neles. Um conjunto reservado (prompts nunca lidos ao editar uma skill) está em `evals/heldout/` e ainda não foi medido neste commit.
+lido, não executado. **Com as skills, 81%. Sem elas, 24%** (299 contra 87 de 370). Por skill,
+método e transcrições brutas: [evals/results/20261108T180307Z-fa81209](evals/results/20261108T180307Z-fa81209/summary.md). Esses prompts são prompts de desenvolvimento: as skills foram revisadas
+contra as falhas das execuções anteriores neles. No conjunto reservado, prompts em `evals/heldout/` nunca lidos ao editar uma skill: `claude-sonnet-5-5`: **70% com, 24% sem** (73 contra 25 de 105, [evals/results/20261108T194552Z-fa81209-heldout](evals/results/20261108T194552Z-fa81209-heldout/summary.md)).
 <!-- /generated:headline -->
 
 ## Por quê
@@ -70,21 +70,21 @@ teste. Sonnet 5.5, 7 turnos, USD 0,21.
 <!-- generated:skills-table -->
 | Skill | Use quando | Com / sem | Vetores |
 |---|---|---|---|
-| [fintech-audit](skills/fintech-audit/SKILL.md)† | Auditar um repositório ou um PR que mexe com dinheiro; o ponto de entrada | 77% / 37% | py |
-| [money-arithmetic](skills/money-arithmetic/SKILL.md) | Guardar, somar, ratear, converter, arredondar ou formatar valores | 83% / 37% | py, ts |
-| [double-entry-ledger](skills/double-entry-ledger/SKILL.md) | Qualquer tabela que responde "quanto X tem ou deve" | 79% / 39% | py, ts |
+| [fintech-audit](skills/fintech-audit/SKILL.md)† | Auditar um repositório ou um PR que mexe com dinheiro; o ponto de entrada | 77% / 33% | py |
+| [money-arithmetic](skills/money-arithmetic/SKILL.md) | Guardar, somar, ratear, converter, arredondar ou formatar valores | 83% / 33% | py, ts |
+| [double-entry-ledger](skills/double-entry-ledger/SKILL.md) | Qualquer tabela que responde "quanto X tem ou deve" | 82% / 25% | py, ts |
 | [idempotent-payments](skills/idempotent-payments/SKILL.md) | Criar, capturar, estornar ou pagar; chamar um processador | 86% / 21% | py, ts |
 | [webhook-handling](skills/webhook-handling/SKILL.md) | Receber callbacks de processadores, bancos e PSPs | 86% / 7% | py, ts |
-| [reconciliation](skills/reconciliation/SKILL.md) | Conciliar ledger, relatório do processador e extrato bancário | 76% / 17% | py |
-| [accounting-sync](skills/accounting-sync/SKILL.md) | Integrar com QuickBooks, Xero, NetSuite, Omie, Conta Azul | 79% / 14% | py |
-| [transaction-classification](skills/transaction-classification/SKILL.md) | Categorizar transações com regras, ML ou LLM, em especial com lançamento automático | 100% / 19% | py |
+| [reconciliation](skills/reconciliation/SKILL.md) | Conciliar ledger, relatório do processador e extrato bancário | 72% / 10% | py |
+| [accounting-sync](skills/accounting-sync/SKILL.md) | Integrar com QuickBooks, Xero, NetSuite, Omie, Conta Azul | 68% / 21% | py |
+| [transaction-classification](skills/transaction-classification/SKILL.md) | Categorizar transações com regras, ML ou LLM, em especial com lançamento automático | 100% / 22% | py |
 | [pii-and-card-data](skills/pii-and-card-data/SKILL.md) | Coletar, logar, exibir ou exportar dados pessoais, bancários ou de cartão | 63% / 37% | py |
-| [audit-trail](skills/audit-trail/SKILL.md) | Qualquer mutação de dinheiro, limites, permissões ou dados de cliente; ações de agentes | 70% / 22% | py |
-| [interest-and-amortization](skills/interest-and-amortization/SKILL.md) | Juros, parcelas, tabelas Price e SAC, provisões, taxa efetiva | 68% / 21% | py |
-| [brazil-payment-rails](skills/brazil-payment-rails/SKILL.md) | Pix, boleto, parcelamento no cartão, CPF e CNPJ, NF-e | 55% / 17% | py, ts |
-| [money-tests](skills/money-tests/SKILL.md) | Escrever ou revisar testes para qualquer item acima | 93% / 43% | py |
+| [audit-trail](skills/audit-trail/SKILL.md) | Qualquer mutação de dinheiro, limites, permissões ou dados de cliente; ações de agentes | 74% / 26% | py |
+| [interest-and-amortization](skills/interest-and-amortization/SKILL.md) | Juros, parcelas, tabelas Price e SAC, provisões, taxa efetiva | 71% / 18% | py |
+| [brazil-payment-rails](skills/brazil-payment-rails/SKILL.md) | Pix, boleto, parcelamento no cartão, CPF e CNPJ, NF-e | 90% / 21% | py, ts |
+| [money-tests](skills/money-tests/SKILL.md) | Escrever ou revisar testes para qualquer item acima | 97% / 30% | py |
 
-Uma execução por prompt. Uma célula de cerca de 28 expectativas carrega cerca de ±15 pontos (intervalo de Wilson a 95%); os números do pacote carregam cerca de ±4. † fintech-audit foi medida sem o lint que ela roda: o sandbox do eval não tem shell, então a linha e o relatório de exemplo (produzido com shell) não são o mesmo arranjo.
+Uma execução por prompt. Uma célula de cerca de 28 expectativas carrega cerca de ±14 pontos (intervalo de Wilson a 95%); os números do pacote carregam cerca de ±4. † fintech-audit foi medida sem o lint que ela roda: o sandbox do eval não tem shell, então a linha e o relatório de exemplo (produzido com shell) não são o mesmo arranjo.
 <!-- /generated:skills-table -->
 
 Toda `SKILL.md` tem a mesma forma: quando usar, regras numeradas, como aplicar, o que fazer
@@ -108,8 +108,10 @@ arquivos que o agente escreveu. Pastas antigas nunca são editadas. Método e fl
 | [20261108T035910Z-c7e767e](evals/results/20261108T035910Z-c7e767e/summary.md) | `c7e767e` | desenvolvimento | `claude-sonnet-5-5` | 62% | 25% | 36.8 |
 | [20261108T053526Z-ee4f998](evals/results/20261108T053526Z-ee4f998/summary.md) | `ee4f998` | desenvolvimento | `claude-sonnet-5-5` | 72% | 27% | 45.4 |
 | [20261108T143507Z-ae8adc1](evals/results/20261108T143507Z-ae8adc1/summary.md) | `ae8adc1` | desenvolvimento | `claude-sonnet-5-5` | 78% | 26% | 52.4 |
+| [20261108T180307Z-fa81209](evals/results/20261108T180307Z-fa81209/summary.md) | `fa81209` | desenvolvimento | `claude-sonnet-5-5` | 81% | 24% | 57.3 |
+| [20261108T194552Z-fa81209-heldout](evals/results/20261108T194552Z-fa81209-heldout/summary.md) | `fa81209` | reservado | `claude-sonnet-5-5` | 70% | 24% | 45.7 |
 
-Em 1 das 91 sessões com skill da última execução o agente nunca abriu a skill; essa sessão conta contra as skills.
+Em 2 das 91 sessões com skill da última execução o agente nunca abriu a skill; essas sessões contam contra as skills.
 <!-- /generated:runs -->
 
 ## Escopo
@@ -129,7 +131,7 @@ skills para a seguinte; os resumos das execuções registram o que mudou e por q
 <!-- generated:cut-rule -->
 A regra de corte declarada antes da primeira execução: skill que não move os próprios evals em pelo menos
 10 pontos é incorporada a outra ou removida. Na última execução o menor ganho foi de 25.9 pontos (pii-and-card-data)
-e o maior de 81.5 (transaction-classification). O ruído de uma célula é de cerca de ±15 pontos, então a regra é aplicada
+e o maior de 79.3 (webhook-handling). O ruído de uma célula é de cerca de ±14 pontos, então a regra é aplicada
 sobre execuções repetidas, não sobre uma.
 <!-- /generated:cut-rule -->
 

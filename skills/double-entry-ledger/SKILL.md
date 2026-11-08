@@ -109,7 +109,7 @@ confirmation path marks it paid). Do not stop at a warning, and do not build the
 - Same external reference twice returns the first entry and writes nothing.
 - Trial balance: after random balanced entries, total debits equal total credits.
 - Reference vectors: `skills/double-entry-ledger/evals/vectors/test_ledger.py` with
-  `LEDGER_SOLUTION` pointing at your module.
+  `LEDGER_SOLUTION` pointing at your module. TypeScript: `ledger.test.ts` with `LEDGER_SOLUTION_TS`.
 
 ## Review checklist
 

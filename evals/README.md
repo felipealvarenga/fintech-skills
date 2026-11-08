@@ -39,4 +39,4 @@ MONEY_SOLUTION=./src/money.py python -m pytest -q skills/money-arithmetic   # yo
 
 TypeScript ports live beside the Python files (`*.test.ts` with `reference.ts`) and run with
 `npm ci && npm run test:ts`; point `MONEY_SOLUTION_TS` (and the matching variable per skill) at
-your module. Ports exist for money-arithmetic, webhook-handling, idempotent-payments and double-entry-ledger; the remaining skills follow.
+your module. Ports exist for money-arithmetic, webhook-handling, idempotent-payments, double-entry-ledger and brazil-payment-rails; the remaining skills follow.

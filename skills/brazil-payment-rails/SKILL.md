@@ -144,6 +144,7 @@ confirmation path marks it paid). Do not stop at a warning, and do not build the
   due-date factor maps both ways across the 2025-02-22 reset.
 - Reference vectors: `skills/brazil-payment-rails/evals/vectors/test_brazil.py` with
   `BRAZIL_SOLUTION` pointing at your module (CPF, CNPJ, boleto check digits, due-date factor).
+  TypeScript: `brazil.test.ts` with `BRAZIL_SOLUTION_TS`.
 
 ## Review checklist
 

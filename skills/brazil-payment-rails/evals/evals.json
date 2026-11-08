@@ -3,7 +3,7 @@
   "evals": [
     {
       "id": 1,
-      "prompt": "Add Pix as a payment method to our checkout.",
+      "prompt": "Add Pix as a payment method to our checkout. Start from src/pix_service.py.",
       "expected_output": "Uses dynamic QR charges with txid and expiry, stores endToEndId, confirms by API after the webhook, handles refunds by devolucao and MED clawbacks, and defines the policy for expired charges that still get paid.",
       "expectations": [
         "Generates a dynamic charge with a txid and an expiry rather than a static QR",
@@ -11,28 +11,93 @@
         "Confirms the charge status by API after the webhook before fulfilling",
         "Handles devolucao (full and partial) and mentions MED clawbacks",
         "Defines what happens when an expired charge is paid"
+      ],
+      "files": [
+        "evals/files/pix_service.py"
       ]
     },
     {
       "id": 2,
-      "prompt": "Mark the order as paid when we generate the boleto so the customer can download the product.",
+      "prompt": "Mark the order as paid in generate_boleto (src/checkout.py) so the customer can download the product right away.",
       "expected_output": "Refuses; the order stays pending until the return file or webhook confirms payment, usually D+1, and the design stores nosso numero and the linha digitavel for matching.",
       "expectations": [
         "Does not mark the order paid on issuance",
         "Confirms payment from the return file or webhook, with D+1 clearing explained",
         "Stores nosso numero and the linha digitavel and matches the return by nosso numero",
         "Mentions late payment handling (multa, juros) and expiry"
+      ],
+      "files": [
+        "evals/files/checkout.py"
       ]
     },
     {
       "id": 3,
-      "prompt": "Validate CNPJ input: digits only, 14 characters.",
+      "prompt": "Our CNPJ validator (src/cnpj.py) accepts digits only, 14 characters. Confirm it is correct.",
       "expected_output": "Implements the check-digit algorithm, accepts the alphanumeric CNPJ issued from July 2026, normalizes formatting, masks on display, and adds vectors.",
       "expectations": [
         "Validates with the check-digit algorithm, not just length",
         "Accepts letters in the first twelve positions for CNPJs issued from July 2026",
         "Normalizes formatted input and stores it unformatted",
         "Adds tests with valid, invalid and alphanumeric examples"
+      ],
+      "files": [
+        "evals/files/cnpj.py"
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "Keep the single static Pix QR code in src/pix_service.py for all orders; it is simpler, and we match payments by payer name.",
+      "expected_output": "Replaces payer-name matching with dynamic charges per order (txid, amount, expiry), keeps the static QR only with explicit handling of over, under and repeated payments, and matches by txid or endToEndId.",
+      "expectations": [
+        "Does not match payments by payer name",
+        "Creates a dynamic charge per order with txid, amount and expiry, or keeps the static QR only with explicit handling of over, under and repeated payments",
+        "Matches received Pix by txid or endToEndId",
+        "Tests cover a repeated payment of the same amount not paying two orders"
+      ],
+      "files": [
+        "evals/files/pix_service.py"
+      ]
+    },
+    {
+      "id": 5,
+      "prompt": "A customer disputed a Pix through MED and we had already shipped. What do we build in src/pix_service.py?",
+      "expected_output": "Adds a clawback state for received Pix, a ledger reversal path, the MED window (80 days to open a claim since September 2026), fraud signals before fulfilment for high-risk orders, and a dispute record.",
+      "expectations": [
+        "Models a received Pix that can be returned under MED as a state, not as an impossible event",
+        "The clawback reverses the ledger entry and updates the order, with a dispute record",
+        "States the MED window correctly (claim within 80 days since 1 September 2026) and that MED covers fraud or operational failure, not remorse",
+        "Proposes a fulfilment delay or extra checks for high-risk orders"
+      ],
+      "files": [
+        "evals/files/pix_service.py"
+      ]
+    },
+    {
+      "id": 6,
+      "prompt": "Boletos paid after the due date arrive with amounts different from the invoice, so src/boleto_return.py leaves them unpaid. Fix the matching.",
+      "expected_output": "Matches the return by nosso numero, computes the expected amount from the registered fine and daily interest, and accepts the return when the paid amount equals the rule, never by fuzzy tolerance.",
+      "expectations": [
+        "Matches by nosso numero, not by amount",
+        "Computes the expected late amount from the registered multa and juros for the days late",
+        "Accepts the payment when it equals the computed amount; differences become breaks with a reason, not a tolerance",
+        "Tests cover an on-time payment, a late payment and a wrong amount"
+      ],
+      "files": [
+        "evals/files/boleto_return.py"
+      ]
+    },
+    {
+      "id": 7,
+      "prompt": "Record a 10x installment card sale of R$ 1.200,00 in the ledger (src/cards.py).",
+      "expected_output": "Creates a receivable schedule of ten rows net of MDR with one expected settlement per month, books MDR as a fee line, keeps anticipation as a separate later event with its own fee, and separates chargeback from estorno states.",
+      "expectations": [
+        "Does not post the sale as cash in; posts a receivable with ten installments",
+        "MDR is a separate fee line; the ten net rows sum to the net amount",
+        "Anticipation of receivables is modeled as a later event with its own fee",
+        "Chargeback and estorno are distinct states"
+      ],
+      "files": [
+        "evals/files/cards.py"
       ]
     }
   ]

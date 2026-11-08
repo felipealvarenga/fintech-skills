@@ -3,7 +3,7 @@
   "evals": [
     {
       "id": 1,
-      "prompt": "Write a script that matches our ledger payments with the Stripe payout CSV.",
+      "prompt": "Write a script that matches our ledger payments (src/ledger.csv) with the Stripe payout export (src/stripe_payout.csv).",
       "expected_output": "Normalizes both sources, matches by reference first and then by amount within a date window, one-to-one and deterministic, outputs matches with the tier and breaks with reason codes, and never posts adjustments.",
       "expectations": [
         "Both sources are normalized into the same line shape with amount in minor units and currency",
@@ -11,28 +11,99 @@
         "Each line matches at most once; duplicated amounts match one-to-one",
         "Output lists matched pairs with the rule used and unmatched lines on both sides with reason codes",
         "The script does not write to the ledger"
+      ],
+      "files": [
+        "evals/files/ledger.csv",
+        "evals/files/stripe_payout.csv"
       ]
     },
     {
       "id": 2,
-      "prompt": "The bank balance differs from our ledger by R$ 1.234,56. Find out why.",
+      "prompt": "The bank balance (src/bank.csv) differs from our ledger (src/ledger.csv, src/stripe_payout.csv) by R$ 1.234,56. Find out why.",
       "expected_output": "Runs a reconciliation over the open window and classifies the breaks (timing, fee, FX, missing on either side, duplicate) instead of posting a plug entry.",
       "expectations": [
         "Produces a list of breaks with reason codes rather than a single adjusting entry",
         "Checks for unbooked fee lines and FX differences as separate lines",
         "Uses an explicit date window and no hidden amount tolerance",
         "Keeps the run result as a record with inputs and parameters"
+      ],
+      "files": [
+        "evals/files/ledger.csv",
+        "evals/files/stripe_payout.csv",
+        "evals/files/bank.csv"
       ]
     },
     {
       "id": 3,
-      "prompt": "Automate month-end: auto-post an adjustment for any remaining difference.",
+      "prompt": "Automate month end in src/match_script.py: auto-post an adjustment for any remaining difference.",
       "expected_output": "Declines automatic adjustments; routes breaks to a person with reason codes and ages, stores immutable run records, and publishes match rate and oldest break metrics.",
       "expectations": [
         "Does not auto-post adjustments from the reconciliation job",
         "Breaks have reason codes, owners and ages, and the oldest unknown break alerts",
         "The run record is immutable and includes input hashes or equivalents",
         "Metrics include match rate and oldest open break age"
+      ],
+      "files": [
+        "evals/files/match_script.py"
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "Our match rate is 92%. Add a 2% amount tolerance to src/match_script.py so it reaches 99%.",
+      "expected_output": "Refuses a blanket tolerance; investigates the 8% by reason (fees netted, timing, FX), books fee lines, and allows a tolerance only per source with a documented reason and visibility in the match record.",
+      "expectations": [
+        "Does not add a default amount tolerance",
+        "Attributes the unmatched lines to reasons such as netted fees or timing and fixes the cause (fee lines, tier rules)",
+        "Any tolerance is per source, small, with a reason, and recorded on the match",
+        "Shows the match rate before and after the real fix"
+      ],
+      "files": [
+        "evals/files/match_script.py",
+        "evals/files/ledger.csv",
+        "evals/files/stripe_payout.csv"
+      ]
+    },
+    {
+      "id": 5,
+      "prompt": "src/match_script.py sometimes pairs the wrong lines when two payments have the same amount. Fix it.",
+      "expected_output": "Adds the reference tier before the amount tier, a date window, one-to-one matching and deterministic ordering, with a test of duplicated amounts.",
+      "expectations": [
+        "Matches by reference and amount before amount alone",
+        "Amount matches use an explicit date window and earliest-first ordering",
+        "A line can match at most once",
+        "A test with two equal amounts on each side shows two correct pairs"
+      ],
+      "files": [
+        "evals/files/match_script.py",
+        "evals/files/ledger.csv",
+        "evals/files/stripe_payout.csv"
+      ]
+    },
+    {
+      "id": 6,
+      "prompt": "Stripe payouts net the fees (src/stripe_payout.csv). Make the payout line match our captures.",
+      "expected_output": "Books the fee lines and writes a named grouping rule: payout equals the sum of captures minus fees in the period; no tolerance.",
+      "expectations": [
+        "Fee lines are booked as their own lines, not hidden inside a difference",
+        "A named rule matches one payout to many captures minus fees",
+        "The rule is explicit code with a name, not a fuzzy tolerance",
+        "A test shows the payout matching gross captures minus fees exactly"
+      ],
+      "files": [
+        "evals/files/ledger.csv",
+        "evals/files/stripe_payout.csv",
+        "evals/files/bank.csv"
+      ]
+    },
+    {
+      "id": 7,
+      "prompt": "Build the reconciliation dashboard for the finance team. This is a new Python project; create src/ and tests/ as needed.",
+      "expected_output": "Shows match rate by count and amount, breaks by reason, oldest open break age and the amount in unknown, with thresholds and alerts, fed by immutable run records.",
+      "expectations": [
+        "Includes match rate by count and by amount",
+        "Includes breaks by reason code and the oldest open break age",
+        "Includes the amount sitting in unknown breaks with a threshold that alerts",
+        "Data comes from immutable run records, not from live mutable tables"
       ]
     }
   ]

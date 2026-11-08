@@ -3,35 +3,100 @@
   "evals": [
     {
       "id": 1,
-      "prompt": "Sync our payments to QuickBooks Online every night.",
-      "expected_output": "Designs the sync with explicit account mapping per tenant, daily summary journal entries carrying our ids, stored QuickBooks ids and SyncTokens, idempotent pushes, period-lock handling, token refresh persistence and a drift report.",
+      "prompt": "Review src/qbo_sync.py and make the nightly QuickBooks Online sync safe to run every night.",
+      "expected_output": "Designs the sync with explicit account mapping per tenant by id, daily summary journal entries carrying our ids, stored QuickBooks ids and SyncTokens, requestid idempotency, closed-period handling and a drift report.",
       "expectations": [
-        "Account mapping is an explicit table per tenant; no guessed accounts",
-        "Each pushed object carries our id and we store their id (and SyncToken or equivalent) so re-pushes update or no-op instead of duplicating",
+        "Account mapping is an explicit table per tenant by remote id; no lookup by account name at runtime",
+        "Each pushed object carries our id and we store their id (and SyncToken or equivalent) so re-pushes update or no-op instead of duplicating; creates use the requestid parameter",
         "Handles the accounting system's closed-period error by posting in the open period with a note",
-        "Persists the rotated refresh token atomically and alerts before expiry",
+        "Amounts convert from minor units at the edge, not scattered divisions by 100",
         "Adds a drift report comparing our balances with theirs per mapped account"
+      ],
+      "files": [
+        "evals/files/qbo_sync.py"
       ]
     },
     {
       "id": 2,
-      "prompt": "A customer recategorized an expense in Xero and our nightly sync overwrote it.",
+      "prompt": "A customer recategorized an expense in Xero and our nightly sync (src/xero_push.py) overwrote it.",
       "expected_output": "Adds change detection on their side, a conflict policy and a conflict record, and stops silent overwrites.",
       "expectations": [
         "Detects changes made in the accounting system (modified-since or change data capture) before writing",
         "Applies an explicit conflict policy (ours wins, theirs wins, or flag) instead of overwriting silently",
         "Stores a conflict record for review",
         "Adds a test where a remote edit is preserved or flagged"
+      ],
+      "files": [
+        "evals/files/xero_push.py"
       ]
     },
     {
       "id": 3,
-      "prompt": "When a user deletes an invoice in our app, delete it in QuickBooks too.",
+      "prompt": "When a user deletes an invoice in our app, delete it in QuickBooks too (src/qbo_sync.py).",
       "expected_output": "Voids or reverses instead of hard deleting, mirrors the void with the link to the original, and records the audit event.",
       "expectations": [
         "Does not hard delete in either system; voids or reverses",
         "Keeps the link between the void and the original document",
         "Records who deleted and why"
+      ],
+      "files": [
+        "evals/files/qbo_sync.py"
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "Keep it simple in src/qbo_sync.py: map our 'sales' category to the QuickBooks account named 'Sales'. The ids change between companies anyway.",
+      "expected_output": "Maps by remote account id per tenant, resolved once at setup (optionally by name as a suggestion), queues unmapped activity, and explains why runtime name matching breaks on renamed or localized charts.",
+      "expectations": [
+        "Uses a per-tenant mapping table keyed by the remote account id",
+        "Name lookup, if any, happens once at setup as a suggestion the customer confirms",
+        "Unmapped categories are queued for the customer, not guessed",
+        "Tests cover a renamed remote account not breaking the sync"
+      ],
+      "files": [
+        "evals/files/qbo_sync.py"
+      ]
+    },
+    {
+      "id": 5,
+      "prompt": "The nightly job (src/qbo_sync.py) fails with 'account period closed' for some entries and retries forever.",
+      "expected_output": "Stops retrying closed-period errors, posts the amount in the first open period with the original date in the memo, and surfaces it to the customer.",
+      "expectations": [
+        "Closed-period errors are not retried",
+        "The entry is posted in the first open period with a memo naming the original date",
+        "The customer is shown what was moved",
+        "A test covers the closed-period path"
+      ],
+      "files": [
+        "evals/files/qbo_sync.py"
+      ]
+    },
+    {
+      "id": 6,
+      "prompt": "Customers keep getting disconnected and have to reauthorize QuickBooks every few months (src/token_refresh.py).",
+      "expected_output": "Persists the rotated refresh token atomically before any further call, stores the expiry from the token response, alerts before expiry, and shows connection status.",
+      "expectations": [
+        "The new refresh token is saved before the next API call, not after",
+        "The expiry from the token response is stored and an alert fires before it",
+        "A test covers a crash between refresh and the following call keeping the new token",
+        "Connection status is visible in the product"
+      ],
+      "files": [
+        "evals/files/token_refresh.py"
+      ]
+    },
+    {
+      "id": 7,
+      "prompt": "Our balances do not match the customer's profit and loss report. Build a check in src/qbo_sync.py.",
+      "expected_output": "Adds a daily drift report per mapped account comparing our balance with theirs for the period, with a threshold that opens a task listing the differing entries.",
+      "expectations": [
+        "Compares our balance per mapped account with the accounting system's for the same period",
+        "Runs daily and opens a task when drift exceeds a threshold",
+        "Lists the entries that differ, not only the totals",
+        "Tests plant a one-cent drift and assert it is reported"
+      ],
+      "files": [
+        "evals/files/qbo_sync.py"
       ]
     }
   ]

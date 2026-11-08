@@ -61,8 +61,11 @@ def check_skill(skill_dir: Path) -> None:
         ids.add(ev.get("id"))
         if not ev.get("expectations"):
             errors.append(f"{skill_dir.name}: eval {ev.get('id')} has no expectations")
-    if len(data.get("evals", [])) < 3:
-        errors.append(f"{skill_dir.name}: fewer than 3 evals")
+        for rel in ev.get("files", []):
+            if not (skill_dir / rel).is_file():
+                errors.append(f"{skill_dir.name}: eval {ev.get('id')} references missing file {rel}")
+    if len(data.get("evals", [])) < 6:
+        errors.append(f"{skill_dir.name}: fewer than 6 evals")
 
 
 def main() -> int:

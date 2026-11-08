@@ -175,9 +175,24 @@ def ts_ports():
     return text + (f"; {', '.join(missing)} are Python only." if missing else ".")
 
 
-def render(path, lang):
+def pinned_run(text):
+    """The run the README already points at. In check mode the README is rendered against that run, so a
+    results folder can land in its own pull request before the README is re-rendered on main; a newer
+    folder is reported, not failed."""
+    m = re.search(r"evals/results/(\d{8}T\d{6}Z-[0-9a-f]{7})/summary\.md", text)
+    return m.group(1) if m else None
+
+
+def render(path, lang, check=False):
     text = (ROOT / path).read_text(encoding="utf-8")
     all_runs = runs()
+    if check and lang in ("en", "pt"):
+        pin = pinned_run(text)
+        if pin and any(r["id"] == pin for r in all_runs):
+            newer = [r["id"] for r in all_runs if r["id"] > pin]
+            all_runs = [r for r in all_runs if r["id"] <= pin]
+            if newer:
+                print(f"note: {path} points at {pin}; newer results on disk: {', '.join(newer)}. Run `python scripts/render_docs.py` to move it.")
     latest = all_runs[-1] if all_runs else None
     blocks = {}
     if lang in ("en", "pt"):
@@ -197,7 +212,7 @@ def main(argv):
     check = "--check" in argv
     stale = []
     for path, lang in FILES.items():
-        new = render(path, lang)
+        new = render(path, lang, check=check)
         if new != (ROOT / path).read_text(encoding="utf-8"):
             stale.append(path)
             if not check:

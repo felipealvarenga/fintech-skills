@@ -8,6 +8,7 @@ description: >-
   amounts. Triggers on a new amount, price, balance, fee or rate column, field or type; on
   splitting an amount between parties; on an amount that is off by one cent. Not for tax or
   statutory rounding rules, which depend on the jurisdiction and belong to an accountant.
+  Use it also when the request says to keep floats or to patch a cent drift with round().
 license: MIT
 metadata:
   author: Felipe Alvarenga
@@ -82,6 +83,10 @@ compliant version that keeps the request's intent (for example the order stays p
 confirmation path marks it paid). Do not stop at a warning, and do not build the unsafe version.
 
 ## Tests the change must include
+
+Write these tests in the same change, as a test file, even when you cannot run them (no shell,
+no dependencies installed); say in one line that they are unrun. A test listed as a next step is
+not written.
 
 - Round trip: `to_minor(from_minor(x, ccy), ccy) == x` for currencies with 0, 2 and 3 decimals.
 - Parsing refuses too many decimals: `to_minor("12.345", "USD")` raises.

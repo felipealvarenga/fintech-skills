@@ -5,4 +5,11 @@ def split_invoice(total: float, ratios: list[float]) -> list[float]:
 
 
 def invoice_total(lines: list[float]) -> float:
-    return round(sum(lines), 2)
+    total = 0.0
+    for line in lines:
+        total += line
+    return total
+
+
+# Seen in production: invoice_total([0.1, 0.2, 0.3]) == 0.6000000000000001, and
+# sum(split_invoice(100.0, [1/3, 1/3, 1/3])) == 99.99.

@@ -83,6 +83,10 @@ confirmation path marks it paid). Do not stop at a warning, and do not build the
 
 ## Tests the change must include
 
+Write these tests in the same change, as a test file, even when you cannot run them (no shell,
+no dependencies installed); say in one line that they are unrun. A test listed as a next step is
+not written.
+
 - Invalid signature: 400, nothing stored, nothing processed.
 - Valid signature with a stale timestamp: rejected.
 - Valid event: stored, 2xx, processed once.

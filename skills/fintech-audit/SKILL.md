@@ -98,6 +98,10 @@ confirmation path marks it paid). Do not stop at a warning, and do not build the
 
 ## Tests the change must include
 
+Write these tests in the same change, as a test file, even when you cannot run them (no shell,
+no dependencies installed); say in one line that they are unrun. A test listed as a next step is
+not written.
+
 - The lint on the planted fixture repository finds every planted defect by code and file
   (`evals/vectors/test_lint.py`), and reports none on the clean sample.
 - A report produced on the fixture names at least the planted defects, each with a test.

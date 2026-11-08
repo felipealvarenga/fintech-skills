@@ -9,6 +9,7 @@ description: >-
   Triggers on a loan, BNPL, credit line, subscription proration, deposit yield or late fee
   feature, or an installment table that does not sum to the principal. Not for the legal formula
   of a jurisdiction's disclosed rate; an accountant or lawyer confirms that.
+  Use it also when a schedule is said to be only for display, or when asked to force the last balance to zero.
 license: MIT
 metadata:
   author: Felipe Alvarenga
@@ -85,6 +86,10 @@ compliant version that keeps the request's intent (for example the order stays p
 confirmation path marks it paid). Do not stop at a warning, and do not build the unsafe version.
 
 ## Tests the change must include
+
+Write these tests in the same change, as a test file, even when you cannot run them (no shell,
+no dependencies installed); say in one line that they are unrun. A test listed as a next step is
+not written.
 
 - Price: principal 1,000.00 at 1% a month for 12 periods gives an installment of 88.85 under
   HALF_UP; principal parts sum to 1,000.00; the final balance is 0.

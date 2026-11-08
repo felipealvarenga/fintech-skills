@@ -55,6 +55,15 @@ def test_parsed_then_reserialized_body_fails():
         m.verify(header, pretty, [SECRET], NOW)
 
 
+@pytest.mark.parametrize("header", ["t=abc,v1=00", "garbage", "", "v1=00", "t=1", None, "t=1,v1=\u00e9"])
+def test_malformed_header_is_a_400_and_stores_nothing(header):
+    store = m.EventStore()
+    with pytest.raises(m.BadSignature):
+        m.verify(header, BODY, [SECRET], NOW)  # type: ignore[arg-type]
+    status, outcome = m.receive(header, BODY, "evt_malformed", {"type": "x"}, secrets=[SECRET], now=NOW, store=store)  # type: ignore[arg-type]
+    assert status == 400 and outcome == "rejected" and store.events == {}
+
+
 def test_non_bytes_body_is_refused():
     with pytest.raises(m.BadSignature):
         m.verify(m.sign(SECRET, BODY, NOW), BODY.decode(), [SECRET], NOW)  # type: ignore[arg-type]

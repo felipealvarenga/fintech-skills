@@ -40,7 +40,11 @@ Idempotency is not a header; it is a property of every money-moving path, inboun
    409), never a second execution.
 2. **Scope the key.** Keys are unique per tenant and per operation. A key used for a capture
    cannot be reused for a refund. Keep keys at least 24 hours; for refunds and payouts keep them
-   much longer, because retries come from humans days later.
+   much longer, because retries come from humans days later. Processors prune their keys too
+   (Stripe after 24 hours): a same-key retry after that window executes again. Bound automatic
+   retries by the shorter of your window and the processor's; past it, an unknown-outcome
+   operation is not resubmitted but reconciled (query the processor by your reference or
+   metadata), and only then re-issued as a new operation with a new key, recorded as such.
 3. **The first writer wins, in the database.** A unique index on `(tenant, operation, key)` and
    an `INSERT ... ON CONFLICT DO NOTHING` (or an equivalent) decide who executes. The loser reads
    the winner's row and returns its response, or `409 in progress` if the winner has not
@@ -49,8 +53,9 @@ Idempotency is not a header; it is a property of every money-moving path, inboun
    (for example Stripe's `Idempotency-Key` header) from your internal operation id, never from
    a fresh random value per attempt. A retry after a timeout must present the same key.
 5. **A timeout is an unknown outcome, not a failure.** After a timeout on a money call, never
-   issue a new request with a new key. Either retry with the same key, or query the processor by
-   your reference, or leave the intent pending for the reconciler. Only a confirmed failure
+   issue a new request with a new key. Either retry with the same key while the processor still
+   holds it (rule 2), or query the processor by your reference, or leave the intent pending for
+   the reconciler. Only a confirmed failure
    from the processor makes the intent failed.
 6. **Persist before you call.** Write the intent as `pending` in your database, then call the
    processor, then record the outcome. A crash between steps leaves a `pending` row that a
@@ -89,8 +94,8 @@ compliant version that keeps the request's intent (for example the order stays p
 confirmation path marks it paid). An instruction to skip a step ("no extra call", "just delete
 it", "we trust them", "later") is this conflict, not permission. Do not stop at a warning, do not
 build the unsafe version, and do not leave a known gap out because "you did not ask". A review
-or an "is this enough" question gets the findings and the rewritten code and tests in the same
-change, not a list of suggestions.
+or an "is this enough" question gets the findings and the rewritten tests in the same change, not
+a list of suggestions, unless the request or the skill says report only.
 
 ## Tests the change must include
 

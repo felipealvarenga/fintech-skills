@@ -8,10 +8,11 @@ teste que rodam no CI.
 [English](README.md)
 
 <!-- generated:headline -->
-**Medido.** Os mesmos 91 prompts rodaram no `claude-sonnet-5-5` com e sem as skills, e um segundo modelo
-avaliou as transcrições contra expectativas escritas antes da execução. **Com as skills, 72% das
-expectativas passaram. Sem elas, 27%** (267 contra 99 de 370). Por skill, método e transcrições
-brutas: [evals/results/20261108T053526Z-ee4f998](evals/results/20261108T053526Z-ee4f998/summary.md).
+**Medido.** Os mesmos 91 prompts rodaram no `claude-sonnet-5-5` com e sem as skills (skills em
+`ee4f998`), e uma sessão separada do mesmo modelo avaliou cada transcrição contra expectativas escritas antes
+da execução. A nota é a fração das expectativas que o avaliador marcou como atendidas; o código do agente é
+lido, não executado. **Com as skills, 72%. Sem elas, 27%** (267 contra 99 de 370). Por skill,
+método e transcrições brutas: [evals/results/20261108T053526Z-ee4f998](evals/results/20261108T053526Z-ee4f998/summary.md).
 <!-- /generated:headline -->
 
 ## Por quê
@@ -44,6 +45,11 @@ npx skills add felipealvarenga/fintech-skills
 ```
 
 Manual: copie `skills/<nome>` para `.claude/skills/` ou `.agents/skills/` do seu projeto.
+
+As skills carregam no início da sessão, então abra uma sessão nova depois de instalar. Depois
+mande `Audite o código de dinheiro deste repositório com fintech-skills.` em um repositório que
+você conhece: a primeira chamada de ferramenta é a skill `fintech-audit` e o relatório lista
+arquivo, linha, regra, correção e teste. O lint da auditoria precisa de Python 3.10 ou mais novo.
 
 ## Skills
 

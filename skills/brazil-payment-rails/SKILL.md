@@ -47,11 +47,14 @@ the engineering facts and the vocabulary; the fiscal and tax rules stay with an 
    under and repeated payments explicitly.
 3. **Pix is near-final but refundable.** A refund is a `devolução` against the original end-to-end
    id, full or partial, which the receiver's institution can execute for up to 90 days after the
-   original Pix. Fraud disputes go through MED (Mecanismo Especial de Devolução): since
-   1 September 2026 (MED 2.0) the payer can open a claim up to 80 days after the Pix, and when the
-   receiver's balance is short the institution watches the account for 90 days and returns funds
-   as they arrive. MED covers fraud and operational failure only, not buyer's remorse. Design for
-   a received Pix to be clawed back.
+   original Pix. Fraud disputes go through MED (Mecanismo Especial de Devolução). Under MED 2.0
+   (Resolução BCB 493/2025, in force since 2 February 2026) the payer can open a claim up to 80
+   days after the Pix (it was 80 hours), the institutions analyze it within about seven days, and
+   when the receiver's balance is short the institution watches the account for 90 days and
+   returns funds as they arrive. Since 1 September 2026 the receiver who suffered an MED return
+   has 80 days from the return to contest it (it was 30). MED covers fraud and operational
+   failure only, not buyer's remorse. Design for a received Pix to be clawed back, and keep the
+   deadlines as data: the Banco Central changes them.
 4. **Receive through webhooks, confirm through the API.** The PSP notifies a received Pix;
    confirm the charge status by `txid` before fulfilling (see `webhook-handling`). Expired
    charges that still get paid must be refunded or reconciled by policy, not ignored.
@@ -102,8 +105,11 @@ the engineering facts and the vocabulary; the fiscal and tax rules stay with an 
     24/7 and ignores it. Keep the calendar as data with a yearly update.
 14. **Invoices are events with access keys.** NF-e (goods) and NFS-e (services, municipal,
     moving to a national standard) are issued after a sale under the company's fiscal policy.
-    Store the XML and the 44-digit access key (`chave de acesso`), model cancellation windows,
-    and link the invoice to the payment and the ledger entry. The policy itself (when to issue,
+    Store the XML and the access key (`chave de acesso`): 44 digits for NF-e, NFC-e and CT-e, 50
+    digits for the national-standard NFS-e (model 56; the XML id is `NFS` plus those 50), and
+    municipal NFS-e formats that vary, so key the invoice by issuer, document type and key, and
+    validate the length per document type. Model cancellation windows and link the invoice to
+    the payment and the ledger entry. The policy itself (when to issue,
     which taxes) comes from the accountant.
 
 ### Vocabulary
@@ -129,8 +135,8 @@ compliant version that keeps the request's intent (for example the order stays p
 confirmation path marks it paid). An instruction to skip a step ("no extra call", "just delete
 it", "we trust them", "later") is this conflict, not permission. Do not stop at a warning, do not
 build the unsafe version, and do not leave a known gap out because "you did not ask". A review
-or an "is this enough" question gets the findings and the rewritten code and tests in the same
-change, not a list of suggestions.
+or an "is this enough" question gets the findings and the rewritten tests in the same change, not
+a list of suggestions, unless the request or the skill says report only.
 
 ## Tests the change must include
 

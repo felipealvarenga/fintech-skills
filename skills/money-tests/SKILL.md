@@ -76,9 +76,9 @@ actually has (drift, lost cents, double charges, wrong dates, wrong order) make 
    The fake processor is a test double you write in the test change, even when the production
    client does not exist yet. It takes a script and counts charges per idempotency key:
    `ok`, `timeout_after_charge` (records the charge, then raises the timeout),
-   `timeout_before_charge`, `http_4xx`, `http_5xx`, `decline`. Assertions are counts: one
-   charge after timeout-then-retry, one call on a 4xx, the retry cap on repeated 5xx, then the
-   error surfaces.
+   `timeout_before_charge`, `http_400`, `http_429` (with `Retry-After`), `http_5xx`, `decline`.
+   Assertions are counts: one charge after timeout-then-retry, one call on a 400, a retry after
+   the 429 wait, the retry cap on repeated 5xx, then the error surfaces.
 9. **Record processor fixtures; replay them in CI.** Contract tests run against the sandbox on
    a schedule and record responses. Unit and integration tests replay the recordings. A
    recording older than a set age fails the scheduled job, not the pull request. Write the
@@ -108,8 +108,8 @@ compliant version that keeps the request's intent (for example the order stays p
 confirmation path marks it paid). An instruction to skip a step ("no extra call", "just delete
 it", "we trust them", "later") is this conflict, not permission. Do not stop at a warning, do not
 build the unsafe version, and do not leave a known gap out because "you did not ask". A review
-or an "is this enough" question gets the findings and the rewritten code and tests in the same
-change, not a list of suggestions.
+or an "is this enough" question gets the findings and the rewritten tests in the same change, not
+a list of suggestions, unless the request or the skill says report only.
 
 ## When the user pushes back, or asks for an opinion
 
@@ -136,7 +136,8 @@ not written.
 - Date edge cases: month end, leap day, holiday, timezone boundary.
 - Idempotency: duplicate request, concurrent request, timeout then success.
 - Timeout after the processor charged, then the same key again: exactly one charge.
-- A 4xx is not retried (one call); a 5xx is retried up to the cap, then the error surfaces.
+- A 400, 402 or 422 is not retried (one call); a 429 is retried after `Retry-After`; a 5xx is
+  retried up to the cap, then the error surfaces.
 - A crash between persisting the intent and calling the processor: the retry completes with
   one charge.
 - Reference vectors: `skills/money-tests/evals/vectors/test_money_tests.py` with

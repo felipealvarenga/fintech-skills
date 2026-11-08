@@ -20,12 +20,18 @@ def sign(secret: str, raw_body: bytes, timestamp: int) -> str:
 
 
 def _parse(header: str) -> tuple[int, list[str]]:
+    """Any malformed header is BadSignature, never ValueError or TypeError: the endpoint answers 400."""
+    if not isinstance(header, str):
+        raise BadSignature("missing or non-text signature header")
     ts = None
     sigs = []
     for part in header.split(","):
         k, _, v = part.strip().partition("=")
         if k == "t":
-            ts = int(v)
+            try:
+                ts = int(v)
+            except ValueError:
+                raise BadSignature("malformed timestamp") from None
         elif k == "v1":
             sigs.append(v)
     if ts is None or not sigs:

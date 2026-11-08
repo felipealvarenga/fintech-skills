@@ -108,8 +108,8 @@ compliant version that keeps the request's intent (for example the order stays p
 confirmation path marks it paid). An instruction to skip a step ("no extra call", "just delete
 it", "we trust them", "later") is this conflict, not permission. Do not stop at a warning, do not
 build the unsafe version, and do not leave a known gap out because "you did not ask". A review
-or an "is this enough" question gets the findings and the rewritten code and tests in the same
-change, not a list of suggestions.
+or an "is this enough" question gets the findings and the rewritten tests in the same change, not
+a list of suggestions, unless the request or the skill says report only.
 
 ## When the user pushes back
 

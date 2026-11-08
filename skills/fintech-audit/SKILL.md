@@ -98,9 +98,9 @@ When the request conflicts with a rule here, say which rule in one sentence, the
 compliant version that keeps the request's intent (for example the order stays pending and the
 confirmation path marks it paid). An instruction to skip a step ("no extra call", "just delete
 it", "we trust them", "later") is this conflict, not permission. Do not stop at a warning, do not
-build the unsafe version, and do not leave a known gap out because "you did not ask". A review
-or an "is this enough" question gets the findings and the rewritten code and tests in the same
-change, not a list of suggestions.
+build the unsafe version, and do not leave a known gap out because "you did not ask". This skill
+reports and does not edit; the rewrite rule in the domain skills applies when the user asks for a
+review of code they own.
 
 ## Tests the change must include
 

@@ -10,10 +10,11 @@ way production fintech systems do. Every skill ships evals and test vectors that
 [Português](README.pt-BR.md)
 
 <!-- generated:headline -->
-**Measured.** The same 91 prompts ran on `claude-sonnet-5-5` with and without the skills, and a second
-model graded the transcripts against expectations written before the run. **With the skills, 72%
-of expectations passed. Without them, 27%** (267 against 99 of 370). Per skill, method and raw
-transcripts: [evals/results/20261108T053526Z-ee4f998](evals/results/20261108T053526Z-ee4f998/summary.md).
+**Measured.** The same 91 prompts ran on `claude-sonnet-5-5` with and without the skills (skills at
+`ee4f998`), and a separate session of the same model graded each transcript against expectations written before
+the run. The score is the share of expectations the grader marked passed; the agent's code is read, not
+executed. **With the skills, 72%. Without them, 27%** (267 against 99 of 370). Per skill,
+method and raw transcripts: [evals/results/20261108T053526Z-ee4f998](evals/results/20261108T053526Z-ee4f998/summary.md).
 <!-- /generated:headline -->
 
 ## Why
@@ -32,9 +33,10 @@ What changes, in ten seconds:
 + # -> [5000, 3000, 2000], sum always preserved    + # same key on every retry; the processor dedupes
 ```
 
-The left column loses or invents cents on real ratios; the right column cannot. The left key
-charges the customer twice after one timeout; the right key cannot. The skills carry the
-other hundred rules like these, each with a test.
+The left column loses or invents cents on real ratios; the right column preserves the sum by
+construction. The left key charges the customer twice after one timeout; with the right key the
+retry is a duplicate the processor dedupes, for as long as the processor keeps the key. The skills
+carry the other hundred rules like these, each with a test.
 
 ## Install
 
@@ -59,6 +61,11 @@ npx skills add felipealvarenga/fintech-skills
 ```
 
 Manual: copy `skills/<name>` into your project's `.claude/skills/` or `.agents/skills/`.
+
+Skills load when a session starts, so start a new session after installing. Then send
+`Audit this repository's money code with fintech-skills.` on a repo you know: the first tool call
+is the `fintech-audit` skill and the report lists file, line, rule, fix and test. The lint the
+audit runs needs Python 3.10 or newer on the machine.
 
 ## Skills
 

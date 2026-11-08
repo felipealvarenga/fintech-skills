@@ -67,15 +67,20 @@ def headline(lang, latest, prompts):
     of = f"{n_w}" if n_w == n_wo else f"{n_w} and {n_wo}" if lang == "en" else f"{n_w} e {n_wo}"
     link = f"[evals/results/{latest['id']}](evals/results/{latest['id']}/summary.md)"
     model = f"`{latest['meta']['subject_model']}`"
+    same = latest["meta"]["grader_model"] == latest["meta"]["subject_model"]
+    grader_en = "a separate session of the same model" if same else f"`{latest['meta']['grader_model']}`"
+    grader_pt = "uma sessão separada do mesmo modelo" if same else f"`{latest['meta']['grader_model']}`"
     if lang == "en":
-        return (f"**Measured.** The same {prompts} prompts ran on {model} with and without the skills, and a second\n"
-                f"model graded the transcripts against expectations written before the run. **With the skills, {pct(w['rate'])}\n"
-                f"of expectations passed. Without them, {pct(wo['rate'])}** ({w['passed']} against {wo['passed']} of {of}). Per skill, method and raw\n"
-                f"transcripts: {link}.")
-    return (f"**Medido.** Os mesmos {prompts} prompts rodaram no {model} com e sem as skills, e um segundo modelo\n"
-            f"avaliou as transcrições contra expectativas escritas antes da execução. **Com as skills, {pct(w['rate'])} das\n"
-            f"expectativas passaram. Sem elas, {pct(wo['rate'])}** ({w['passed']} contra {wo['passed']} de {of}). Por skill, método e transcrições\n"
-            f"brutas: {link}.")
+        return (f"**Measured.** The same {prompts} prompts ran on {model} with and without the skills (skills at\n"
+                f"`{latest['sha']}`), and {grader_en} graded each transcript against expectations written before\n"
+                f"the run. The score is the share of expectations the grader marked passed; the agent's code is read, not\n"
+                f"executed. **With the skills, {pct(w['rate'])}. Without them, {pct(wo['rate'])}** ({w['passed']} against {wo['passed']} of {of}). Per skill,\n"
+                f"method and raw transcripts: {link}.")
+    return (f"**Medido.** Os mesmos {prompts} prompts rodaram no {model} com e sem as skills (skills em\n"
+            f"`{latest['sha']}`), e {grader_pt} avaliou cada transcrição contra expectativas escritas antes\n"
+            f"da execução. A nota é a fração das expectativas que o avaliador marcou como atendidas; o código do agente é\n"
+            f"lido, não executado. **Com as skills, {pct(w['rate'])}. Sem elas, {pct(wo['rate'])}** ({w['passed']} contra {wo['passed']} de {of}). Por skill,\n"
+            f"método e transcrições brutas: {link}.")
 
 
 def skills_table(lang, latest):
@@ -125,11 +130,19 @@ def cut_rule(lang, latest):
             f"última execução o menor ganho foi de {lov['lift_points']} pontos ({lo}) e o maior de {hiv['lift_points']} ({hi}).")
 
 
+def required_names(py_files):
+    names = set()
+    for f in py_files:
+        names |= set(re.findall(r"(?<![A-Za-z0-9_.])m\.([A-Za-z_][A-Za-z0-9_]*)", f.read_text(encoding="utf-8")))
+    return sorted(names)
+
+
 def vectors_table():
-    rows = ["| Skill | Python | TypeScript | Environment variable |", "|---|---|---|---|"]
+    rows = ["| Skill | Python | TypeScript | Environment variable | Names your module must export |", "|---|---|---|---|---|"]
     for skill in skills_in_order():
         py, ts, env = vectors(skill)
-        rows.append(f"| {skill.name} | {', '.join(f'`{rel(p)}`' for p in py) or 'none'} | {', '.join(f'`{rel(p)}`' for p in ts) or 'none'} | {', '.join(f'`{e}`' for e in env)} |")
+        names = ", ".join(f"`{n}`" for n in required_names(py)) or "see the file"
+        rows.append(f"| {skill.name} | {', '.join(f'`{rel(p)}`' for p in py) or 'none'} | {', '.join(f'`{rel(p)}`' for p in ts) or 'none'} | {', '.join(f'`{e}`' for e in env)} | {names} |")
     return "\n".join(rows)
 
 

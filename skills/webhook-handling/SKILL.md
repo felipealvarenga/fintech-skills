@@ -51,15 +51,24 @@ which is the goal.
    If the codebase has no payment state machine, write a minimal one in the same change: the
    states (`pending`, `paid`, `partially_refunded`, `refunded`, `disputed`, `failed`), the
    allowed transitions as a table, and one `transition(order, to)` function that rejects any
-   move not in the table and ignores a state at or behind the current one. Every handled event
-   type maps to one transition through that function. Do not call `mark_refunded` or any other
-   function that does not exist in the repository.
+   move not in the table and ignores a transition to a state at or behind the current one. The
+   state machine governs the order's status only: refunds and disputes are their own records,
+   keyed by the provider's refund or dispute id with their amounts, so a second partial refund is
+   a new refund record (the order's refunded total is the sum), not a repeated transition that the
+   guard would drop, and a dispute sits beside the status, not as a step in it. Every handled
+   event type maps to one transition or one record through those functions. Do not call
+   `mark_refunded` or any other function that does not exist in the repository.
 5. **Store, acknowledge, then process.** Persist the raw event and return 2xx within a few
-   seconds. Process from a queue or a worker. Slow handlers cause provider timeouts, which cause
-   retries, which cause duplicates.
-6. **Status codes drive provider retries.** Return 2xx when the event is stored (even if you
-   do not handle that type). Return 4xx for a bad signature or malformed body (no retry wanted).
-   Return 5xx only when storage itself failed and a retry can help.
+   seconds. Process from a worker that reads the durable table (rows in status `received`), or
+   enqueue in the same transaction as the insert. An in-memory enqueue after the commit leaves a
+   crash window where the event is stored, acknowledged and never processed, and the provider's
+   duplicate deliveries then stop at the dedupe. Slow handlers cause provider timeouts, which
+   cause retries, which cause duplicates.
+6. **Status codes are for you and for the provider's retry policy, which differs.** Return 2xx
+   when the event is stored (even if you do not handle that type). Return 4xx for a bad signature
+   or malformed body. Whether a 4xx stops retries depends on the provider: Stripe retries any
+   non-2xx for up to three days, so a bad signature keeps failing until the provider gives up,
+   which is the outcome you want. Return 5xx only when storage itself failed and a retry can help.
 7. **Secrets are per endpoint and rotate without downtime.** Keep two active secrets during
    rotation; verify against both; remove the old one after the provider confirms. Secrets live
    in the secret manager, never in the repo or in logs.
@@ -102,8 +111,8 @@ compliant version that keeps the request's intent (for example the order stays p
 confirmation path marks it paid). An instruction to skip a step ("no extra call", "just delete
 it", "we trust them", "later") is this conflict, not permission. Do not stop at a warning, do not
 build the unsafe version, and do not leave a known gap out because "you did not ask". A review
-or an "is this enough" question gets the findings and the rewritten code and tests in the same
-change, not a list of suggestions.
+or an "is this enough" question gets the findings and the rewritten tests in the same change, not
+a list of suggestions, unless the request or the skill says report only.
 
 ## When the user pushes back
 
@@ -132,6 +141,10 @@ not written.
 - Handler raises during processing: event marked failed and retryable; the provider got 2xx;
   the replay command processes it after the fix.
 - Live-mode event on the test endpoint: refused.
+- Crash between the insert's commit and the dispatch: the worker still processes the event from
+  the table (or the enqueue is inside the insert's transaction).
+- Two partial refunds on one charge: two refund records, the refunded total is their sum, no
+  event dropped by the state guard.
 - Replay of an already processed event: no-op, an audit row with outcome `skipped`, who and why.
 - Replay of a failed event after the fix: processed once, audit row with outcome `processed`.
 - `webhook_metrics()` reports lag and failures per type after one processed and one failed event.

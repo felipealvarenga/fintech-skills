@@ -100,22 +100,26 @@ implementation that proves they are satisfiable. Point the environment variable 
 module to run them against your code.
 
 <!-- generated:vectors-table -->
-| Skill | Python | TypeScript | Environment variable |
-|---|---|---|---|
-| fintech-audit | `skills/fintech-audit/evals/vectors/test_lint.py` | none | `AUDIT_LINT` |
-| money-arithmetic | `skills/money-arithmetic/evals/vectors/test_money.py` | `skills/money-arithmetic/evals/vectors/money.test.ts` | `MONEY_SOLUTION`, `MONEY_SOLUTION_TS` |
-| double-entry-ledger | `skills/double-entry-ledger/evals/vectors/test_ledger.py` | `skills/double-entry-ledger/evals/vectors/ledger.test.ts` | `LEDGER_SOLUTION`, `LEDGER_SOLUTION_TS` |
-| idempotent-payments | `skills/idempotent-payments/evals/vectors/test_idempotency.py` | `skills/idempotent-payments/evals/vectors/idempotency.test.ts` | `IDEMPOTENCY_SOLUTION`, `IDEMPOTENCY_SOLUTION_TS` |
-| webhook-handling | `skills/webhook-handling/evals/vectors/test_webhooks.py` | `skills/webhook-handling/evals/vectors/webhooks.test.ts` | `WEBHOOK_SOLUTION`, `WEBHOOK_SOLUTION_TS` |
-| reconciliation | `skills/reconciliation/evals/vectors/test_reconcile.py` | none | `RECON_SOLUTION` |
-| accounting-sync | `skills/accounting-sync/evals/vectors/test_sync.py` | none | `SYNC_SOLUTION` |
-| transaction-classification | `skills/transaction-classification/evals/vectors/test_classification.py` | none | `CLASSIFY_SOLUTION` |
-| pii-and-card-data | `skills/pii-and-card-data/evals/vectors/test_pii.py` | none | `BRAZIL_SOLUTION`, `PII_SOLUTION` |
-| audit-trail | `skills/audit-trail/evals/vectors/test_audit.py` | none | `AUDIT_SOLUTION` |
-| interest-and-amortization | `skills/interest-and-amortization/evals/vectors/test_amortization.py` | none | `AMORT_SOLUTION` |
-| brazil-payment-rails | `skills/brazil-payment-rails/evals/vectors/test_brazil.py` | `skills/brazil-payment-rails/evals/vectors/brazil.test.ts` | `BRAZIL_SOLUTION`, `BRAZIL_SOLUTION_TS` |
-| money-tests | `skills/money-tests/evals/vectors/test_money_tests.py` | none | `MONEYTESTS_SOLUTION` |
+| Skill | Python | TypeScript | Environment variable | Names your module must export |
+|---|---|---|---|---|
+| fintech-audit | `skills/fintech-audit/evals/vectors/test_lint.py` | none | `AUDIT_LINT` | see the file |
+| money-arithmetic | `skills/money-arithmetic/evals/vectors/test_money.py` | `skills/money-arithmetic/evals/vectors/money.test.ts` | `MONEY_SOLUTION`, `MONEY_SOLUTION_TS` | `add`, `allocate`, `apply_rate`, `convert`, `from_minor`, `to_minor` |
+| double-entry-ledger | `skills/double-entry-ledger/evals/vectors/test_ledger.py` | `skills/double-entry-ledger/evals/vectors/ledger.test.ts` | `LEDGER_SOLUTION`, `LEDGER_SOLUTION_TS` | `Entry`, `Ledger`, `Posting` |
+| idempotent-payments | `skills/idempotent-payments/evals/vectors/test_idempotency.py` | `skills/idempotent-payments/evals/vectors/idempotency.test.ts` | `IDEMPOTENCY_SOLUTION`, `IDEMPOTENCY_SOLUTION_TS` | `FakeProcessor`, `FingerprintMismatch`, `IdempotencyStore`, `IllegalTransition`, `InProgress`, `PaymentService`, `RetryPolicy`, `is_retryable`, `transition` |
+| webhook-handling | `skills/webhook-handling/evals/vectors/test_webhooks.py` | `skills/webhook-handling/evals/vectors/webhooks.test.ts` | `WEBHOOK_SOLUTION`, `WEBHOOK_SOLUTION_TS` | `BadSignature`, `EventStore`, `apply_state`, `receive`, `response_status`, `sign`, `verify` |
+| reconciliation | `skills/reconciliation/evals/vectors/test_reconcile.py` | none | `RECON_SOLUTION` | `Line`, `reconcile` |
+| accounting-sync | `skills/accounting-sync/evals/vectors/test_sync.py` | none | `SYNC_SOLUTION` | `FakeAccounting`, `PeriodClosed`, `Sync`, `TokenStore`, `drift_report` |
+| transaction-classification | `skills/transaction-classification/evals/vectors/test_classification.py` | none | `CLASSIFY_SOLUTION` | `GatePolicy`, `InvalidOutput`, `Line`, `classify_with_layers`, `decide`, `normalize_merchant`, `pair_transfers`, `validate_output` |
+| pii-and-card-data | `skills/pii-and-card-data/evals/vectors/test_pii.py` | none | `BRAZIL_SOLUTION`, `PII_SOLUTION` | `luhn_check_digit`, `luhn_valid`, `make_test_cpf`, `make_test_pan`, `mask_document`, `mask_pan`, `redact`, `scan`, `schema_lint` |
+| audit-trail | `skills/audit-trail/evals/vectors/test_audit.py` | none | `AUDIT_SOLUTION` | `AuditError`, `AuditLog`, `mutate` |
+| interest-and-amortization | `skills/interest-and-amortization/evals/vectors/test_amortization.py` | none | `AMORT_SOLUTION` | `effective_to_periodic`, `price_schedule`, `sac_schedule`, `simple_interest` |
+| brazil-payment-rails | `skills/brazil-payment-rails/evals/vectors/test_brazil.py` | `skills/brazil-payment-rails/evals/vectors/brazil.test.ts` | `BRAZIL_SOLUTION`, `BRAZIL_SOLUTION_TS` | `barcode_from_typeable_line`, `build_barcode`, `cnpj_check_digits`, `due_date_from_factor`, `factor_from_due_date`, `format_cnpj`, `mask_cpf`, `mod10`, `mod11_barcode`, `normalize_cnpj`, `typeable_line`, `validate_barcode`, `validate_cnpj`, `validate_cpf` |
+| money-tests | `skills/money-tests/evals/vectors/test_money_tests.py` | none | `MONEYTESTS_SOLUTION` | `kill_rate`, `lint_tests`, `meets_gate` |
 <!-- /generated:vectors-table -->
+
+Each suite imports the names in the last column from the module the environment variable points
+at, so a production module usually needs an adapter of a few lines that exposes them. An import
+or attribute error is an interface mismatch, not a money defect; a failing assertion is.
 
 Each skill has seven evals: three build prompts, three judgment prompts and at least one
 adversarial prompt that asks for the unsafe thing (keep the floats, disable the signature check,

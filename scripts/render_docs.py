@@ -68,27 +68,38 @@ def rel(skill):
     return skill.relative_to(ROOT).as_posix()
 
 
-def headline(lang, latest, prompts):
-    w, wo = latest["pack"]["with"], latest["pack"]["without"]
-    n_w, n_wo = w["passed"] + w["failed"], wo["passed"] + wo["failed"]
-    of = f"{n_w}" if n_w == n_wo else f"{n_w} and {n_wo}" if lang == "en" else f"{n_w} e {n_wo}"
-    link = f"[evals/results/{latest['id']}](evals/results/{latest['id']}/summary.md)"
-    model = f"`{latest['meta']['subject_model']}`"
-    same = latest["meta"]["grader_model"] == latest["meta"]["subject_model"]
-    grader_en = "a separate session of the same model" if same else f"`{latest['meta']['grader_model']}`"
-    grader_pt = "uma sessão separada do mesmo modelo" if same else f"`{latest['meta']['grader_model']}`"
+def headline(lang, latest, prompts, all_runs=()):
+    """One sentence per subject model measured on the same skills commit as the latest run (latest run per model)."""
+    same_commit = [r for r in all_runs if r["sha"] == latest["sha"]] or [latest]
+    per_model = {}
+    for r in same_commit:
+        per_model[r["meta"]["subject_model"]] = r  # sorted ascending, so the latest run per model wins
+    runs_here = list(per_model.values())
+    def nums(r):
+        w, wo = r["pack"]["with"], r["pack"]["without"]
+        return pct(w["rate"]), pct(wo["rate"]), w["passed"], wo["passed"], w["passed"] + w["failed"]
+    graders = {r["meta"]["grader_model"] for r in runs_here}
+    grader = next(iter(graders)) if len(graders) == 1 else None
+    links = ", ".join(f"[evals/results/{r['id']}](evals/results/{r['id']}/summary.md)" for r in runs_here)
+    models = " and ".join(f"`{m}`" for m in per_model) if lang == "en" else " e ".join(f"`{m}`" for m in per_model)
     if lang == "en":
-        return (f"**Measured.** The same {prompts} prompts ran on {model} with and without the skills (skills at\n"
+        scores = "; ".join(f"`{m}`: **{nums(r)[0]} with the skills, {nums(r)[1]} without** ({nums(r)[2]} against {nums(r)[3]} of {nums(r)[4]})" for m, r in per_model.items()) if len(per_model) > 1 else \
+                 f"**With the skills, {nums(latest)[0]}. Without them, {nums(latest)[1]}** ({nums(latest)[2]} against {nums(latest)[3]} of {nums(latest)[4]})"
+        grader_en = ("a separate session of the same model" if grader and grader in per_model and len(per_model) == 1 else f"`{grader}`" if grader else "a separate grader model")
+        return (f"**Measured.** The same {prompts} prompts ran on {models} with and without the skills (skills at\n"
                 f"`{latest['sha']}`), and {grader_en} graded each transcript against expectations written before\n"
                 f"the run. The score is the share of expectations the grader marked passed; the agent's code is read, not\n"
-                f"executed. **With the skills, {pct(w['rate'])}. Without them, {pct(wo['rate'])}** ({w['passed']} against {wo['passed']} of {of}). Per skill,\n"
-                f"method and raw transcripts: {link}. The prompts are development prompts: the skills were revised against\n"
+                f"executed. {scores}. Per skill,\n"
+                f"method and raw transcripts: {links}. The prompts are development prompts: the skills were revised against\n"
                 f"earlier runs' failures on these same prompts, and a held-out set is the next step.")
-    return (f"**Medido.** Os mesmos {prompts} prompts rodaram no {model} com e sem as skills (skills em\n"
+    scores = "; ".join(f"`{m}`: **{nums(r)[0]} com as skills, {nums(r)[1]} sem** ({nums(r)[2]} contra {nums(r)[3]} de {nums(r)[4]})" for m, r in per_model.items()) if len(per_model) > 1 else \
+             f"**Com as skills, {nums(latest)[0]}. Sem elas, {nums(latest)[1]}** ({nums(latest)[2]} contra {nums(latest)[3]} de {nums(latest)[4]})"
+    grader_pt = ("uma sessão separada do mesmo modelo" if grader and grader in per_model and len(per_model) == 1 else f"`{grader}`" if grader else "um modelo avaliador separado")
+    return (f"**Medido.** Os mesmos {prompts} prompts rodaram no {models} com e sem as skills (skills em\n"
             f"`{latest['sha']}`), e {grader_pt} avaliou cada transcrição contra expectativas escritas antes\n"
             f"da execução. A nota é a fração das expectativas que o avaliador marcou como atendidas; o código do agente é\n"
-            f"lido, não executado. **Com as skills, {pct(w['rate'])}. Sem elas, {pct(wo['rate'])}** ({w['passed']} contra {wo['passed']} de {of}). Por skill,\n"
-            f"método e transcrições brutas: {link}. Os prompts são prompts de desenvolvimento: as skills foram revisadas\n"
+            f"lido, não executado. {scores}. Por skill,\n"
+            f"método e transcrições brutas: {links}. Os prompts são prompts de desenvolvimento: as skills foram revisadas\n"
             f"contra as falhas das execuções anteriores nestes mesmos prompts, e um conjunto reservado é o próximo passo.")
 
 
@@ -196,7 +207,7 @@ def render(path, lang, check=False):
     latest = all_runs[-1] if all_runs else None
     blocks = {}
     if lang in ("en", "pt"):
-        blocks = {"headline": headline(lang, latest, prompt_count()), "skills-table": skills_table(lang, latest),
+        blocks = {"headline": headline(lang, latest, prompt_count(), all_runs), "skills-table": skills_table(lang, latest),
                   "runs": runs_block(lang, all_runs), "cut-rule": cut_rule(lang, latest)}
     else:
         blocks = {"vectors-table": vectors_table(), "ts-ports": ts_ports()}

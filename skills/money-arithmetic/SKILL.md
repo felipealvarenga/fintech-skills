@@ -76,6 +76,11 @@ them.
 4. Implement against the integer representation. Convert at the edges only.
 5. Run the tests. Then grep again for the patterns in step 1 and remove every float path.
 
+
+When the request conflicts with a rule here, say which rule in one sentence, then build the
+compliant version that keeps the request's intent (for example the order stays pending and the
+confirmation path marks it paid). Do not stop at a warning, and do not build the unsafe version.
+
 ## Tests the change must include
 
 - Round trip: `to_minor(from_minor(x, ccy), ccy) == x` for currencies with 0, 2 and 3 decimals.
@@ -89,7 +94,8 @@ them.
 - Conversion returns an integer in the target exponent: 1000 USD minor at 150.5 JPY/USD is
   1505 JPY.
 - The reference vectors: `skills/money-arithmetic/evals/vectors/test_money.py`. Point the
-  `MONEY_SOLUTION` environment variable at your module and run `pytest`.
+  `MONEY_SOLUTION` environment variable at your module and run `pytest`. TypeScript:
+  `money.test.ts` with `MONEY_SOLUTION_TS` and `npx vitest run`.
 
 ## Review checklist
 

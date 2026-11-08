@@ -10,12 +10,12 @@ Last reviewed 2026-11-07.
 
 A public, MIT-licensed pack of Agent Skills that teach coding agents (Claude Code, Codex, Cursor,
 Copilot, any agent that reads `SKILL.md`) how to handle money the way production fintech systems
-do. Twelve skills at v0: money arithmetic, double-entry ledger, idempotent payments, webhook
+do. An audit entry point (`fintech-audit`) and twelve skills at v0: money arithmetic, double-entry ledger, idempotent payments, webhook
 handling, reconciliation, accounting sync, transaction classification, PII and card data, audit
 trail, interest and amortization, Brazil payment rails, money tests.
 
-Each skill is a folder with `SKILL.md` and `evals/evals.json`. Skills whose output is a number
-also ship `evals/vectors/`: a pytest file with a reference implementation, runnable against any
+Each skill is a folder with `SKILL.md` and `evals/evals.json`. Every skill also ships
+`evals/vectors/`: a pytest file with a reference implementation, runnable against any
 implementation through an environment variable.
 
 ## Who it serves
@@ -27,7 +27,7 @@ implementation through an environment variable.
 
 ## Where we are going
 
-1. v0 (done): twelve skills, evals in the skill-creator format, four vector suites, CI.
+1. v0 (done): the audit entry point and twelve skills, seven evals each in the skill-creator format, a vector suite per skill, CI.
 2. Measured: an eval runner that executes every eval prompt with and without the skill in a
    fresh agent session, grades the expectations, and records results per run with the model,
    the pass rates, tokens and duration. Results are published in the repository.

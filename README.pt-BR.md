@@ -1,8 +1,8 @@
 # fintech-skills
 
-Skills de engenharia fintech para agentes de código. Doze skills que ensinam Claude Code, Codex,
+Skills de engenharia fintech para agentes de código. Um ponto de entrada de auditoria e doze skills que ensinam Claude Code, Codex,
 Cursor, Copilot e qualquer agente que leia `SKILL.md` a tratar dinheiro como sistemas fintech de
-produção tratam. Toda skill vem com um eval. As numéricas vêm com vetores de teste que rodam no CI.
+produção tratam. Toda skill vem com um eval e com vetores de teste que rodam no CI.
 
 [English](README.md)
 
@@ -39,25 +39,37 @@ Manual: copie `skills/<nome>` para `.claude/skills/` ou `.agents/skills/` do seu
 
 ## Skills
 
+Comece pela auditoria. Ela roda um lint determinístico no seu código de dinheiro, confirma cada
+pista lendo o código, aplica os checklists abaixo e reporta achados com arquivo, linha, regra,
+correção e teste.
+
+```
+Audite o código de dinheiro deste repositório com fintech-skills.
+```
+
+[Relatório de exemplo](skills/fintech-audit/evals/sample-report.md) na fixture com defeitos plantados: 12 achados em 8
+arquivos, 4 críticos, cada um com arquivo, linha, regra, correção e teste. Sonnet 5.5, 7 turnos, USD 0,21, nenhum código alterado.
+
 | Skill | Use quando | Vetores |
 |---|---|---|
+| [fintech-audit](skills/fintech-audit/SKILL.md) | Auditar um repositório ou um PR que mexe com dinheiro; o ponto de entrada | sim |
 | [money-arithmetic](skills/money-arithmetic/SKILL.md) | Guardar, somar, ratear, converter, arredondar ou formatar valores | sim |
 | [double-entry-ledger](skills/double-entry-ledger/SKILL.md) | Qualquer tabela que responde "quanto X tem ou deve" | sim |
-| [idempotent-payments](skills/idempotent-payments/SKILL.md) | Criar, capturar, estornar ou pagar; chamar um processador | |
-| [webhook-handling](skills/webhook-handling/SKILL.md) | Receber callbacks de processadores, bancos e PSPs | |
+| [idempotent-payments](skills/idempotent-payments/SKILL.md) | Criar, capturar, estornar ou pagar; chamar um processador | sim |
+| [webhook-handling](skills/webhook-handling/SKILL.md) | Receber callbacks de processadores, bancos e PSPs | sim |
 | [reconciliation](skills/reconciliation/SKILL.md) | Conciliar ledger, relatório do processador e extrato bancário | sim |
-| [accounting-sync](skills/accounting-sync/SKILL.md) | Integrar com QuickBooks, Xero, NetSuite, Omie, Conta Azul | |
-| [transaction-classification](skills/transaction-classification/SKILL.md) | Categorizar transações com regras, ML ou LLM, em especial com lançamento automático | |
-| [pii-and-card-data](skills/pii-and-card-data/SKILL.md) | Coletar, logar, exibir ou exportar dados pessoais, bancários ou de cartão | |
-| [audit-trail](skills/audit-trail/SKILL.md) | Qualquer mutação de dinheiro, limites, permissões ou dados de cliente; ações de agentes | |
+| [accounting-sync](skills/accounting-sync/SKILL.md) | Integrar com QuickBooks, Xero, NetSuite, Omie, Conta Azul | sim |
+| [transaction-classification](skills/transaction-classification/SKILL.md) | Categorizar transações com regras, ML ou LLM, em especial com lançamento automático | sim |
+| [pii-and-card-data](skills/pii-and-card-data/SKILL.md) | Coletar, logar, exibir ou exportar dados pessoais, bancários ou de cartão | sim |
+| [audit-trail](skills/audit-trail/SKILL.md) | Qualquer mutação de dinheiro, limites, permissões ou dados de cliente; ações de agentes | sim |
 | [interest-and-amortization](skills/interest-and-amortization/SKILL.md) | Juros, parcelas, tabelas Price e SAC, provisões, taxa efetiva | sim |
-| [brazil-payment-rails](skills/brazil-payment-rails/SKILL.md) | Pix, boleto, parcelamento no cartão, CPF e CNPJ, NF-e | |
-| [money-tests](skills/money-tests/SKILL.md) | Escrever ou revisar testes para qualquer item acima | |
+| [brazil-payment-rails](skills/brazil-payment-rails/SKILL.md) | Pix, boleto, parcelamento no cartão, CPF e CNPJ, NF-e | sim |
+| [money-tests](skills/money-tests/SKILL.md) | Escrever ou revisar testes para qualquer item acima | sim |
 
 ## Evals
 
 Toda skill tem `evals/evals.json` no formato do `skill-creator` da Anthropic: prompts que um
-agente receberia e expectativas que um avaliador confere na transcrição. Quatro skills também têm
+agente receberia e expectativas que um avaliador confere na transcrição. Todas as skills também têm
 vetores: arquivos pytest com uma implementação de referência, executáveis contra o seu código
 por uma variável de ambiente. Veja [evals/README.md](evals/README.md).
 
@@ -71,8 +83,9 @@ do fornecedor: a Stripe tem o dela, a Intuit tem `intuit-developer` e `quickbook
 ## Como foi feito
 
 Escrito por Felipe Alvarenga a partir de trabalho em produção com crédito, pagamentos e
-integrações contábeis no Brasil e nos EUA, redigido e iterado com Claude Code. Cada regra entrou
-porque a ausência dela causou um incidente ou um fechamento de mês real.
+integrações contábeis no Brasil e nos EUA, redigido e iterado com Claude Code. Os vetores rodam a
+cada push. Os evals rodam antes de cada release e os resultados ficam em `evals/results/`, com o
+modelo e o id da execução.
 
 ## Licença
 

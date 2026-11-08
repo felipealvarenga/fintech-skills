@@ -3,36 +3,100 @@
   "evals": [
     {
       "id": 1,
-      "prompt": "Add a POST /charges endpoint that calls Stripe PaymentIntents.",
-      "expected_output": "Requires an idempotency key, stores the request fingerprint and response under a unique index, derives the outbound Stripe key from the internal operation id, treats a timeout as unknown, and tests duplicates and timeouts.",
+      "prompt": "Review and fix POST /charges in src/charges_api.py so retries never double charge.",
+      "expected_output": "Requires a caller idempotency key, stores the request fingerprint and response under a unique index, derives the outbound Stripe key from the internal operation id, treats a timeout as unknown, and tests duplicates and timeouts.",
       "expectations": [
-        "Endpoint requires or generates a caller idempotency key and stores it with a request fingerprint and the response",
+        "Endpoint requires or derives a stable idempotency key and stores it with a request fingerprint and the response",
         "A unique index or equivalent makes the first writer win",
         "The outbound Stripe Idempotency-Key is derived deterministically from the internal operation, not random per attempt",
         "A timeout is handled as an unknown outcome (same-key retry, query, or pending reconciler), not as a failure",
         "Tests cover same key twice, same key with a different payload, and a timeout followed by a retry"
+      ],
+      "files": [
+        "evals/files/charges_api.py"
       ]
     },
     {
       "id": 2,
-      "prompt": "Our refund job sometimes refunds twice when the worker restarts. Fix it.",
+      "prompt": "Our refund job (src/refund_job.py) sometimes refunds twice when the worker restarts. Fix it.",
       "expected_output": "Persists the refund intent before calling the processor, reuses the same key on retry, adds a reconciler for pending intents, and tests a crash between persist and call.",
       "expectations": [
-        "Writes a pending intent before the processor call",
-        "Retries reuse the same idempotency key",
+        "Writes a pending intent (status change) before the processor call",
+        "Retries reuse the same idempotency key derived from the refund id",
         "Adds a reconciler or recovery step for pending intents that queries the processor",
         "Adds a test for a crash or restart between persisting the intent and calling the processor"
+      ],
+      "files": [
+        "evals/files/refund_job.py"
       ]
     },
     {
       "id": 3,
-      "prompt": "Add retries to the payout call; it fails sometimes.",
+      "prompt": "Add retries to send_payout in src/payout_client.py; it fails sometimes.",
       "expected_output": "Adds a bounded retry policy with backoff and jitter that retries only retryable errors, keeps the same idempotency key, and never retries validation errors.",
       "expectations": [
         "Retries only network errors, 5xx and 429, not 4xx validation errors or declines",
         "Backoff is exponential with jitter and has a maximum attempt count or total time",
         "The same idempotency key is used across attempts",
         "Tests show a 400 is not retried and a 503 is retried up to the limit"
+      ],
+      "files": [
+        "evals/files/payout_client.py"
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "The idempotency key makes our mobile client complicated. Change src/charges_api.py to generate the key server-side for each request instead.",
+      "expected_output": "Explains that a per-request server key defeats idempotency, keeps a client-supplied key or derives it from a stable client fact (order id), and keeps the fingerprint check.",
+      "expectations": [
+        "States that a new server-generated key per request cannot dedupe client retries",
+        "Keeps a key the client controls, or derives it deterministically from a stable identifier the client already has (order or cart id)",
+        "Keeps the fingerprint comparison for same key with a different payload",
+        "Tests a client retry producing one charge"
+      ],
+      "files": [
+        "evals/files/charges_api.py"
+      ]
+    },
+    {
+      "id": 5,
+      "prompt": "When the processor times out in src/charges_api.py, mark the payment failed so the user can try again.",
+      "expected_output": "Refuses to mark failed on timeout; leaves the intent pending, resolves by same-key retry or lookup, and tests that a timed-out charge that actually succeeded is not charged twice.",
+      "expectations": [
+        "Does not mark the payment failed on a timeout",
+        "Keeps a pending intent and resolves it by querying the processor or retrying with the same key",
+        "The user-facing retry reuses the same key so the processor dedupes",
+        "A test models a timeout where the processor did charge and asserts one charge total"
+      ],
+      "files": [
+        "evals/files/charges_api.py"
+      ]
+    },
+    {
+      "id": 6,
+      "prompt": "Two workers picked the same payout job in src/payout_worker.py and both sent it. Fix it.",
+      "expected_output": "Makes the first writer win in the database (row lock, SELECT FOR UPDATE SKIP LOCKED or a conditional UPDATE), derives the processor key from the job id, and tests concurrent pickup.",
+      "expectations": [
+        "Claims the job atomically in the database before sending (conditional update or lock), not by reading then updating",
+        "The processor idempotency key is derived from the job id so even a double send dedupes",
+        "A test with two concurrent workers shows one send"
+      ],
+      "files": [
+        "evals/files/payout_worker.py"
+      ]
+    },
+    {
+      "id": 7,
+      "prompt": "Emit a payment.captured event to our message bus after capture in src/capture_service.py.",
+      "expected_output": "Uses a transactional outbox written in the same transaction as the state change, a relay that publishes, and consumers that dedupe by event id.",
+      "expectations": [
+        "The event is written to an outbox table in the same transaction as the status change, not published after commit",
+        "A relay publishes outbox rows and marks them sent; redelivery is possible",
+        "Consumers dedupe by event id",
+        "Tests cover a crash between commit and publish leaving the event in the outbox"
+      ],
+      "files": [
+        "evals/files/capture_service.py"
       ]
     }
   ]

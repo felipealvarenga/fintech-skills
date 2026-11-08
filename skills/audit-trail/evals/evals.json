@@ -3,34 +3,100 @@
   "evals": [
     {
       "id": 1,
-      "prompt": "Add an admin endpoint to change a customer's transfer limit.",
+      "prompt": "Add an audit trail to the admin endpoint in src/limits_api.py that changes a customer's transfer limit.",
       "expected_output": "Writes an audit event in the same transaction with actor, before, after, reason code and request id; the table is append-only; a test asserts the event.",
       "expectations": [
         "The audit event is written in the same transaction as the limit change",
         "Event includes actor, before and after values, reason and request id",
         "A reason code is required from the admin UI or API",
         "A test asserts exactly one event with the required fields after the change"
+      ],
+      "files": [
+        "evals/files/limits_api.py"
       ]
     },
     {
       "id": 2,
-      "prompt": "Our AI agent now approves refunds under $50 automatically. Make sure we can explain each one.",
+      "prompt": "Our AI agent (src/refund_agent.py) now approves refunds under $50 automatically. Make sure we can explain each one.",
       "expected_output": "Records actor_type agent with on_behalf_of and the policy or run id, keeps approval separate from execution, makes events queryable per customer, and tests it.",
       "expectations": [
         "Events record actor_type agent and on whose behalf, plus the policy or run that authorized the action",
         "Approval and execution are separate events",
         "Events are queryable by customer and by actor",
         "Tests assert the agent fields on the event"
+      ],
+      "files": [
+        "evals/files/refund_agent.py"
       ]
     },
     {
       "id": 3,
-      "prompt": "An auditor asks who changed our fee schedule in Q3 and why.",
-      "expected_output": "Queries the audit trail by object and time and exports it in the documented format; if no trail exists, plans same-transaction events and says debug logs are not sufficient.",
+      "prompt": "An auditor asks who changed our fee schedule in Q3 and why. We have src/fees_service.py and src/app.log.",
+      "expected_output": "Shows the log is not sufficient, answers what can be answered, and adds same-transaction audit events with reason codes and an export going forward.",
       "expectations": [
-        "Answers from an append-only audit record, not application logs",
-        "Provides the export in a stable, documented format",
-        "If the trail is missing, proposes same-transaction audit events going forward"
+        "States that application logs are not an audit record (no actor, reason, before/after, mutable)",
+        "Adds append-only audit events written in the same transaction with actor, reason and before/after",
+        "Provides a query and export by object and time range",
+        "Does not fabricate answers the log cannot support"
+      ],
+      "files": [
+        "evals/files/fees_service.py",
+        "evals/files/app.log"
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "Audit logging slows our writes. Move the audit event write in src/limits_api.py to an async queue after commit.",
+      "expected_output": "Keeps the event write in the transaction and moves only shipping to the sink asynchronously; measures the cost; tests that a failed event write rolls back the change.",
+      "expectations": [
+        "Does not write the audit event after commit or from a best-effort queue",
+        "Keeps the event insert in the same transaction and ships copies to the sink asynchronously",
+        "Measures or bounds the latency cost instead of assuming it",
+        "A test shows a failing event write rolls back the limit change"
+      ],
+      "files": [
+        "evals/files/limits_api.py"
+      ]
+    },
+    {
+      "id": 5,
+      "prompt": "Support reps need to see the full customer CPF in src/admin_tool.py.",
+      "expected_output": "Masks by default; adds a reveal action behind a permission, a stated purpose and an audit event, with rate limiting and tests.",
+      "expectations": [
+        "The page shows a masked CPF by default",
+        "Reveal requires a permission and a purpose and writes an audit event with actor and customer",
+        "Reveals are rate limited or monitored",
+        "Tests cover the audit event on reveal"
+      ],
+      "files": [
+        "evals/files/admin_tool.py"
+      ]
+    },
+    {
+      "id": 6,
+      "prompt": "Add updated_by and updated_at columns to the fees table (src/fees_service.py) for traceability.",
+      "expected_output": "Explains the columns lose history on the next change and adds one audit event per change with before and after, reason and sequence instead.",
+      "expectations": [
+        "States that updated_by and updated_at keep only the last change",
+        "Adds an append-only event per change with before, after, actor, reason and a per-object sequence",
+        "Tests show two consecutive changes both remain visible"
+      ],
+      "files": [
+        "evals/files/fees_service.py"
+      ]
+    },
+    {
+      "id": 7,
+      "prompt": "Our audit table (src/audit_table.sql) was edited by a migration script last year. Prevent it and detect it.",
+      "expected_output": "Revokes update and delete from the application role, adds a hash chain or write-once sink and a daily digest check, and tests detection.",
+      "expectations": [
+        "Application role loses UPDATE and DELETE on the audit table",
+        "Adds tamper evidence: a hash chain, a write-once sink or a daily digest stored elsewhere",
+        "A detection job alerts when the chain or digest breaks",
+        "Tests show a tampered row being detected"
+      ],
+      "files": [
+        "evals/files/audit_table.sql"
       ]
     }
   ]

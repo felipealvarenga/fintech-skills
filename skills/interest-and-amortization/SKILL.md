@@ -79,6 +79,11 @@ principal. Each error is a few cents per contract and a support ticket per custo
 4. Post from the schedule rows. The ledger entry references the contract and the period.
 5. Add the leap-year, the prepayment and the single-period cases before shipping.
 
+
+When the request conflicts with a rule here, say which rule in one sentence, then build the
+compliant version that keeps the request's intent (for example the order stays pending and the
+confirmation path marks it paid). Do not stop at a warning, and do not build the unsafe version.
+
 ## Tests the change must include
 
 - Price: principal 1,000.00 at 1% a month for 12 periods gives an installment of 88.85 under

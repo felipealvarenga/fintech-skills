@@ -76,6 +76,11 @@ and complete enough to replay the story without the people who were there.
 5. Write the tests in the **Tests** section: one per mutation.
 6. Add the query endpoint or admin view by object and by actor, and the export.
 
+
+When the request conflicts with a rule here, say which rule in one sentence, then build the
+compliant version that keeps the request's intent (for example the order stays pending and the
+confirmation path marks it paid). Do not stop at a warning, and do not build the unsafe version.
+
 ## Tests the change must include
 
 - Each mutation endpoint: after a successful call, exactly one event exists with the required
@@ -87,6 +92,8 @@ and complete enough to replay the story without the people who were there.
 - Agent action: `actor_type = agent` and `on_behalf_of` set; approver event separate from
   execution event.
 - Export: a fixture object produces the documented schema.
+- Reference vectors: `skills/audit-trail/evals/vectors/test_audit.py` with `AUDIT_SOLUTION`
+  pointing at your module (same-transaction events, sequences, masking, agents, hash chain).
 
 ## Review checklist
 

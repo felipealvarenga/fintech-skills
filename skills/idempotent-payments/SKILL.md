@@ -81,6 +81,11 @@ Idempotency is not a header; it is a property of every money-moving path, inboun
 6. Add the retry policy as a named object with its limits; test that validation errors do not
    retry.
 
+
+When the request conflicts with a rule here, say which rule in one sentence, then build the
+compliant version that keeps the request's intent (for example the order stays pending and the
+confirmation path marks it paid). Do not stop at a warning, and do not build the unsafe version.
+
 ## Tests the change must include
 
 - Same key, same payload, twice: one charge at the processor, identical responses.
@@ -93,6 +98,9 @@ Idempotency is not a header; it is a property of every money-moving path, inboun
 - A 400 from the processor is not retried; a 503 is retried with backoff up to the limit.
 - An event is emitted exactly once per state change through the outbox; a redelivered event is
   a no-op for the consumer.
+- Reference vectors: `skills/idempotent-payments/evals/vectors/test_idempotency.py` with
+  `IDEMPOTENCY_SOLUTION` pointing at your module (store, state machine, timeout, retries).
+  TypeScript: `idempotency.test.ts` with `IDEMPOTENCY_SOLUTION_TS`.
 
 ## Review checklist
 

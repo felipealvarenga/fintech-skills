@@ -44,9 +44,12 @@ the engineering facts and the vocabulary; the fiscal and tax rules stay with an 
    A static QR can be paid any number of times for any amount; if you use one, handle over,
    under and repeated payments explicitly.
 3. **Pix is near-final but refundable.** A refund is a `devolução` against the original end-to-end
-   id, full or partial, typically allowed for up to 90 days (the PSP's rule applies). Fraud
-   disputes go through MED (Mecanismo Especial de Devolução), initiated by the payer's
-   institution; design for a received Pix to be clawed back under MED.
+   id, full or partial, which the receiver's institution can execute for up to 90 days after the
+   original Pix. Fraud disputes go through MED (Mecanismo Especial de Devolução): since
+   1 September 2026 (MED 2.0) the payer can open a claim up to 80 days after the Pix, and when the
+   receiver's balance is short the institution watches the account for 90 days and returns funds
+   as they arrive. MED covers fraud and operational failure only, not buyer's remorse. Design for
+   a received Pix to be clawed back.
 4. **Receive through webhooks, confirm through the API.** The PSP notifies a received Pix;
    confirm the charge status by `txid` before fulfilling (see `webhook-handling`). Expired
    charges that still get paid must be refunded or reconciled by policy, not ignored.
@@ -59,11 +62,16 @@ the engineering facts and the vocabulary; the fiscal and tax rules stay with an 
 6. **A boleto is pending until the return confirms it.** Payment can happen at any bank; your
    bank or PSP confirms it in the return file (CNAB 240 or 400) or by webhook, usually on the
    next business day (D+1). Fulfil on confirmation, never on issuance.
-7. **Store `nosso número` and the `linha digitável`.** `Nosso número` is your reference at the
+7. **Store `nosso número` and the `linha digitável`.** The line's three mod-10 field digits catch
+   any single-digit error; the barcode's mod-11 digit does not (0, 10 and 11 all map to 1), so the
+   amount and due date come from your charge record, never from the typed line alone. `Nosso número` is your reference at the
    bank; the `linha digitável` (47 digits for bank boletos, 48 for utility `arrecadação`) is
    what the payer types. Match the return by `nosso número`.
 8. **Due date, fine and interest are fields, computed by rule.** `Vencimento` follows the
-   business-day calendar. After it, `multa` (a one-time fine) and `juros de mora` (daily
+   business-day calendar. The barcode carries the due date as a 4-digit factor: days since
+   1997-10-07 until factor 9999 on 2025-02-21, then restarted at 1000 on 2025-02-22 (FEBRABAN;
+   a few bank manuals differ by one day, so test against your bank's). Code that still adds the
+   factor to the 1997 base prints due dates 24 years in the past. After it, `multa` (a one-time fine) and `juros de mora` (daily
    interest) apply as the contract and the registration say; the bank enforces what was
    registered. Partial payment, discount and expiry (`baixa`) are registration settings, not
    runtime surprises.
@@ -84,8 +92,9 @@ the engineering facts and the vocabulary; the fiscal and tax rules stay with an 
 
 12. **Validate CPF and CNPJ with the check-digit algorithm; mask them in UIs.** CPF has 11
     digits. CNPJ has 14 positions and, for registrations issued from July 2026, the first 12
-    can contain letters; the check digits use the character's ASCII value minus 48. Do not
-    assume digits only, do not strip letters, do not store with formatting.
+    can contain letters; the check digits use the character's ASCII value minus 48 (Receita's
+    published example is `12.ABC.345/01DE-35`). Do not assume digits only, do not strip letters,
+    do not store with formatting.
 13. **Use the national business-day calendar.** Boleto due dates, D+1 clearing and settlement
     dates follow national bank holidays (the ANBIMA calendar is the common source). Pix runs
     24/7 and ignores it. Keep the calendar as data with a yearly update.
@@ -97,22 +106,9 @@ the engineering facts and the vocabulary; the fiscal and tax rules stay with an 
 
 ### Vocabulary
 
-| Portuguese | English | Note |
-|---|---|---|
-| cobrança | charge, payment request | Pix `cobrança` is a dynamic QR |
-| devolução | Pix refund | By end-to-end id |
-| estorno | refund, reversal | Cards and general use |
-| chargeback | chargeback | Network dispute |
-| compensação | clearing | Boleto D+1 |
-| baixa | write-off, settlement, cancellation | Boleto lifecycle |
-| nosso número | our number | Bank-side boleto reference |
-| linha digitável | typeable line | 47 or 48 digits |
-| vencimento | due date | Business days |
-| multa / juros de mora | fine / late interest | After due date |
-| antecipação de recebíveis | receivables anticipation | Fee to get installments early |
-| adquirente / subadquirente | acquirer / sub-acquirer (payment facilitator) | |
-| conciliação | reconciliation | |
-| arquivo retorno / remessa | return file / remittance file | CNAB 240, 400 |
+The Portuguese terms engineers meet in PSP documentation (`cobrança`, `devolução`, `estorno`,
+`compensação`, `baixa`, `nosso número`, `linha digitável`, `antecipação de recebíveis`, CNAB
+`remessa` and `retorno`) are translated and explained in [references/vocabulary.md](references/vocabulary.md).
 
 ## How to apply
 
@@ -124,6 +120,11 @@ the engineering facts and the vocabulary; the fiscal and tax rules stay with an 
    `double-entry-ledger`, reconciliation per `reconciliation`.
 4. Add CPF and CNPJ validators with test vectors that include alphanumeric CNPJ.
 5. Load the business-day calendar as data and test a due date that falls on a holiday.
+
+
+When the request conflicts with a rule here, say which rule in one sentence, then build the
+compliant version that keeps the request's intent (for example the order stays pending and the
+confirmation path marks it paid). Do not stop at a warning, and do not build the unsafe version.
 
 ## Tests the change must include
 
@@ -139,6 +140,10 @@ the engineering facts and the vocabulary; the fiscal and tax rules stay with an 
 - CPF and CNPJ: valid and invalid check digits; alphanumeric CNPJ accepted; formatted input
   normalized.
 - Calendar: a due date on a national holiday moves to the next business day.
+- Boleto typeable line and barcode check digits round-trip; a tampered digit is rejected; the
+  due-date factor maps both ways across the 2025-02-22 reset.
+- Reference vectors: `skills/brazil-payment-rails/evals/vectors/test_brazil.py` with
+  `BRAZIL_SOLUTION` pointing at your module (CPF, CNPJ, boleto check digits, due-date factor).
 
 ## Review checklist
 

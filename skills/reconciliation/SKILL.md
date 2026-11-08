@@ -74,6 +74,11 @@ matches what it can, explains what it cannot, and never edits a record on its ow
    matching invariants.
 5. Wire the run to storage and to the dashboard. Add the oldest-break alert before shipping.
 
+
+When the request conflicts with a rule here, say which rule in one sentence, then build the
+compliant version that keeps the request's intent (for example the order stays pending and the
+confirmation path marks it paid). Do not stop at a warning, and do not build the unsafe version.
+
 ## Tests the change must include
 
 - Reference match beats a date match when both are possible.

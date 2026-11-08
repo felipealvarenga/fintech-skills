@@ -86,6 +86,11 @@ any classifier in production: a holdout, numbers per class, a gate, and a feedba
 6. Ship with the dashboard: per-class metrics, coverage, correction rate, cost. Set the drift
    alert.
 
+
+When the request conflicts with a rule here, say which rule in one sentence, then build the
+compliant version that keeps the request's intent (for example the order stays pending and the
+confirmation path marks it paid). Do not stop at a warning, and do not build the unsafe version.
+
 ## Tests the change must include
 
 - Holdout evaluation runs in CI or on a schedule and fails the pull request when precision for
@@ -97,6 +102,8 @@ any classifier in production: a holdout, numbers per class, a gate, and a feedba
 - Injection: a memo with instructions does not change the output or bypass validation.
 - Decision record: every classified transaction has version, confidence and rules fired.
 - PII: the rendered prompt for a sample transaction contains no full account or card number.
+- Reference vectors: `skills/transaction-classification/evals/vectors/test_classification.py`
+  with `CLASSIFY_SOLUTION` pointing at your module (normalization, transfers, validation, gate).
 
 ## Review checklist
 

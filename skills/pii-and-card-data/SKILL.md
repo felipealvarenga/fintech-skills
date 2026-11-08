@@ -86,6 +86,11 @@ safer default.
    column names.
 7. Write the retention job and the access and deletion runbook if they do not exist.
 
+
+When the request conflicts with a rule here, say which rule in one sentence, then build the
+compliant version that keeps the request's intent (for example the order stays pending and the
+confirmation path marks it paid). Do not stop at a warning, and do not build the unsafe version.
+
 ## Tests the change must include
 
 - Redaction: a captured log from a sample payment and a sample signup contains no PAN, CVV,
@@ -97,6 +102,8 @@ safer default.
 - Masking: UI and export fixtures show last four only.
 - Deletion job: a deleted customer's rows are gone from primary tables and the search index.
 - Generators produce valid check digits and never a real-looking sequence from production.
+- Reference vectors: `skills/pii-and-card-data/evals/vectors/test_pii.py` with `PII_SOLUTION`
+  pointing at your module (allowlist redaction, scanner, Luhn, generators, masking, schema lint).
 
 ## Review checklist
 

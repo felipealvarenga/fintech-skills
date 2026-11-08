@@ -41,10 +41,13 @@ from running these integrations in production; the vendor's API details come fro
    your API usage small. Offer line-level detail as an option, not the default.
 3. **Every object you push carries your id, and you store theirs.** Put your reference in the
    document number, memo or a custom field; store their id and version token (QuickBooks
-   Online uses `SyncToken`; others use ETags or updated timestamps). A re-push looks up the pair
+   Online uses `SyncToken` and rejects a stale one with error 5010; others use ETags or updated
+   timestamps). A re-push looks up the pair
    and updates or no-ops. There is no code path that creates without first checking the pair.
-4. **Use the vendor's idempotency and batch features.** Many APIs accept a request id for
-   idempotent creates and a batch endpoint for several operations; use both. Respect the
+4. **Use the vendor's idempotency and batch features.** QuickBooks Online accepts a `requestid`
+   query parameter (unique per company, up to 50 characters, 36 in batch) and returns the original
+   response on a repeat; other APIs have an equivalent. Use it on every create, and the batch
+   endpoint for several operations. Respect the
    documented rate limits per company or tenant, with backoff and a queue, not a sleep.
 5. **Closed periods are theirs to close.** When the accounting system refuses a posting
    because the period is closed, do not retry; post the amount in the first open period with a
@@ -55,9 +58,10 @@ from running these integrations in production; the vendor's API details come fro
    silently. Store a conflict record with both versions.
 7. **Tokens rotate; persist the new one atomically.** OAuth access tokens are short-lived and
    refresh tokens can change on every refresh. Save the returned refresh token in the same
-   transaction that marks the refresh done. Alert the customer before the refresh token expires
-   (QuickBooks Online refresh tokens expire after about 100 days without use) and show the
-   connection status in the product.
+   transaction that marks the refresh done. Refresh-token lifetimes are policy, and the policy changes
+   (QuickBooks Online moved from about 100 days to a longer validity for the accounting scope in
+   late 2025): store the expiry from each token response (`x_refresh_token_expires_in`) and alert
+   the customer before that date. Show the connection status in the product.
 8. **Amounts and tax codes convert at the edge.** Accounting APIs take major units with the
    currency's decimals; convert from minor units at the boundary. Tax codes, classes, locations
    and customers are mapped entities with a creation policy per tenant (create missing, map to
@@ -84,6 +88,11 @@ from running these integrations in production; the vendor's API details come fro
 5. Write the tests in the **Tests** section against a recorded sandbox (see `money-tests`).
 6. Ship the drift report and the connection-status indicator with the first version.
 
+
+When the request conflicts with a rule here, say which rule in one sentence, then build the
+compliant version that keeps the request's intent (for example the order stays pending and the
+confirmation path marks it paid). Do not stop at a warning, and do not build the unsafe version.
+
 ## Tests the change must include
 
 - Pushing the same day's summary twice creates one journal entry and updates it on change.
@@ -94,6 +103,8 @@ from running these integrations in production; the vendor's API details come fro
 - Token refresh persists the new refresh token even if the following API call fails.
 - A deleted invoice results in a void linked to the original on both sides.
 - The drift report flags a planted one-cent difference.
+- Reference vectors: `skills/accounting-sync/evals/vectors/test_sync.py` with `SYNC_SOLUTION`
+  pointing at your module (idempotent push, conflicts, closed period, token rotation, drift).
 
 ## Review checklist
 

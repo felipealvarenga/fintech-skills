@@ -6,6 +6,11 @@ produção tratam. Toda skill vem com um eval e com vetores de teste que rodam n
 
 [English](README.md)
 
+**Medido.** Os mesmos 91 prompts rodaram no Sonnet 5.5 com e sem as skills, e um segundo modelo
+avaliou as transcrições contra expectativas escritas antes da execução. **Com as skills, 62% das
+expectativas passaram. Sem elas, 25%** (230 contra 94 de 370). Por skill, método e transcrições
+brutas: [evals/results/20261108T035910Z-c7e767e](evals/results/20261108T035910Z-c7e767e/summary.md).
+
 ## Por quê
 
 Agentes escrevem código de pagamento rápido e errado do mesmo jeito que pessoas: float para
@@ -50,21 +55,21 @@ Audite o código de dinheiro deste repositório com fintech-skills.
 [Relatório de exemplo](skills/fintech-audit/evals/sample-report.md) na fixture com defeitos plantados: 12 achados em 8
 arquivos, 4 críticos, cada um com arquivo, linha, regra, correção e teste. Sonnet 5.5, 7 turnos, USD 0,21, nenhum código alterado.
 
-| Skill | Use quando | Vetores |
-|---|---|---|
-| [fintech-audit](skills/fintech-audit/SKILL.md) | Auditar um repositório ou um PR que mexe com dinheiro; o ponto de entrada | sim |
-| [money-arithmetic](skills/money-arithmetic/SKILL.md) | Guardar, somar, ratear, converter, arredondar ou formatar valores | sim |
-| [double-entry-ledger](skills/double-entry-ledger/SKILL.md) | Qualquer tabela que responde "quanto X tem ou deve" | sim |
-| [idempotent-payments](skills/idempotent-payments/SKILL.md) | Criar, capturar, estornar ou pagar; chamar um processador | sim |
-| [webhook-handling](skills/webhook-handling/SKILL.md) | Receber callbacks de processadores, bancos e PSPs | sim |
-| [reconciliation](skills/reconciliation/SKILL.md) | Conciliar ledger, relatório do processador e extrato bancário | sim |
-| [accounting-sync](skills/accounting-sync/SKILL.md) | Integrar com QuickBooks, Xero, NetSuite, Omie, Conta Azul | sim |
-| [transaction-classification](skills/transaction-classification/SKILL.md) | Categorizar transações com regras, ML ou LLM, em especial com lançamento automático | sim |
-| [pii-and-card-data](skills/pii-and-card-data/SKILL.md) | Coletar, logar, exibir ou exportar dados pessoais, bancários ou de cartão | sim |
-| [audit-trail](skills/audit-trail/SKILL.md) | Qualquer mutação de dinheiro, limites, permissões ou dados de cliente; ações de agentes | sim |
-| [interest-and-amortization](skills/interest-and-amortization/SKILL.md) | Juros, parcelas, tabelas Price e SAC, provisões, taxa efetiva | sim |
-| [brazil-payment-rails](skills/brazil-payment-rails/SKILL.md) | Pix, boleto, parcelamento no cartão, CPF e CNPJ, NF-e | sim |
-| [money-tests](skills/money-tests/SKILL.md) | Escrever ou revisar testes para qualquer item acima | sim |
+| Skill | Use quando | Com / sem | Vetores |
+|---|---|---|---|
+| [fintech-audit](skills/fintech-audit/SKILL.md) | Auditar um repositório ou um PR que mexe com dinheiro; o ponto de entrada | 77% / 33% | sim |
+| [money-arithmetic](skills/money-arithmetic/SKILL.md) | Guardar, somar, ratear, converter, arredondar ou formatar valores | 73% / 37% | sim |
+| [double-entry-ledger](skills/double-entry-ledger/SKILL.md) | Qualquer tabela que responde "quanto X tem ou deve" | 75% / 39% | sim |
+| [idempotent-payments](skills/idempotent-payments/SKILL.md) | Criar, capturar, estornar ou pagar; chamar um processador | 61% / 21% | sim |
+| [webhook-handling](skills/webhook-handling/SKILL.md) | Receber callbacks de processadores, bancos e PSPs | 59% / 14% | sim |
+| [reconciliation](skills/reconciliation/SKILL.md) | Conciliar ledger, relatório do processador e extrato bancário | 69% / 17% | sim |
+| [accounting-sync](skills/accounting-sync/SKILL.md) | Integrar com QuickBooks, Xero, NetSuite, Omie, Conta Azul | 54% / 14% | sim |
+| [transaction-classification](skills/transaction-classification/SKILL.md) | Categorizar transações com regras, ML ou LLM, em especial com lançamento automático | 56% / 15% | sim |
+| [pii-and-card-data](skills/pii-and-card-data/SKILL.md) | Coletar, logar, exibir ou exportar dados pessoais, bancários ou de cartão | 63% / 37% | sim |
+| [audit-trail](skills/audit-trail/SKILL.md) | Qualquer mutação de dinheiro, limites, permissões ou dados de cliente; ações de agentes | 48% / 26% | sim |
+| [interest-and-amortization](skills/interest-and-amortization/SKILL.md) | Juros, parcelas, tabelas Price e SAC, provisões, taxa efetiva | 54% / 21% | sim |
+| [brazil-payment-rails](skills/brazil-payment-rails/SKILL.md) | Pix, boleto, parcelamento no cartão, CPF e CNPJ, NF-e | 52% / 17% | sim |
+| [money-tests](skills/money-tests/SKILL.md) | Escrever ou revisar testes para qualquer item acima | 67% / 37% | sim |
 
 ## Evals
 
@@ -72,6 +77,13 @@ Toda skill tem `evals/evals.json` no formato do `skill-creator` da Anthropic: pr
 agente receberia e expectativas que um avaliador confere na transcrição. Todas as skills também têm
 vetores: arquivos pytest com uma implementação de referência, executáveis contra o seu código
 por uma variável de ambiente. Veja [evals/README.md](evals/README.md).
+
+A execução avaliada de 2026-11-08 (`claude-sonnet-5-5` como sujeito e avaliador, uma execução
+por prompt por condição, 370 expectativas por condição) está em
+[evals/results/20261108T035910Z-c7e767e](evals/results/20261108T035910Z-c7e767e/summary.md): números por skill e por eval, a
+invocação exata do `claude`, todas as transcrições e todos os arquivos que o agente escreveu. Em 6
+das 91 sessões com skill o agente nunca abriu a skill; essas sessões contam contra as skills. Cada
+nova execução vai para uma pasta nova e resultados antigos nunca são editados.
 
 ## Escopo
 
@@ -84,8 +96,10 @@ do fornecedor: a Stripe tem o dela, a Intuit tem `intuit-developer` e `quickbook
 
 Escrito por Felipe Alvarenga a partir de trabalho em produção com crédito, pagamentos e
 integrações contábeis no Brasil e nos EUA, redigido e iterado com Claude Code. Os vetores rodam a
-cada push. Os evals rodam antes de cada release e os resultados ficam em `evals/results/`, com o
-modelo e o id da execução.
+cada push. Os evals avaliados rodam antes de cada release, com e sem as skills, e os resultados
+ficam em `evals/results/<run-id>/` com os modelos, o sha do git e as transcrições. Skill que não
+move os próprios evals em pelo menos 10 pontos é incorporada a outra ou removida; na primeira
+execução o menor ganho foi de 22 pontos (audit-trail) e o maior de 52 (reconciliation).
 
 ## Licença
 

@@ -15,6 +15,8 @@ license: MIT
 metadata:
   author: Felipe Alvarenga
   version: 0.1.0
+  use_when: "Writing or reviewing tests for any of the above"
+  use_when_pt: "Escrever ou revisar testes para qualquer item acima"
 ---
 
 # Money tests

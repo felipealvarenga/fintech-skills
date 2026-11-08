@@ -10,6 +10,7 @@ import yaml
 
 ROOT = Path(__file__).resolve().parent.parent
 ALLOWED = {"name", "description", "license", "allowed-tools", "metadata", "compatibility"}
+MIN_EVALS = 6
 errors = []
 
 
@@ -64,8 +65,8 @@ def check_skill(skill_dir: Path) -> None:
         for rel in ev.get("files", []):
             if not (skill_dir / rel).is_file():
                 errors.append(f"{skill_dir.name}: eval {ev.get('id')} references missing file {rel}")
-    if len(data.get("evals", [])) < 6:
-        errors.append(f"{skill_dir.name}: fewer than 6 evals")
+    if len(data.get("evals", [])) < MIN_EVALS:
+        errors.append(f"{skill_dir.name}: fewer than {MIN_EVALS} evals")
 
 
 def main() -> int:
@@ -77,6 +78,9 @@ def main() -> int:
     on_disk = {s.name for s in skills}
     if listed != on_disk:
         errors.append(f"plugin.json skills differ from disk: missing {sorted(on_disk - listed)}, extra {sorted(listed - on_disk)}")
+    import render_docs
+    if render_docs.main(["--check"]) != 0:
+        errors.append("generated docs are stale (python scripts/render_docs.py)")
     for e in errors:
         print("ERROR:", e)
     print(f"{len(skills)} skills checked, {len(errors)} errors")

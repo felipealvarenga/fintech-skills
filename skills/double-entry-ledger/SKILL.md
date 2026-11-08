@@ -12,6 +12,8 @@ license: MIT
 metadata:
   author: Felipe Alvarenga
   version: 0.1.0
+  use_when: "Any table that answers \"how much does X hold or owe\""
+  use_when_pt: "Qualquer tabela que responde \"quanto X tem ou deve\""
 ---
 
 # Double-entry ledger

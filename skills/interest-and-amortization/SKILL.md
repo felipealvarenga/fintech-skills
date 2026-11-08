@@ -14,6 +14,8 @@ license: MIT
 metadata:
   author: Felipe Alvarenga
   version: 0.1.0
+  use_when: "Interest, installments, schedules, accruals, effective rates"
+  use_when_pt: "Juros, parcelas, tabelas Price e SAC, provisões, taxa efetiva"
 ---
 
 # Interest and amortization

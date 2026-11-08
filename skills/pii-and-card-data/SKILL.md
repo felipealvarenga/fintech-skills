@@ -15,6 +15,8 @@ license: MIT
 metadata:
   author: Felipe Alvarenga
   version: 0.1.0
+  use_when: "Collecting, logging, displaying or exporting personal, bank or card data"
+  use_when_pt: "Coletar, logar, exibir ou exportar dados pessoais, bancários ou de cartão"
 ---
 
 # PII and card data

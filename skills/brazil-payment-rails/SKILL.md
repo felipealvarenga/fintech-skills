@@ -14,6 +14,8 @@ license: MIT
 metadata:
   author: Felipe Alvarenga
   version: 0.1.0
+  use_when: "Pix, boleto, card installments, CPF and CNPJ, NF-e in Brazil"
+  use_when_pt: "Pix, boleto, parcelamento no cartão, CPF e CNPJ, NF-e"
 ---
 
 # Brazil payment rails

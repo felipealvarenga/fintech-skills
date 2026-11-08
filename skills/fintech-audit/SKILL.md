@@ -13,6 +13,8 @@ license: MIT
 metadata:
   author: Felipe Alvarenga
   version: 0.1.0
+  use_when: "Auditing a repo or a PR that touches money; the entry point"
+  use_when_pt: "Auditar um repositório ou um PR que mexe com dinheiro; o ponto de entrada"
 ---
 
 # Fintech audit

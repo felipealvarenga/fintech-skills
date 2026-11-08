@@ -14,6 +14,8 @@ license: MIT
 metadata:
   author: Felipe Alvarenga
   version: 0.1.0
+  use_when: "Pushing to or reading from QuickBooks, Xero, NetSuite, Omie, Conta Azul"
+  use_when_pt: "Integrar com QuickBooks, Xero, NetSuite, Omie, Conta Azul"
 ---
 
 # Accounting sync

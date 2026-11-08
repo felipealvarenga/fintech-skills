@@ -14,6 +14,8 @@ license: MIT
 metadata:
   author: Felipe Alvarenga
   version: 0.1.0
+  use_when: "Any mutation of money, limits, permissions or customer data; agent actions"
+  use_when_pt: "Qualquer mutação de dinheiro, limites, permissões ou dados de cliente; ações de agentes"
 ---
 
 # Audit trail

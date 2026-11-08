@@ -12,6 +12,8 @@ license: MIT
 metadata:
   author: Felipe Alvarenga
   version: 0.1.0
+  use_when: "Receiving callbacks from processors, banks and PSPs"
+  use_when_pt: "Receber callbacks de processadores, bancos e PSPs"
 ---
 
 # Webhook handling

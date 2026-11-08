@@ -12,6 +12,8 @@ license: MIT
 metadata:
   author: Felipe Alvarenga
   version: 0.1.0
+  use_when: "Creating, capturing, refunding or paying out money; calling a processor"
+  use_when_pt: "Criar, capturar, estornar ou pagar; chamar um processador"
 ---
 
 # Idempotent payments

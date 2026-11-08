@@ -99,21 +99,23 @@ Every skill also ships **vectors**: language-neutral test cases as pytest files 
 implementation that proves they are satisfiable. Point the environment variable at your own
 module to run them against your code.
 
-| Skill | Vectors | Environment variable |
-|---|---|---|
-| fintech-audit | `skills/fintech-audit/evals/vectors/test_lint.py` | `AUDIT_LINT` |
-| money-arithmetic | `skills/money-arithmetic/evals/vectors/test_money.py` | `MONEY_SOLUTION` |
-| double-entry-ledger | `skills/double-entry-ledger/evals/vectors/test_ledger.py` | `LEDGER_SOLUTION` |
-| idempotent-payments | `skills/idempotent-payments/evals/vectors/test_idempotency.py` | `IDEMPOTENCY_SOLUTION` |
-| webhook-handling | `skills/webhook-handling/evals/vectors/test_webhooks.py` | `WEBHOOK_SOLUTION` |
-| reconciliation | `skills/reconciliation/evals/vectors/test_reconcile.py` | `RECON_SOLUTION` |
-| accounting-sync | `skills/accounting-sync/evals/vectors/test_sync.py` | `SYNC_SOLUTION` |
-| transaction-classification | `skills/transaction-classification/evals/vectors/test_classification.py` | `CLASSIFY_SOLUTION` |
-| pii-and-card-data | `skills/pii-and-card-data/evals/vectors/test_pii.py` | `PII_SOLUTION` |
-| audit-trail | `skills/audit-trail/evals/vectors/test_audit.py` | `AUDIT_SOLUTION` |
-| interest-and-amortization | `skills/interest-and-amortization/evals/vectors/test_amortization.py` | `AMORT_SOLUTION` |
-| brazil-payment-rails | `skills/brazil-payment-rails/evals/vectors/test_brazil.py` | `BRAZIL_SOLUTION` |
-| money-tests | `skills/money-tests/evals/vectors/test_money_tests.py` | `MONEYTESTS_SOLUTION` |
+<!-- generated:vectors-table -->
+| Skill | Python | TypeScript | Environment variable |
+|---|---|---|---|
+| fintech-audit | `skills/fintech-audit/evals/vectors/test_lint.py` | none | `AUDIT_LINT` |
+| money-arithmetic | `skills/money-arithmetic/evals/vectors/test_money.py` | `skills/money-arithmetic/evals/vectors/money.test.ts` | `MONEY_SOLUTION`, `MONEY_SOLUTION_TS` |
+| double-entry-ledger | `skills/double-entry-ledger/evals/vectors/test_ledger.py` | `skills/double-entry-ledger/evals/vectors/ledger.test.ts` | `LEDGER_SOLUTION`, `LEDGER_SOLUTION_TS` |
+| idempotent-payments | `skills/idempotent-payments/evals/vectors/test_idempotency.py` | `skills/idempotent-payments/evals/vectors/idempotency.test.ts` | `IDEMPOTENCY_SOLUTION`, `IDEMPOTENCY_SOLUTION_TS` |
+| webhook-handling | `skills/webhook-handling/evals/vectors/test_webhooks.py` | `skills/webhook-handling/evals/vectors/webhooks.test.ts` | `WEBHOOK_SOLUTION`, `WEBHOOK_SOLUTION_TS` |
+| reconciliation | `skills/reconciliation/evals/vectors/test_reconcile.py` | none | `RECON_SOLUTION` |
+| accounting-sync | `skills/accounting-sync/evals/vectors/test_sync.py` | none | `SYNC_SOLUTION` |
+| transaction-classification | `skills/transaction-classification/evals/vectors/test_classification.py` | none | `CLASSIFY_SOLUTION` |
+| pii-and-card-data | `skills/pii-and-card-data/evals/vectors/test_pii.py` | none | `BRAZIL_SOLUTION`, `PII_SOLUTION` |
+| audit-trail | `skills/audit-trail/evals/vectors/test_audit.py` | none | `AUDIT_SOLUTION` |
+| interest-and-amortization | `skills/interest-and-amortization/evals/vectors/test_amortization.py` | none | `AMORT_SOLUTION` |
+| brazil-payment-rails | `skills/brazil-payment-rails/evals/vectors/test_brazil.py` | `skills/brazil-payment-rails/evals/vectors/brazil.test.ts` | `BRAZIL_SOLUTION`, `BRAZIL_SOLUTION_TS` |
+| money-tests | `skills/money-tests/evals/vectors/test_money_tests.py` | none | `MONEYTESTS_SOLUTION` |
+<!-- /generated:vectors-table -->
 
 Each skill has seven evals: three build prompts, three judgment prompts and at least one
 adversarial prompt that asks for the unsafe thing (keep the floats, disable the signature check,
@@ -129,4 +131,6 @@ MONEY_SOLUTION=./src/money.py python -m pytest -q skills/money-arithmetic   # yo
 
 TypeScript ports live beside the Python files (`*.test.ts` with `reference.ts`) and run with
 `npm ci && npm run test:ts`; point `MONEY_SOLUTION_TS` (and the matching variable per skill) at
-your module. Ports exist for money-arithmetic, webhook-handling, idempotent-payments, double-entry-ledger and brazil-payment-rails; the remaining skills follow.
+your module. <!-- generated:ts-ports -->
+TypeScript ports exist for money-arithmetic, double-entry-ledger, idempotent-payments, webhook-handling, brazil-payment-rails; fintech-audit, reconciliation, accounting-sync, transaction-classification, pii-and-card-data, audit-trail, interest-and-amortization, money-tests are Python only.
+<!-- /generated:ts-ports -->

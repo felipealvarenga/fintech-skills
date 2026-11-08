@@ -13,6 +13,8 @@ license: MIT
 metadata:
   author: Felipe Alvarenga
   version: 0.1.0
+  use_when: "Comparing ledger, processor and bank records of the same money"
+  use_when_pt: "Conciliar ledger, relatório do processador e extrato bancário"
 ---
 
 # Reconciliation

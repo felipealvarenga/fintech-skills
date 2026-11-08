@@ -13,6 +13,8 @@ license: MIT
 metadata:
   author: Felipe Alvarenga
   version: 0.1.0
+  use_when: "Storing, adding, allocating, converting, rounding or formatting amounts"
+  use_when_pt: "Guardar, somar, ratear, converter, arredondar ou formatar valores"
 ---
 
 # Money arithmetic

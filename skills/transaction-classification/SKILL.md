@@ -14,6 +14,8 @@ license: MIT
 metadata:
   author: Felipe Alvarenga
   version: 0.1.0
+  use_when: "Categorizing transactions with rules, ML or an LLM, especially auto-posting"
+  use_when_pt: "Categorizar transações com regras, ML ou LLM, em especial com lançamento automático"
 ---
 
 # Transaction classification

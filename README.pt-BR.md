@@ -71,8 +71,9 @@ do fornecedor: a Stripe tem o dela, a Intuit tem `intuit-developer` e `quickbook
 ## Como foi feito
 
 Escrito por Felipe Alvarenga a partir de trabalho em produção com crédito, pagamentos e
-integrações contábeis no Brasil e nos EUA, redigido e iterado com Claude Code. Cada regra entrou
-porque a ausência dela causou um incidente ou um fechamento de mês real.
+integrações contábeis no Brasil e nos EUA, redigido e iterado com Claude Code. Os vetores rodam a
+cada push. Os evals rodam antes de cada release e os resultados ficam em `evals/results/`, com o
+modelo e o id da execução.
 
 ## Licença
 

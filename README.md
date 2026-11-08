@@ -16,6 +16,19 @@ balance column updated in place, a retry that charges twice, a webhook trusted a
 reconciliation that hides breaks behind a tolerance. Each skill fixes one of those, with rules
 that are testable, a review checklist, and the tests the change must include.
 
+What changes, in ten seconds:
+
+```python
+# split R$ 100,00 three ways                      # retry a charge after a timeout
+- shares = [round(total * r, 2) for r in ratios]  - key = uuid4()            # new key per attempt
++ shares = allocate(10_000, [50, 30, 20])          + key = f"{tenant}:charge:{order_id}"
++ # -> [5000, 3000, 2000], sum always preserved    + # same key on every retry; the processor dedupes
+```
+
+The left column loses or invents cents on real ratios; the right column cannot. The left key
+charges the customer twice after one timeout; the right key cannot. The skills carry the
+other hundred rules like these, each with a test.
+
 ## Install
 
 Claude Code:
@@ -83,9 +96,9 @@ The skills link to them instead of duplicating them.
 ## How this was built
 
 Written by Felipe Alvarenga from production work on credit, payments and accounting
-integrations in Brazil and the US, drafted and iterated with Claude Code. Every rule was chosen
-because its absence caused a real incident or a real month-end. The vectors run on every push;
-the rubric evals are run by hand before each release.
+integrations in Brazil and the US, drafted and iterated with Claude Code. The vectors run on every
+push. The rubric evals run before each release and their results are published under
+`evals/results/` with the model and the run id.
 
 ## Contributing
 

@@ -27,7 +27,7 @@ def test_cli_defaults():
     assert vars(args) == {
         "skill": None, "all": True, "subject_model": "claude-sonnet-5-5",
         "grader_model": "claude-sonnet-5-5", "runs": 1, "max_turns": 30,
-        "timeout": 900, "budget": 80, "results_dir": Path("evals/results"), "agent": "claude"}
+        "timeout": 900, "budget": 80, "results_dir": runner.ROOT / "evals" / "results", "agent": "claude"}
 
 
 @pytest.mark.parametrize("selection", [[], ["--skill", "missing"], ["--all", "--skill", "money-tests"]])
@@ -86,7 +86,8 @@ def test_installed_projects(name, has_vectors, runner_args, tmp_path, monkeypatc
     original = runner.fake_session
     expected = {p.relative_to(runner.ROOT / "skills" / name).as_posix(): p.read_bytes()
                 for p in (runner.ROOT / "skills" / name).rglob("*")
-                if p.is_file() and p.relative_to(runner.ROOT / "skills" / name).as_posix() != "evals/evals.json"}
+                if p.is_file() and p.relative_to(runner.ROOT / "skills" / name).as_posix() != "evals/evals.json"
+                and "__pycache__" not in p.relative_to(runner.ROOT / "skills" / name).parts}
     def inspect(role, project, prompt):
         assert not project.resolve().is_relative_to(runner.ROOT)
         projects.append(project)
@@ -139,23 +140,30 @@ def test_cli_invocations(condition, runner_args, tmp_path):
         "argv": ["claude", "-p", "--output-format", "json", "--verbose", "--model", "claude-sonnet-5-5",
                  "--max-turns", "30", "--tools", "Read,Write,Edit,Glob,Grep,Skill", "--setting-sources", "project",
                  "--strict-mcp-config", "--permission-mode", "acceptEdits", "--permission-prompts", "none", "--no-session-persistence"],
-        "cwd": "<project>", "stdin": "Synthetic"}
+        "cwd": "<project>", "stdin": "Synthetic", "env": {"CLAUDE_CODE_DISABLE_CLAUDE_MDS": "1"}}
     assert record["grader"]["invocation"]["argv"] == [
         "claude", "-p", "--output-format", "json", "--model", "claude-sonnet-5-5", "--tools", "",
         "--setting-sources", "project", "--strict-mcp-config", "--no-session-persistence"]
+    assert record["grader"]["invocation"]["env"] == {"CLAUDE_CODE_DISABLE_CLAUDE_MDS": "1"}
 
 
-def test_real_transport(runner_args, tmp_path, monkeypatch):
+@pytest.mark.parametrize("role", ["subject", "grader"])
+def test_real_transport(role, runner_args, tmp_path, monkeypatch):
     runner_args.agent = "claude"
     calls = []
     def transport(argv, **kwargs):
         calls.append((argv, kwargs))
         return SimpleNamespace(returncode=0, stdout='{"type":"result","result":"done"}', stderr="")
     monkeypatch.setattr(subprocess, "run", transport)
-    session = runner.call_session(runner_args, "subject", tmp_path, "stdin prompt")
+    monkeypatch.setenv("EVAL_INHERITED_TEST", "inherited")
+    monkeypatch.setenv("CLAUDE_CODE_DISABLE_CLAUDE_MDS", "0")
+    session = runner.call_session(runner_args, role, tmp_path, "stdin prompt")
     assert len(calls) == 1
     assert calls[0] == (session["invocation"]["argv"], {
-        "input": "stdin prompt", "text": True, "capture_output": True, "cwd": tmp_path, "timeout": 900})
+        "input": "stdin prompt", "text": True, "capture_output": True, "cwd": tmp_path, "timeout": 900,
+        "env": {**os.environ, "CLAUDE_CODE_DISABLE_CLAUDE_MDS": "1"}})
+    assert calls[0][1]["env"]["EVAL_INHERITED_TEST"] == "inherited"
+    assert calls[0][1]["env"]["CLAUDE_CODE_DISABLE_CLAUDE_MDS"] == "1"
     assert session["final_answer"] == "done"
 
 
@@ -197,7 +205,11 @@ def test_capture(verbose, runner_args, tmp_path, monkeypatch):
     assert (tmp_path / files["answer.txt"]["raw_path"]).read_text() == "in <project>"
     assert (tmp_path / files["boundary.txt"]["raw_path"]).stat().st_size == 262144
     assert (tmp_path / files["binary.bin"]["raw_path"]).read_bytes() == b"\xff\x00"
-    assert files["binary.bin"]["base64"] == "/wA="
+    payload = json.loads((tmp_path / record["grader"]["invocation"]["stdin_path"]).read_text())
+    assert next(f for f in payload["produced_files"] if f["path"] == "binary.bin")["base64"] == "/wA="
+    assert "whole transcript" not in json.dumps(record)
+    assert "in <project>" not in json.dumps(record)
+    assert all(set(f) <= {"path", "size", "sha256", "raw_path"} for f in files.values())
     assert all(not p.exists() for p in project_paths)
     assert all(str(p) not in json.dumps(record) for p in project_paths)
 
@@ -208,10 +220,13 @@ def test_fixture_changes(runner_args, tmp_path, monkeypatch):
     (skill / "nested/input.txt").write_text("original")
     (skill / "unchanged.txt").write_text("unchanged")
     (skill / "SKILL.md").write_text("Synthetic")
+    (skill / "evals/vectors/__pycache__").mkdir(parents=True)
+    (skill / "evals/vectors/__pycache__/reference.pyc").write_bytes(b"synthetic cache")
     inputs = []
     original = runner.fake_session
     def change(role, project, prompt):
         if role == "subject":
+            assert not list(project.rglob("__pycache__"))
             inputs.append(runner.project_files(project))
             (project / "nested/input.txt").write_text("changed")
         return original(role, project, prompt)
@@ -220,7 +235,7 @@ def test_fixture_changes(runner_args, tmp_path, monkeypatch):
         record, _ = runner.evaluate_prompt(runner_args, skill, {
             "id": 1, "prompt": "Synthetic", "files": ["nested/input.txt", "unchanged.txt"], "expectations": ["Explains"]}, condition, 1, tmp_path)
         assert [f["path"] for f in record["files"]] == ["nested/input.txt", "test_generated.py"]
-        assert record["files"][0]["content"] == "changed"
+        assert (tmp_path / record["files"][0]["raw_path"]).read_text() == "changed"
     assert inputs == [{"nested/input.txt": b"original", "unchanged.txt": b"unchanged"}] * 2
 
 
@@ -241,6 +256,9 @@ def test_grader_payload(runner_args, tmp_path, monkeypatch):
     assert payload["final_answer"] == "Fake answer in <project>"
     assert json.loads(payload["transcript"])[-1]["type"] == "result"
     assert payload["produced_files"][0]["path"] == "test_generated.py"
+    assert payload["produced_files"][0]["content"] == "def test_example():\n    assert 1 == 1\n"
+    assert "stdin" not in record["grader"]["invocation"]
+    assert json.loads((tmp_path / record["grader"]["invocation"]["stdin_path"]).read_text()) == payload
     assert "condition" not in json.dumps(payload) and "without" not in json.dumps(payload)
     assert "raw_path" not in payload["produced_files"][0]
     assert record["subject"]["tokens"]["input_tokens"] == 10
@@ -350,7 +368,9 @@ def test_full_fake_flow(tmp_path, monkeypatch):
     run_dir, = tmp_path.iterdir()
     assert run_dir.name.endswith("-abcdef0")
     assert len(run_dir.name) == 24
-    data = json.loads((run_dir / "money-arithmetic.json").read_text())
+    skill_json = (run_dir / "money-arithmetic.json").read_text()
+    data = json.loads(skill_json)
+    assert "def test_example()" not in skill_json
     assert data["run_id"] == run_dir.name and data["date"] == run_dir.name[:16]
     assert data["subject_model"] == data["grader_model"] == "fake"
     assert data["skill"] == "money-arithmetic" and data["git_sha"] == "abcdef0123456789"
@@ -367,6 +387,13 @@ def test_full_fake_flow(tmp_path, monkeypatch):
             for path in record[role]["raw_paths"].values():
                 assert path.startswith(prefix) and (run_dir / path).is_file()
         assert record["files_raw_path"].startswith(prefix)
+        manifest = json.loads((run_dir / record["files_raw_path"]).read_text())
+        assert manifest == record["files"]
+        assert all(set(f) == {"path", "size", "sha256", "raw_path"} for f in manifest)
+        stdin_path = record["grader"]["invocation"]["stdin_path"]
+        assert stdin_path == prefix + "grader-stdin.json"
+        payload = json.loads((run_dir / stdin_path).read_text())
+        assert json.dumps(payload["transcript"])[1:-1] not in skill_json
     summary = (run_dir / "summary.md").read_text()
     assert summary.startswith("# FAKE evaluation (no model judgments)\n")
     assert "Planned sessions: 24; started sessions: 24" in summary

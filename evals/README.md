@@ -8,7 +8,7 @@ root, run paired evaluations with the local Claude Code CLI and its existing log
 python3 scripts/run_evals.py --skill money-arithmetic
 python3 scripts/run_evals.py --skill money-arithmetic --skill money-tests
 python3 scripts/run_evals.py --all --budget 144
-python3 scripts/run_evals.py --skill money-arithmetic --agent fake --results-dir /tmp/opencode/skill-evals
+python3 scripts/run_evals.py --skill money-arithmetic --agent fake --results-dir /tmp/skill-evals
 ```
 
 Evals never run in CI. A person starts a real run and approves its budget. The pytest suite uses
@@ -24,7 +24,7 @@ in-process fake agents, not Claude. Fake results measure the runner, not a skill
 | `--max-turns` | `30` | Subject turn limit. Partial output is still graded. |
 | `--timeout` | `900` | Seconds per subject or grader session; timed-out processes are killed. |
 | `--budget` | `80` | Maximum planned sessions, including graders. |
-| `--results-dir` | `evals/results` | Parent of the new append-only run folder. |
+| `--results-dir` | `evals/results` | Parent of the new append-only run folder; default is relative to the repository root. |
 | `--agent` | `claude` | `claude` or deterministic, in-process `fake`. |
 | `--help` | off | Show CLI help. |
 
@@ -36,13 +36,11 @@ started count. Sessions run sequentially, with no retries or resume.
 Each subject gets a new temporary project outside the repository. Input `files` are relative to
 the skill folder and copied at the same relative path. Absolute paths, `..` segments and missing
 files become prompt errors. Only the with condition installs `.claude/skills/<name>/`: the skill
-folder minus `evals/evals.json`. `SKILL.md` and any vectors stay installed. Both conditions get
-Read, Write, Edit, Glob, Grep and Skill, with project-only settings, strict MCP configuration and
-no session persistence. No Bash, web or Agent tool is enabled. The runner adds no credential.
-
-The invocation follows the approved argument list. Project-only settings do not establish
-isolation from `CLAUDE.md` discovery. That isolation requirement needs an invocation revision
-before a real run can be treated as an uncontaminated comparison.
+folder minus `evals/evals.json` and local `__pycache__` artifacts. `SKILL.md` and any vectors stay
+installed. Both conditions get Read, Write, Edit, Glob, Grep and Skill, with project-only settings, strict MCP configuration and
+no session persistence. Both subject and grader inherit the environment with
+`CLAUDE_CODE_DISABLE_CLAUDE_MDS=1` to disable `CLAUDE.md` discovery. No Bash, web or Agent tool is
+enabled. The runner adds no credential.
 
 A separate grader gets an empty temporary project, no tools, and the prompt, expectations,
 answer, full transcript and produced files. It is not given the condition label or storage
@@ -67,6 +65,7 @@ evals/results/<UTC YYYYMMDDTHHMMSSZ>-<7-character git sha>/
     subject-stderr.txt
     grader-transcript.txt
     grader-stderr.txt
+    grader-stdin.json
     files.json
     files/<produced-path>
 ```
@@ -78,9 +77,10 @@ rows, planned and started sessions, and the total raw size. Git state includes u
 under `skills/`. Temporary projects are removed after capture, including on errors and timeouts.
 
 Created or changed files outside `.claude/` are captured. A produced file over 256 KB gets only
-its name, size and SHA-256. Smaller binary files include base64 in the manifest. Transcripts stay
-whole. Stored text replaces the temporary project path with `<project>`. Results are not
-gitignored; review their size and contents before choosing whether to commit them.
+its name, size and SHA-256. Smaller files keep their bytes under `files/`; manifests hold only
+metadata and raw paths. The raw grader stdin includes file contents (base64 for binary files)
+and the whole transcript. Stored text replaces the temporary project path with `<project>`.
+Results are not gitignored; review their size and contents before choosing whether to commit them.
 
 ## Vectors
 

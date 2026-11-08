@@ -68,10 +68,6 @@ an agent would receive, and expectations a grader checks in the transcript. Four
 vectors: pytest files with a reference implementation, runnable against your own code through
 an environment variable. See [evals/README.md](evals/README.md).
 
-Run paired evaluations with `python3 scripts/run_evals.py --skill money-arithmetic`.
-For all skills, use `--all --budget 144`; the default budget is 80 sessions, including graders.
-Use `--agent fake` to exercise the runner without a model. Real evals never run in CI.
-
 ```sh
 python scripts/validate.py       # frontmatter, evals, manifest
 python -m pytest -q              # vectors against the references

@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 import fnmatch
 import hashlib
 import json
+import os
 from pathlib import Path
 import re
 import shutil
@@ -32,13 +33,12 @@ def cli_parser():
     parser.add_argument("--max-turns", type=int, default=30)
     parser.add_argument("--timeout", type=float, default=900)
     parser.add_argument("--budget", type=int, default=80)
-    parser.add_argument("--results-dir", type=Path, default=Path("evals/results"))
+    parser.add_argument("--results-dir", type=Path, default=ROOT / "evals" / "results")
     parser.add_argument("--agent", choices=("claude", "fake"), default="claude")
     return parser
 
 
 def session_invocation(args, role):
-    # debt: pinned flags leave CLAUDE.md discovery enabled; replace after isolation invocation approval.
     command = ["claude", "-p", "--output-format", "json"]
     if role == "subject":
         command += ["--verbose", "--model", args.subject_model, "--max-turns", str(args.max_turns),
@@ -69,7 +69,8 @@ def fake_session(role, project, prompt):
 
 
 def call_session(args, role, project, prompt):
-    invocation = {"argv": session_invocation(args, role), "cwd": "<project>", "stdin": prompt}
+    invocation = {"argv": session_invocation(args, role), "cwd": "<project>", "stdin": prompt,
+                  "env": {"CLAUDE_CODE_DISABLE_CLAUDE_MDS": "1"}}
     start = time.monotonic()
     stdout, stderr, error = "", "", None
     exit_code = 0
@@ -78,7 +79,8 @@ def call_session(args, role, project, prompt):
             stdout = fake_session(role, project, prompt)
         else:
             process = subprocess.run(invocation["argv"], input=prompt, text=True,
-                                     capture_output=True, cwd=project, timeout=args.timeout)
+                                     capture_output=True, cwd=project, timeout=args.timeout,
+                                     env={**os.environ, **invocation["env"]})
             stdout, stderr = process.stdout, process.stderr
             exit_code = process.returncode
     except subprocess.TimeoutExpired as exc:
@@ -140,7 +142,7 @@ def install_project(skill, evaluation, project, condition):
     if condition == "with":
         for source in sorted(skill.rglob("*")):
             relative = source.relative_to(skill)
-            if not source.is_file() or relative.as_posix() == "evals/evals.json":
+            if not source.is_file() or relative.as_posix() == "evals/evals.json" or "__pycache__" in relative.parts:
                 continue
             target = project / ".claude/skills" / skill.name / relative
             target.parent.mkdir(parents=True, exist_ok=True)
@@ -246,6 +248,11 @@ def evaluate_prompt(args, skill, evaluation, condition, run, run_dir):
             session["raw_paths"] = {
                 key: save_text(raw, f"{role}-{key}.txt", session.pop(key), run_dir)
                 for key in ("transcript", "stderr")}
+            if role == "grader":
+                session["invocation"]["stdin_path"] = save_text(
+                    raw, "grader-stdin.json", session["invocation"].pop("stdin"), run_dir)
+    record["files"] = [{k: v for k, v in item.items() if k not in ("content", "base64")}
+                       for item in record["files"]]
     record["files_raw_path"] = save_text(raw, "files.json", json.dumps(record["files"], indent=2), run_dir)
     return record, started
 

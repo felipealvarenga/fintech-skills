@@ -1,6 +1,6 @@
 # fintech-skills
 
-Fintech engineering skills for coding agents. Twelve skills that teach Claude Code, Codex,
+Fintech engineering skills for coding agents. An audit entry point and twelve skills that teach Claude Code, Codex,
 Cursor, Copilot and any agent that reads `SKILL.md` how to handle money the way production
 fintech systems do. Every skill ships with an eval and with test vectors that run in CI.
 
@@ -55,8 +55,16 @@ Manual: copy `skills/<name>` into your project's `.claude/skills/` or `.agents/s
 
 ## Skills
 
+Start with the audit. It runs a deterministic lint on your money code, confirms each lead by
+reading, applies the checklists below and reports findings with file, line, rule, fix and test.
+
+```
+Audit this repository's money code with fintech-skills.
+```
+
 | Skill | Use when | Vectors |
 |---|---|---|
+| [fintech-audit](skills/fintech-audit/SKILL.md) | Auditing a repo or a PR that touches money; the entry point | yes |
 | [money-arithmetic](skills/money-arithmetic/SKILL.md) | Storing, adding, allocating, converting, rounding or formatting amounts | yes |
 | [double-entry-ledger](skills/double-entry-ledger/SKILL.md) | Any table that answers "how much does X hold or owe" | yes |
 | [idempotent-payments](skills/idempotent-payments/SKILL.md) | Creating, capturing, refunding or paying out money; calling a processor | yes |

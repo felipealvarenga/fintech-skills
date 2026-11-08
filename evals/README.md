@@ -11,6 +11,7 @@ module to run them against your code.
 
 | Skill | Vectors | Environment variable |
 |---|---|---|
+| fintech-audit | `skills/fintech-audit/evals/vectors/test_lint.py` | `AUDIT_LINT` |
 | money-arithmetic | `skills/money-arithmetic/evals/vectors/test_money.py` | `MONEY_SOLUTION` |
 | double-entry-ledger | `skills/double-entry-ledger/evals/vectors/test_ledger.py` | `LEDGER_SOLUTION` |
 | idempotent-payments | `skills/idempotent-payments/evals/vectors/test_idempotency.py` | `IDEMPOTENCY_SOLUTION` |

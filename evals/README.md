@@ -36,5 +36,6 @@ python -m pytest -q skills                                   # all vectors again
 MONEY_SOLUTION=./src/money.py python -m pytest -q skills/money-arithmetic   # your implementation
 ```
 
-The vectors are Python today. The cases are listed in each test file so they can be ported to
-another language by hand.
+TypeScript ports live beside the Python files (`*.test.ts` with `reference.ts`) and run with
+`npm ci && npm run test:ts`; point `MONEY_SOLUTION_TS` (and the matching variable per skill) at
+your module. Ports exist for money-arithmetic today; the remaining skills follow.

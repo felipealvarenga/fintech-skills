@@ -14,8 +14,8 @@ way production fintech systems do. Every skill ships evals and test vectors that
 `ae8adc1`), and a separate session of the same model graded each transcript against expectations written before
 the run. The score is the share of expectations the grader marked passed; the agent's code is read, not
 executed. **With the skills, 78%. Without them, 26%** (289 against 95 of 370). Per skill,
-method and raw transcripts: [evals/results/20261108T143507Z-ae8adc1](evals/results/20261108T143507Z-ae8adc1/summary.md). The prompts are development prompts: the skills were revised against
-earlier runs' failures on these same prompts, and a held-out set is the next step.
+method and raw transcripts: [evals/results/20261108T143507Z-ae8adc1](evals/results/20261108T143507Z-ae8adc1/summary.md). Those prompts are development prompts: the skills were revised against
+earlier runs' failures on them. A held-out set (prompts never read when editing a skill) is in `evals/heldout/` and has not been measured on this commit yet.
 <!-- /generated:headline -->
 
 ## Why
@@ -114,11 +114,11 @@ sends the same prompts with and without the skill, grades both, and lands in its
 Old folders are never edited. Method and flags: [evals/README.md](evals/README.md).
 
 <!-- generated:runs -->
-| Run | Skills at | Subject | With | Without | Lift (points) |
-|---|---|---|---|---|---|
-| [20261108T035910Z-c7e767e](evals/results/20261108T035910Z-c7e767e/summary.md) | `c7e767e` | `claude-sonnet-5-5` | 62% | 25% | 36.8 |
-| [20261108T053526Z-ee4f998](evals/results/20261108T053526Z-ee4f998/summary.md) | `ee4f998` | `claude-sonnet-5-5` | 72% | 27% | 45.4 |
-| [20261108T143507Z-ae8adc1](evals/results/20261108T143507Z-ae8adc1/summary.md) | `ae8adc1` | `claude-sonnet-5-5` | 78% | 26% | 52.4 |
+| Run | Skills at | Prompts | Subject | With | Without | Lift (points) |
+|---|---|---|---|---|---|---|
+| [20261108T035910Z-c7e767e](evals/results/20261108T035910Z-c7e767e/summary.md) | `c7e767e` | development | `claude-sonnet-5-5` | 62% | 25% | 36.8 |
+| [20261108T053526Z-ee4f998](evals/results/20261108T053526Z-ee4f998/summary.md) | `ee4f998` | development | `claude-sonnet-5-5` | 72% | 27% | 45.4 |
+| [20261108T143507Z-ae8adc1](evals/results/20261108T143507Z-ae8adc1/summary.md) | `ae8adc1` | development | `claude-sonnet-5-5` | 78% | 26% | 52.4 |
 
 In 1 of the 91 with-skill sessions of the latest run the agent never opened the skill; that session counts against the skills.
 <!-- /generated:runs -->

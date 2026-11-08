@@ -35,6 +35,8 @@ def cli_parser():
     parser.add_argument("--budget", type=int, default=80)
     parser.add_argument("--results-dir", type=Path, default=ROOT / "evals" / "results")
     parser.add_argument("--agent", choices=("claude", "fake"), default="claude")
+    parser.add_argument("--evals", choices=("dev", "heldout"), default="dev",
+                        help="dev: skills/<skill>/evals/evals.json; heldout: evals/heldout/<skill>.json, never read when editing skills")
     return parser
 
 
@@ -130,8 +132,17 @@ def skill_folders():
     return {p.name: p for p in sorted((ROOT / "skills").iterdir()) if p.is_dir()}
 
 
-def fixture_target(skill, name):
+def fixture_target(skill, name, files_root=None):
+    """Development evals list files under the skill's evals/files/; held-out evals list files under
+    evals/heldout/files/<skill>/ (files_root). A flat name goes to src/<name>; a nested one keeps its path
+    below the first folder."""
     path = Path(name)
+    if files_root is not None:
+        source = files_root / path
+        if (path.is_absolute() or ".." in path.parts or not source.is_file()
+                or not source.resolve().is_relative_to(files_root.resolve())):
+            raise ValueError(f"invalid or missing eval file: {name}")
+        return Path("src") / path if len(path.parts) == 1 else Path(*path.parts[1:])
     source = skill / path
     if (path.is_absolute() or ".." in path.parts or path.parts[:2] != ("evals", "files")
             or len(path.parts) < 3 or not source.is_file()
@@ -156,11 +167,12 @@ def install_skill(skill, project):
 
 def install_project(skill, evaluation, project, condition):
     sources = {}
+    files_root = Path(evaluation["files_root"]) if evaluation.get("files_root") else None
     for name in evaluation.get("files", []):
-        target = fixture_target(skill, name)
+        target = fixture_target(skill, name, files_root)
         if target in sources:
             raise ValueError(f"duplicate eval file target: {target}")
-        sources[target] = skill / name
+        sources[target] = (files_root / name) if files_root is not None else (skill / name)
     for path, source in sources.items():
         target = project / path
         target.parent.mkdir(parents=True, exist_ok=True)
@@ -368,7 +380,18 @@ def eval_main(argv=None):
     names = list(available) if args.all else list(dict.fromkeys(args.skill))
     if any(name not in available for name in names):
         parser.error("unknown skill: " + ", ".join(name for name in names if name not in available))
-    evaluations = {name: json.loads((available[name] / "evals/evals.json").read_text())["evals"] for name in names}
+    if args.evals == "heldout":
+        evaluations = {}
+        for name in names:
+            source = ROOT / "evals/heldout" / f"{name}.json"
+            if not source.is_file():
+                parser.error(f"no held-out evals for {name}: {source}")
+            items = json.loads(source.read_text())["evals"]
+            for item in items:
+                item["files_root"] = str(ROOT / "evals/heldout/files" / name)
+            evaluations[name] = items
+    else:
+        evaluations = {name: json.loads((available[name] / "evals/evals.json").read_text())["evals"] for name in names}
     prompts = sum(len(items) for items in evaluations.values())
     subjects = prompts * 2 * args.runs
     total = subjects * 2
@@ -378,7 +401,7 @@ def eval_main(argv=None):
         return 1
     sha, dirty = repository_state()
     date = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    run_id = f"{date}-{sha[:7]}"
+    run_id = f"{date}-{sha[:7]}" + ("-heldout" if args.evals == "heldout" else "")
     run_dir = args.results_dir / run_id
     try:
         run_dir.mkdir(parents=True, exist_ok=False)
@@ -388,7 +411,7 @@ def eval_main(argv=None):
     if args.agent == "fake":
         args.subject_model = args.grader_model = "fake"
     metadata = {"run_id": run_id, "date": date, "subject_model": args.subject_model,
-                "grader_model": args.grader_model, "git_sha": sha, "skills_dirty": dirty}
+                "grader_model": args.grader_model, "git_sha": sha, "skills_dirty": dirty, "prompt_set": args.evals}
     skills, started = {}, 0
     for name, items in evaluations.items():
         data = {**metadata, "skill": name, "installed_paths": [], "records": []}

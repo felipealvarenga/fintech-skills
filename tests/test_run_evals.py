@@ -578,3 +578,20 @@ def test_blind_transcript_hides_the_condition():
     assert "money-arithmetic" not in blinded and "Money arithmetic rules" not in blinded and "Launching skill" not in blinded
     assert "amount = 1.1" in blinded and '"tools"' in blinded and '"result": "done"' in blinded
     assert blind_transcript("not json") == "not json"
+
+
+def test_heldout_mode_reads_the_separate_set_and_names_the_folder(runner_args, tmp_path, monkeypatch):
+    heldout = runner.ROOT / "evals/heldout"
+    assert (heldout / "money-arithmetic.json").is_file(), "held-out set missing"
+    items = json.loads((heldout / "money-arithmetic.json").read_text())["evals"]
+    for item in items:
+        for name in item.get("files", []):
+            assert (heldout / "files/money-arithmetic" / name).is_file()
+    code = runner.eval_main(["--skill", "money-arithmetic", "--agent", "fake", "--evals", "heldout",
+                             "--results-dir", str(tmp_path), "--budget", "40"])
+    assert code == 0
+    run_dir = next(p for p in tmp_path.iterdir() if p.is_dir())
+    assert run_dir.name.endswith("-heldout")
+    data = json.loads((run_dir / "money-arithmetic.json").read_text())
+    assert data["prompt_set"] == "heldout" and len(data["records"]) == len(items) * 2
+    assert all(r["eval_id"] in {i["id"] for i in items} for r in data["records"])

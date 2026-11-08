@@ -69,10 +69,33 @@ def check_skill(skill_dir: Path) -> None:
         errors.append(f"{skill_dir.name}: fewer than {MIN_EVALS} evals")
 
 
+def check_heldout(skill_dir: Path) -> None:
+    source = ROOT / "evals" / "heldout" / f"{skill_dir.name}.json"
+    if not source.exists():
+        return
+    data = json.loads(source.read_text(encoding="utf-8"))
+    if data.get("skill_name") != skill_dir.name:
+        errors.append(f"heldout {skill_dir.name}: skill_name does not match")
+    ids = set()
+    for ev in data.get("evals", []):
+        for key in ("id", "prompt", "expected_output", "expectations"):
+            if key not in ev:
+                errors.append(f"heldout {skill_dir.name}: eval missing '{key}'")
+        if ev.get("id") in ids:
+            errors.append(f"heldout {skill_dir.name}: duplicate eval id {ev.get('id')}")
+        ids.add(ev.get("id"))
+        for rel in ev.get("files", []):
+            if not (ROOT / "evals" / "heldout" / "files" / skill_dir.name / rel).is_file():
+                errors.append(f"heldout {skill_dir.name}: eval {ev.get('id')} references missing file {rel}")
+    if len(data.get("evals", [])) < 2:
+        errors.append(f"heldout {skill_dir.name}: fewer than 2 evals")
+
+
 def main() -> int:
     skills = sorted(p for p in (ROOT / "skills").iterdir() if p.is_dir())
     for s in skills:
         check_skill(s)
+        check_heldout(s)
     plugin = json.loads((ROOT / ".claude-plugin" / "plugin.json").read_text(encoding="utf-8"))
     listed = {Path(p).name for p in plugin["skills"]}
     on_disk = {s.name for s in skills}

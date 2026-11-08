@@ -54,8 +54,10 @@ def runs():
         if not f.is_file():
             continue
         d = json.loads(f.read_text(encoding="utf-8"))
+        parts = folder.name.split("-")
         d["id"] = folder.name
-        d["sha"] = folder.name.split("-", 1)[1]
+        d["sha"] = parts[1]
+        d["kind"] = parts[2] if len(parts) > 2 else "dev"
         out.append(d)
     return out
 
@@ -68,13 +70,36 @@ def rel(skill):
     return skill.relative_to(ROOT).as_posix()
 
 
+def heldout_sentence(lang, heldout):
+    """The held-out set: prompts never read when editing a skill, in evals/heldout/, measured in their own folders."""
+    if not heldout:
+        return ("A held-out set (prompts never read when editing a skill) is in `evals/heldout/` and has not been measured on this commit yet."
+                if lang == "en" else "Um conjunto reservado (prompts nunca lidos ao editar uma skill) está em `evals/heldout/` e ainda não foi medido neste commit.")
+    parts = []
+    for m, r in heldout.items():
+        w, wo = r["pack"]["with"], r["pack"]["without"]
+        n = w["passed"] + w["failed"]
+        link = f"[evals/results/{r['id']}](evals/results/{r['id']}/summary.md)"
+        if lang == "en":
+            parts.append(f"`{m}`: **{pct(w['rate'])} with, {pct(wo['rate'])} without** ({w['passed']} against {wo['passed']} of {n}, {link})")
+        else:
+            parts.append(f"`{m}`: **{pct(w['rate'])} com, {pct(wo['rate'])} sem** ({w['passed']} contra {wo['passed']} de {n}, {link})")
+    if lang == "en":
+        return "On the held-out set, prompts in `evals/heldout/` that are never read when editing a skill: " + "; ".join(parts) + "."
+    return "No conjunto reservado, prompts em `evals/heldout/` nunca lidos ao editar uma skill: " + "; ".join(parts) + "."
+
+
 def headline(lang, latest, prompts, all_runs=()):
     """One sentence per subject model measured on the same skills commit as the latest run (latest run per model)."""
-    same_commit = [r for r in all_runs if r["sha"] == latest["sha"]] or [latest]
+    same_commit = [r for r in all_runs if r["sha"] == latest["sha"] and r["kind"] == "dev"] or [latest]
     per_model = {}
     for r in same_commit:
         per_model[r["meta"]["subject_model"]] = r  # sorted ascending, so the latest run per model wins
     runs_here = list(per_model.values())
+    heldout = {}
+    for r in all_runs:
+        if r["sha"] == latest["sha"] and r["kind"] == "heldout":
+            heldout[r["meta"]["subject_model"]] = r
     def nums(r):
         w, wo = r["pack"]["with"], r["pack"]["without"]
         return pct(w["rate"]), pct(wo["rate"]), w["passed"], wo["passed"], w["passed"] + w["failed"]
@@ -90,8 +115,8 @@ def headline(lang, latest, prompts, all_runs=()):
                 f"`{latest['sha']}`), and {grader_en} graded each transcript against expectations written before\n"
                 f"the run. The score is the share of expectations the grader marked passed; the agent's code is read, not\n"
                 f"executed. {scores}. Per skill,\n"
-                f"method and raw transcripts: {links}. The prompts are development prompts: the skills were revised against\n"
-                f"earlier runs' failures on these same prompts, and a held-out set is the next step.")
+                f"method and raw transcripts: {links}. Those prompts are development prompts: the skills were revised against\n"
+                f"earlier runs' failures on them. " + heldout_sentence("en", heldout))
     scores = "; ".join(f"`{m}`: **{nums(r)[0]} com as skills, {nums(r)[1]} sem** ({nums(r)[2]} contra {nums(r)[3]} de {nums(r)[4]})" for m, r in per_model.items()) if len(per_model) > 1 else \
              f"**Com as skills, {nums(latest)[0]}. Sem elas, {nums(latest)[1]}** ({nums(latest)[2]} contra {nums(latest)[3]} de {nums(latest)[4]})"
     grader_pt = ("uma sessão separada do mesmo modelo" if grader and grader in per_model and len(per_model) == 1 else f"`{grader}`" if grader else "um modelo avaliador separado")
@@ -99,8 +124,8 @@ def headline(lang, latest, prompts, all_runs=()):
             f"`{latest['sha']}`), e {grader_pt} avaliou cada transcrição contra expectativas escritas antes\n"
             f"da execução. A nota é a fração das expectativas que o avaliador marcou como atendidas; o código do agente é\n"
             f"lido, não executado. {scores}. Por skill,\n"
-            f"método e transcrições brutas: {links}. Os prompts são prompts de desenvolvimento: as skills foram revisadas\n"
-            f"contra as falhas das execuções anteriores nestes mesmos prompts, e um conjunto reservado é o próximo passo.")
+            f"método e transcrições brutas: {links}. Esses prompts são prompts de desenvolvimento: as skills foram revisadas\n"
+            f"contra as falhas das execuções anteriores neles. " + heldout_sentence("pt", heldout))
 
 
 def skills_table(lang, latest):
@@ -128,13 +153,14 @@ def skills_table(lang, latest):
 
 def runs_block(lang, all_runs):
     if lang == "en":
-        rows = ["| Run | Skills at | Subject | With | Without | Lift (points) |", "|---|---|---|---|---|---|"]
+        rows = ["| Run | Skills at | Prompts | Subject | With | Without | Lift (points) |", "|---|---|---|---|---|---|---|"]
     else:
-        rows = ["| Execução | Skills em | Sujeito | Com | Sem | Ganho (pontos) |", "|---|---|---|---|---|---|"]
+        rows = ["| Execução | Skills em | Prompts | Sujeito | Com | Sem | Ganho (pontos) |", "|---|---|---|---|---|---|---|"]
     for d in all_runs:
         w, wo = d["pack"]["with"]["rate"], d["pack"]["without"]["rate"]
-        rows.append(f"| [{d['id']}](evals/results/{d['id']}/summary.md) | `{d['sha']}` | `{d['meta']['subject_model']}` | {pct(w)} | {pct(wo)} | {round((w - wo) * 100, 1)} |")
-    latest = all_runs[-1]
+        kind = ("development" if d["kind"] == "dev" else "held-out") if lang == "en" else ("desenvolvimento" if d["kind"] == "dev" else "reservado")
+        rows.append(f"| [{d['id']}](evals/results/{d['id']}/summary.md) | `{d['sha']}` | {kind} | `{d['meta']['subject_model']}` | {pct(w)} | {pct(wo)} | {round((w - wo) * 100, 1)} |")
+    latest = [r for r in all_runs if r["kind"] == "dev"][-1]
     skipped = latest.get("method", {}).get("skill_not_opened_with", [])
     n, total = len(skipped), sum(1 for e in latest["evals"] if e["condition"] == "with")
     if lang == "en":
@@ -200,11 +226,13 @@ def render(path, lang, check=False):
     if check and lang in ("en", "pt"):
         pin = pinned_run(text)
         if pin and any(r["id"] == pin for r in all_runs):
-            newer = [r["id"] for r in all_runs if r["id"] > pin]
-            all_runs = [r for r in all_runs if r["id"] <= pin]
+            pin_sha = pin.split("-")[1]
+            newer = [r["id"] for r in all_runs if r["id"] > pin and not (r["kind"] == "heldout" and r["sha"] == pin_sha)]
+            all_runs = [r for r in all_runs if r["id"] <= pin or (r["kind"] == "heldout" and r["sha"] == pin_sha)]
             if newer:
                 print(f"note: {path} points at {pin}; newer results on disk: {', '.join(newer)}. Run `python scripts/render_docs.py` to move it.")
-    latest = all_runs[-1] if all_runs else None
+    dev_runs = [r for r in all_runs if r["kind"] == "dev"]
+    latest = dev_runs[-1] if dev_runs else None
     blocks = {}
     if lang in ("en", "pt"):
         blocks = {"headline": headline(lang, latest, prompt_count(), all_runs), "skills-table": skills_table(lang, latest),

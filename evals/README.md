@@ -69,6 +69,23 @@ Pass rate = passed / (passed + failed), excluding errors; no grades means `n/a`.
 are counted separately. Fake mode uses both model labels `fake` and marks the summary's first
 line. It starts no agent processes; Git commands still read the repository's SHA and dirty state.
 
+## Held-out set
+
+`evals/heldout/<skill>.json` holds two prompts per skill that are never read when editing a skill
+(fixtures under `evals/heldout/files/<skill>/`). They exist so one number is out of sample: the
+development prompts in `skills/*/evals/evals.json` were used to revise the skills, the held-out
+prompts were not. `python3 scripts/run_evals.py --all --evals heldout --budget 104` runs them into a
+folder named `<timestamp>-<sha>-heldout`; the README shows the held-out number beside the
+development one for the same commit. A held-out prompt changes only to fix a defect in the prompt
+itself, stated in the next run's summary.
+
+## Noise rule
+
+One run per prompt per condition. An eval counts as lower with the skill than without only when it
+drops by two or more expectations; a one-expectation drop triggers one re-run of that skill, and
+both results are reported. Per-cell numbers (about 28 expectations) carry about ±16 points at 95%;
+the pack-level numbers about ±5.
+
 ## Results
 
 A run writes one folder, refused if it exists:

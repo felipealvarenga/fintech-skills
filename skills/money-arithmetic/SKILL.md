@@ -94,7 +94,8 @@ confirmation path marks it paid). Do not stop at a warning, and do not build the
 - Conversion returns an integer in the target exponent: 1000 USD minor at 150.5 JPY/USD is
   1505 JPY.
 - The reference vectors: `skills/money-arithmetic/evals/vectors/test_money.py`. Point the
-  `MONEY_SOLUTION` environment variable at your module and run `pytest`.
+  `MONEY_SOLUTION` environment variable at your module and run `pytest`. TypeScript:
+  `money.test.ts` with `MONEY_SOLUTION_TS` and `npx vitest run`.
 
 ## Review checklist
 

@@ -95,6 +95,7 @@ confirmation path marks it paid). Do not stop at a warning, and do not build the
 - Live-mode event on the test endpoint: refused.
 - Reference vectors: `skills/webhook-handling/evals/vectors/test_webhooks.py` with
   `WEBHOOK_SOLUTION` pointing at your module (signature, tolerance, rotation, dedupe, order).
+  TypeScript: `webhooks.test.ts` with `WEBHOOK_SOLUTION_TS`.
 
 ## Review checklist
 

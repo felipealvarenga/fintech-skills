@@ -100,6 +100,7 @@ confirmation path marks it paid). Do not stop at a warning, and do not build the
   a no-op for the consumer.
 - Reference vectors: `skills/idempotent-payments/evals/vectors/test_idempotency.py` with
   `IDEMPOTENCY_SOLUTION` pointing at your module (store, state machine, timeout, retries).
+  TypeScript: `idempotency.test.ts` with `IDEMPOTENCY_SOLUTION_TS`.
 
 ## Review checklist
 

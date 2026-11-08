@@ -47,6 +47,9 @@ correção e teste.
 Audite o código de dinheiro deste repositório com fintech-skills.
 ```
 
+[Relatório de exemplo](skills/fintech-audit/evals/sample-report.md) na fixture com defeitos plantados: 12 achados em 8
+arquivos, 4 críticos, cada um com arquivo, linha, regra, correção e teste. Sonnet 5.5, 7 turnos, USD 0,21, nenhum código alterado.
+
 | Skill | Use quando | Vetores |
 |---|---|---|
 | [fintech-audit](skills/fintech-audit/SKILL.md) | Auditar um repositório ou um PR que mexe com dinheiro; o ponto de entrada | sim |

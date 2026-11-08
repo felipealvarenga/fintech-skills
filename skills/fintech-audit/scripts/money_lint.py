@@ -13,7 +13,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 
 MONEY = r"(amount|price|total|balance|fee|interest|installment|cents|minor|payout|refund|charge|subtotal|tax|discount|credit|debit)"
-SKIP_DIRS = {".git", "node_modules", ".venv", "venv", "vendor", "dist", "build", "__pycache__", ".pytest_cache", "target"}
+SKIP_DIRS = {".git", ".claude", ".agents", ".codex", "node_modules", ".venv", "venv", "vendor", "dist", "build", "__pycache__", ".pytest_cache", "target"}
 EXTS = {".py", ".js", ".ts", ".tsx", ".jsx", ".go", ".rb", ".java", ".kt", ".sql", ".cs", ".php"}
 
 RULES: list[tuple[str, re.Pattern, str, str]] = [

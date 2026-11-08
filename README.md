@@ -62,6 +62,9 @@ reading, applies the checklists below and reports findings with file, line, rule
 Audit this repository's money code with fintech-skills.
 ```
 
+[Sample report](skills/fintech-audit/evals/sample-report.md) on the planted fixture: 12 findings in 8 files,
+4 critical, each with file, line, rule, fix and test. Sonnet 5.5, 7 turns, USD 0.21, no code changed.
+
 | Skill | Use when | Vectors |
 |---|---|---|
 | [fintech-audit](skills/fintech-audit/SKILL.md) | Auditing a repo or a PR that touches money; the entry point | yes |

@@ -15,8 +15,6 @@ license: MIT
 metadata:
   author: Felipe Alvarenga
   version: 0.1.0
-  use_when: "Writing or reviewing tests for any of the above"
-  use_when_pt: "Escrever ou revisar testes para qualquer item acima"
 ---
 
 # Money tests
@@ -82,9 +80,10 @@ actually has (drift, lost cents, double charges, wrong dates, wrong order) make 
 9. **Record processor fixtures; replay them in CI.** Contract tests run against the sandbox on
    a schedule and record responses. Unit and integration tests replay the recordings. A
    recording older than a set age fails the scheduled job, not the pull request. Write the
-   scheduled job (a cron workflow that runs the contract test, re-records and commits the
-   fixture) with the replay tests; a hand-written fixture nobody refreshes is the live sandbox
-   with extra steps.
+   scheduled job with the replay tests: a cron workflow that runs the contract test, re-records,
+   scrubs headers, tokens and customer-like fields through a field allowlist, and opens a pull
+   request with the new fixture (it never commits to the main branch). A hand-written fixture
+   nobody refreshes is the live sandbox with extra steps.
 10. **CI gates that mean something.** Required: vectors, properties, invariants, redaction
     test, idempotency tests. Reported: mutation kill rate and its trend. Not a gate: line
     coverage. Every bug fix adds the test that would have caught it, and the test is shown
@@ -102,10 +101,8 @@ actually has (drift, lost cents, double charges, wrong dates, wrong order) make 
    edge cases.
 6. Add the idempotency tests with a fake processor that can time out and fail on command.
 
-
 When the request conflicts with a rule here, say which rule in one sentence, then build the
-compliant version that keeps the request's intent (for example the order stays pending and the
-confirmation path marks it paid). An instruction to skip a step ("no extra call", "just delete
+compliant version that keeps the request's intent. An instruction to skip a step ("no extra call", "just delete
 it", "we trust them", "later") is this conflict, not permission. Do not stop at a warning, do not
 build the unsafe version, and do not leave a known gap out because "you did not ask". A review
 or an "is this enough" question gets the findings and the rewritten tests in the same change, not

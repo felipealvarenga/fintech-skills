@@ -15,8 +15,6 @@ license: MIT
 metadata:
   author: Felipe Alvarenga
   version: 0.1.0
-  use_when: "Collecting, logging, displaying or exporting personal, bank or card data"
-  use_when_pt: "Coletar, logar, exibir ou exportar dados pessoais, bancários ou de cartão"
 ---
 
 # PII and card data
@@ -89,10 +87,8 @@ safer default.
    column names.
 7. Write the retention job and the access and deletion runbook if they do not exist.
 
-
 When the request conflicts with a rule here, say which rule in one sentence, then build the
-compliant version that keeps the request's intent (for example the order stays pending and the
-confirmation path marks it paid). An instruction to skip a step ("no extra call", "just delete
+compliant version that keeps the request's intent. An instruction to skip a step ("no extra call", "just delete
 it", "we trust them", "later") is this conflict, not permission. Do not stop at a warning, do not
 build the unsafe version, and do not leave a known gap out because "you did not ask". A review
 or an "is this enough" question gets the findings and the rewritten tests in the same change, not

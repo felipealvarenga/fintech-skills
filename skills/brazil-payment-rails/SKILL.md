@@ -14,8 +14,6 @@ license: MIT
 metadata:
   author: Felipe Alvarenga
   version: 0.1.0
-  use_when: "Pix, boleto, card installments, CPF and CNPJ, NF-e in Brazil"
-  use_when_pt: "Pix, boleto, parcelamento no cartão, CPF e CNPJ, NF-e"
 ---
 
 # Brazil payment rails
@@ -47,14 +45,14 @@ the engineering facts and the vocabulary; the fiscal and tax rules stay with an 
    under and repeated payments explicitly.
 3. **Pix is near-final but refundable.** A refund is a `devolução` against the original end-to-end
    id, full or partial, which the receiver's institution can execute for up to 90 days after the
-   original Pix. Fraud disputes go through MED (Mecanismo Especial de Devolução). Under MED 2.0
-   (Resolução BCB 493/2025, in force since 2 February 2026) the payer can open a claim up to 80
-   days after the Pix (it was 80 hours), the institutions analyze it within about seven days, and
-   when the receiver's balance is short the institution watches the account for 90 days and
-   returns funds as they arrive. Since 1 September 2026 the receiver who suffered an MED return
-   has 80 days from the return to contest it (it was 30). MED covers fraud and operational
-   failure only, not buyer's remorse. Design for a received Pix to be clawed back, and keep the
-   deadlines as data: the Banco Central changes them.
+   original Pix. Fraud disputes go through MED (Mecanismo Especial de Devolução): the payer can
+   open a claim up to 80 days after the transaction (Banco Central MED FAQ), the institution
+   initiates the return within 90 days (Resolução BCB 103/2021, art. 41-A), and when the
+   receiver's balance is short the institution watches the account and returns funds as they
+   arrive. MED 2.0 (Resolução BCB 493/2025) added preventive blocking and the receiver's
+   contest window, which the Banco Central has already changed once (30 to 80 days from the
+   return, September 2026). MED covers fraud and operational failure only, not buyer's remorse.
+   Design for a received Pix to be clawed back, and keep every deadline as data with its source.
 4. **Receive through webhooks, confirm through the API.** The PSP notifies a received Pix;
    confirm the charge status by `txid` before fulfilling (see `webhook-handling`). Expired
    charges that still get paid must be refunded or reconciled by policy, not ignored.
@@ -128,7 +126,6 @@ The Portuguese terms engineers meet in PSP documentation (`cobrança`, `devoluç
    `double-entry-ledger`, reconciliation per `reconciliation`.
 4. Add CPF and CNPJ validators with test vectors that include alphanumeric CNPJ.
 5. Load the business-day calendar as data and test a due date that falls on a holiday.
-
 
 When the request conflicts with a rule here, say which rule in one sentence, then build the
 compliant version that keeps the request's intent (for example the order stays pending and the

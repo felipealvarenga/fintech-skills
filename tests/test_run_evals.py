@@ -560,3 +560,21 @@ def test_parse_verdicts_accepts_fenced_json_and_prose():
     prose = "Here are the verdicts:\n[{\"passed\": false, \"evidence\": \"no\"}]\nDone."
     assert parse_verdicts(prose) == [{"passed": False, "evidence": "no"}]
     assert parse_verdicts("[]") == []
+
+
+def test_blind_transcript_hides_the_condition():
+    from scripts.run_evals import blind_transcript
+    transcript = json.dumps([
+        {"type": "system", "subtype": "init", "skills": ["money-arithmetic", "doctor"], "tools": ["Read", "Skill"], "model": "m"},
+        {"type": "assistant", "message": {"content": [{"type": "tool_use", "id": "t1", "name": "Skill", "input": {"skill": "money-arithmetic"}}]}},
+        {"type": "user", "message": {"content": [{"type": "tool_result", "tool_use_id": "t1", "content": "Launching skill: money-arithmetic"}]}},
+        {"type": "assistant", "message": {"content": [{"type": "tool_use", "id": "t2", "name": "Read", "input": {"file_path": "<project>/.claude/skills/money-arithmetic/SKILL.md"}}]}},
+        {"type": "user", "message": {"content": [{"type": "tool_result", "tool_use_id": "t2", "content": "# Money arithmetic rules"}]}},
+        {"type": "assistant", "message": {"content": [{"type": "tool_use", "id": "t3", "name": "Read", "input": {"file_path": "<project>/src/money.py"}}]}},
+        {"type": "user", "message": {"content": [{"type": "tool_result", "tool_use_id": "t3", "content": "amount = 1.1"}]}},
+        {"type": "result", "result": "done"},
+    ])
+    blinded = blind_transcript(transcript)
+    assert "money-arithmetic" not in blinded and "Money arithmetic rules" not in blinded and "Launching skill" not in blinded
+    assert "amount = 1.1" in blinded and '"tools"' in blinded and '"result": "done"' in blinded
+    assert blind_transcript("not json") == "not json"

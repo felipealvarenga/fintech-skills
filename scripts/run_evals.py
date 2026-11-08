@@ -220,6 +220,44 @@ def parse_verdicts(text):
     return json.loads(text)
 
 
+SKILL_DIR = ".claude/skills"
+
+
+def blind_transcript(stdout):
+    """What the grader reads: the subject transcript without the installed-skill list in the session
+    header, without the Skill tool calls and without the reads of files under .claude/skills/ (and
+    their results), so the condition is not shown to it. The subject's own prose can still name the
+    skill. The stored raw transcript is untouched."""
+    try:
+        messages = json.loads(stdout)
+    except (ValueError, TypeError):
+        return stdout
+    if not isinstance(messages, list):
+        return stdout
+    hidden, out = set(), []
+    for message in messages:
+        if not isinstance(message, dict):
+            out.append(message)
+            continue
+        if message.get("type") == "system" and message.get("subtype") == "init":
+            message = {k: v for k, v in message.items() if k not in ("skills", "slash_commands", "plugins")}
+        inner = message.get("message") if isinstance(message.get("message"), dict) else None
+        content = (inner if inner is not None else message).get("content")
+        if isinstance(content, list):
+            kept = []
+            for block in content:
+                if isinstance(block, dict) and block.get("type") == "tool_use":
+                    if block.get("name") == "Skill" or SKILL_DIR in json.dumps(block.get("input", {})):
+                        hidden.add(block.get("id"))
+                        continue
+                if isinstance(block, dict) and block.get("type") == "tool_result" and block.get("tool_use_id") in hidden:
+                    continue
+                kept.append(block)
+            message = {**message, "message": {**inner, "content": kept}} if inner is not None else {**message, "content": kept}
+        out.append(message)
+    return json.dumps(out)
+
+
 def combine_verdicts(expectations, files, grader, error=None):
     try:
         verdicts = parse_verdicts(grader["final_answer"]) if not error else []
@@ -268,7 +306,7 @@ def evaluate_prompt(args, skill, evaluation, condition, run, run_dir):
     if not error:
         payload = {"prompt": evaluation["prompt"], "expectations": evaluation["expectations"],
                    "final_answer": record["subject"]["final_answer"],
-                   "transcript": record["subject"]["transcript"], "produced_files": record["files"],
+                   "transcript": blind_transcript(record["subject"]["transcript"]), "produced_files": record["files"],
                    "instructions": "Judge each expectation from the evidence. Return only a JSON array, in expectation order, with boolean passed and non-empty evidence for each verdict."}
         # Raw storage paths reveal the condition; the grader receives only the captured files.
         payload["produced_files"] = [{k: v for k, v in item.items() if k != "raw_path"} for item in record["files"]]

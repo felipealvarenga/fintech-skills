@@ -54,8 +54,12 @@ The fintech-audit eval 3 expectation "Runs the lint and reports zero leads" and 
 conditions until a sandboxed Bash exists. They are graded normally, not excluded from pass rates.
 
 A separate grader gets an empty temporary project, no tools, and the prompt, expectations,
-answer, full transcript and produced files. It is not given the condition label or storage
-paths. It returns ordered boolean verdicts with evidence. Static checks require a produced test
+answer, transcript and produced files. Before the transcript reaches it, the runner removes the
+installed-skill list from the session header, the `Skill` tool calls and every read of a file under
+`.claude/skills/` with their results, so the condition is not shown to it; the subject's own prose
+can still name the skill, which is reported, not hidden. Storage paths are not sent. Grader and
+subject are the same model unless `--grader-model` says otherwise. It returns ordered boolean
+verdicts with evidence. Static checks require a produced test
 file when an expectation asks for tests, and a produced named path when a backticked path is
 specified. Both grader and code checks must pass. Produced code is never executed.
 
@@ -67,31 +71,26 @@ line. It starts no agent processes; Git commands still read the repository's SHA
 
 ## Results
 
+A run writes one folder, refused if it exists:
+
 ```text
 evals/results/<UTC YYYYMMDDTHHMMSSZ>-<7-character git sha>/
-  summary.md
-  <skill>.json
+  summary.md                 the runner's tables
+  <skill>.json               metadata, installed paths, each answer, verdicts with evidence, exact CLI invocations, tokens, wall time
   raw/<skill>/<eval-id>-<with|without>-<run>/
-    subject-transcript.txt
-    subject-stderr.txt
-    grader-transcript.txt
-    grader-stderr.txt
-    grader-stdin.json
-    files.json
-    files/<produced-path>
+    subject-transcript.txt   grader-transcript.txt   grader-stdin.json   *-stderr.txt   files.json   files/<produced-path>
 ```
 
-An existing run folder is refused, never overwritten. Skill JSON holds metadata, installed paths,
-each answer, verdicts and evidence, static checks, exact CLI invocations, separate subject/grader
-tokens and wall time, and raw item paths. The summary shows per-skill and all-skills condition
-rows, planned and started sessions, and the total raw size. Git state includes uncommitted changes
-under `skills/`. Temporary projects are removed after capture, including on errors and timeouts.
-
-Created or changed files outside `.claude/` are captured. A produced file over 256 KB gets only
-its name, size and SHA-256. Smaller files keep their bytes under `files/`; manifests hold only
-metadata and raw paths. The raw grader stdin includes file contents (base64 for binary files)
-and the whole transcript. Stored text replaces the temporary project path with `<project>`.
-Results are not gitignored; review their size and contents before choosing whether to commit them.
+The committed form of a run is `summary.md`, `results.json` and `skills/<skill>.json`:
+`python3 scripts/aggregate_results.py <run-dir> <out-dir>` writes `results.json` in the schema
+`scripts/render_docs.py` reads (pack, per skill, per eval) and copies the skill files; the narrative
+at the top of a committed `summary.md` is written by hand after reading the failures. `raw/`
+(transcripts and produced files, about 10 MB per run) is not committed, so a plugin install stays
+small; each run's `raw/` is attached to the GitHub release as `raw-<run-id>.tar.gz`. Stored text
+replaces the temporary project path with `<project>` and machine paths with `<home>` and `<tmp>`.
+Git state includes uncommitted changes under `skills/`. Temporary projects are removed after
+capture, including on errors and timeouts. A produced file over 256 KB keeps only its name, size and
+SHA-256.
 
 ## Vectors
 

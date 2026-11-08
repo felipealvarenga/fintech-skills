@@ -12,7 +12,8 @@ teste que rodam no CI.
 `ee4f998`), e uma sessão separada do mesmo modelo avaliou cada transcrição contra expectativas escritas antes
 da execução. A nota é a fração das expectativas que o avaliador marcou como atendidas; o código do agente é
 lido, não executado. **Com as skills, 72%. Sem elas, 27%** (267 contra 99 de 370). Por skill,
-método e transcrições brutas: [evals/results/20261108T053526Z-ee4f998](evals/results/20261108T053526Z-ee4f998/summary.md).
+método e transcrições brutas: [evals/results/20261108T053526Z-ee4f998](evals/results/20261108T053526Z-ee4f998/summary.md). Os prompts são prompts de desenvolvimento: as skills foram revisadas
+contra as falhas das execuções anteriores nestes mesmos prompts, e um conjunto reservado é o próximo passo.
 <!-- /generated:headline -->
 
 ## Por quê
@@ -48,8 +49,9 @@ Manual: copie `skills/<nome>` para `.claude/skills/` ou `.agents/skills/` do seu
 
 As skills carregam no início da sessão, então abra uma sessão nova depois de instalar. Depois
 mande `Audite o código de dinheiro deste repositório com fintech-skills.` em um repositório que
-você conhece: a primeira chamada de ferramenta é a skill `fintech-audit` e o relatório lista
-arquivo, linha, regra, correção e teste. O lint da auditoria precisa de Python 3.10 ou mais novo.
+você conhece: o agente deve carregar a skill `fintech-audit` primeiro e reportar arquivo, linha,
+regra, correção e teste. Se a transcrição não mostrar a leitura de nenhuma skill, abra uma sessão
+nova. O lint da auditoria precisa de Python 3.10 ou mais novo.
 
 ## Skills
 
@@ -68,7 +70,7 @@ teste. Sonnet 5.5, 7 turnos, USD 0,21.
 <!-- generated:skills-table -->
 | Skill | Use quando | Com / sem | Vetores |
 |---|---|---|---|
-| [fintech-audit](skills/fintech-audit/SKILL.md) | Auditar um repositório ou um PR que mexe com dinheiro; o ponto de entrada | 77% / 50% | py |
+| [fintech-audit](skills/fintech-audit/SKILL.md)† | Auditar um repositório ou um PR que mexe com dinheiro; o ponto de entrada | 77% / 50% | py |
 | [money-arithmetic](skills/money-arithmetic/SKILL.md) | Guardar, somar, ratear, converter, arredondar ou formatar valores | 83% / 33% | py, ts |
 | [double-entry-ledger](skills/double-entry-ledger/SKILL.md) | Qualquer tabela que responde "quanto X tem ou deve" | 82% / 32% | py, ts |
 | [idempotent-payments](skills/idempotent-payments/SKILL.md) | Criar, capturar, estornar ou pagar; chamar um processador | 93% / 25% | py, ts |
@@ -81,6 +83,8 @@ teste. Sonnet 5.5, 7 turnos, USD 0,21.
 | [interest-and-amortization](skills/interest-and-amortization/SKILL.md) | Juros, parcelas, tabelas Price e SAC, provisões, taxa efetiva | 68% / 18% | py |
 | [brazil-payment-rails](skills/brazil-payment-rails/SKILL.md) | Pix, boleto, parcelamento no cartão, CPF e CNPJ, NF-e | 69% / 17% | py, ts |
 | [money-tests](skills/money-tests/SKILL.md) | Escrever ou revisar testes para qualquer item acima | 60% / 40% | py |
+
+Uma execução por prompt. Uma célula de cerca de 28 expectativas carrega cerca de ±16 pontos (intervalo de Wilson a 95%); os números do pacote carregam cerca de ±5. † fintech-audit foi medida sem o lint que ela roda: o sandbox do eval não tem shell, então a linha e o relatório de exemplo (produzido com shell) não são o mesmo arranjo.
 <!-- /generated:skills-table -->
 
 Toda `SKILL.md` tem a mesma forma: quando usar, regras numeradas, como aplicar, o que fazer
@@ -122,8 +126,10 @@ cada push. Os evals avaliados rodam antes de cada release e as falhas de cada ex
 skills para a seguinte; os resumos das execuções registram o que mudou e por quê.
 
 <!-- generated:cut-rule -->
-Skill que não move os próprios evals em pelo menos 10 pontos é incorporada a outra ou removida; na
-última execução o menor ganho foi de 20.0 pontos (money-tests) e o maior de 67.9 (idempotent-payments).
+A regra de corte declarada antes da primeira execução: skill que não move os próprios evals em pelo menos
+10 pontos é incorporada a outra ou removida. Na última execução o menor ganho foi de 20.0 pontos (money-tests)
+e o maior de 67.9 (idempotent-payments). O ruído de uma célula é de cerca de ±16 pontos, então a regra é aplicada
+sobre execuções repetidas, não sobre uma.
 <!-- /generated:cut-rule -->
 
 ## Licença

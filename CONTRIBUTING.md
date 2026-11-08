@@ -1,15 +1,17 @@
 # Contributing
 
-One skill per folder under `skills/`, with `SKILL.md` and `evals/evals.json`. Skills whose output
-is a number (amounts, schedules, matches) also ship `evals/vectors/` with a reference
-implementation and a pytest file that can run against any implementation through an environment
-variable.
+One skill per folder under `skills/`: `SKILL.md`, `evals/evals.json` and `evals/vectors/` with a
+reference implementation and a pytest file that runs against any implementation through an
+environment variable. The eval shape, the install rule and the vectors table are in
+[evals/README.md](evals/README.md); `scripts/validate.py` enforces the minimum.
 
 Before opening a pull request:
 
 ```sh
-python scripts/validate.py          # frontmatter, evals shape, plugin manifest
-python -m pytest -q skills          # vectors against the references
+pip install -r requirements-dev.txt
+python scripts/validate.py          # frontmatter, evals shape, plugin manifest, generated docs
+python -m pytest -q                 # vectors against the references, runner tests
+npm ci && npm run test:ts           # TypeScript vectors
 ```
 
 Rules for a skill:
@@ -21,8 +23,9 @@ Rules for a skill:
 - No tax rates, statutory rounding or legal conclusions. Say that an accountant or lawyer confirms
   those, and keep the engineering part.
 - No real customer data, account numbers or identifiers in examples or vectors.
-- At least six evals (`scripts/validate.py` checks), one of them adversarial (the prompt asks for
-  the unsafe thing), each with concrete expectations a grader can check in a transcript.
+- Seven evals (three build, three judgment, at least one adversarial that asks for the unsafe
+  thing), each with expectations a grader can check in the transcript and the produced files.
 - Plain English. Short sentences. Tables for comparisons.
 
-Changing a vector is a reviewed change with a reason in the pull request.
+Changing a vector or an eval is a reviewed change with a reason in the pull request. A graded run
+goes in a new folder under `evals/results/`; old folders are never edited.

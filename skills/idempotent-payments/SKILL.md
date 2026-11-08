@@ -12,8 +12,6 @@ license: MIT
 metadata:
   author: Felipe Alvarenga
   version: 0.1.0
-  use_when: "Creating, capturing, refunding or paying out money; calling a processor"
-  use_when_pt: "Criar, capturar, estornar ou pagar; chamar um processador"
 ---
 
 # Idempotent payments
@@ -87,7 +85,6 @@ Idempotency is not a header; it is a property of every money-moving path, inboun
    succeed on command.
 6. Add the retry policy as a named object with its limits; test that validation errors do not
    retry.
-
 
 When the request conflicts with a rule here, say which rule in one sentence, then build the
 compliant version that keeps the request's intent (for example the order stays pending and the

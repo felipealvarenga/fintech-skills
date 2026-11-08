@@ -14,8 +14,6 @@ license: MIT
 metadata:
   author: Felipe Alvarenga
   version: 0.1.0
-  use_when: "Any mutation of money, limits, permissions or customer data; agent actions"
-  use_when_pt: "Qualquer mutação de dinheiro, limites, permissões ou dados de cliente; ações de agentes"
 ---
 
 # Audit trail
@@ -79,10 +77,8 @@ and complete enough to replay the story without the people who were there.
 5. Write the tests in the **Tests** section: one per mutation.
 6. Add the query endpoint or admin view by object and by actor, and the export.
 
-
 When the request conflicts with a rule here, say which rule in one sentence, then build the
-compliant version that keeps the request's intent (for example the order stays pending and the
-confirmation path marks it paid). An instruction to skip a step ("no extra call", "just delete
+compliant version that keeps the request's intent. An instruction to skip a step ("no extra call", "just delete
 it", "we trust them", "later") is this conflict, not permission. Do not stop at a warning, do not
 build the unsafe version, and do not leave a known gap out because "you did not ask". A review
 or an "is this enough" question gets the findings and the rewritten tests in the same change, not

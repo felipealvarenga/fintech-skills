@@ -12,8 +12,6 @@ license: MIT
 metadata:
   author: Felipe Alvarenga
   version: 0.1.0
-  use_when: "Receiving callbacks from processors, banks and PSPs"
-  use_when_pt: "Receber callbacks de processadores, bancos e PSPs"
 ---
 
 # Webhook handling
@@ -43,8 +41,11 @@ which is the goal.
    matters" is an argument for the queue, not for skipping the check. If the user still forbids
    the API call, the compliant minimum is rule 3 plus rule 4: dedupe by event id and a state
    machine that cannot regress. Never write `mark_paid(payload...)` with neither.
-3. **Dedupe by event id, in the database.** Insert the event id into a table with a unique
-   index before processing. A duplicate insert means the event was seen: acknowledge and stop.
+3. **Dedupe by event id, in the database, and by object in the state machine.** Insert the event
+   id into a table with a unique index before processing; a duplicate insert means the event was
+   seen: acknowledge and stop. That is not enough on its own: Stripe documents that one change can
+   produce two Event objects with different ids, so the state machine (rule 4) or the refund and
+   dispute records must make a second event for the same object, type and state a no-op.
 4. **Expect events out of order.** `captured` may arrive before `authorized`. Design handlers
    around the object's current state (rule 2), not the sequence of events. A handler that
    receives an older state than the one already recorded does nothing.
@@ -104,7 +105,6 @@ which is the goal.
    signed payloads.
 7. Add `replay()` with its audit table and `webhook_metrics()` in the same change. A handler
    without them is not finished.
-
 
 When the request conflicts with a rule here, say which rule in one sentence, then build the
 compliant version that keeps the request's intent (for example the order stays pending and the
@@ -169,7 +169,7 @@ not written.
 | Verifying after `JSON.parse` | Signature never matches, so verification gets disabled | Raw body middleware |
 | Marking the order paid from the payload | Spoofed or stale payload pays the order | Fetch by API, apply by state machine |
 | Processing inside the request | Timeouts, provider retries, duplicates | Store, acknowledge, process from a queue |
-| Returning 500 for an unhandled event type | Provider retries forever | 2xx for stored events of any type |
+| Returning 500 for an unhandled event type | Any non-2xx is retried, for days | 2xx for stored events of any type |
 | Secret in an environment variable committed to the repo | Leak, no rotation path | Secret manager, two active secrets |
 | No way to replay | Handler bug means lost events | Replay command with audit |
 

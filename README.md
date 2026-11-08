@@ -14,7 +14,8 @@ way production fintech systems do. Every skill ships evals and test vectors that
 `ee4f998`), and a separate session of the same model graded each transcript against expectations written before
 the run. The score is the share of expectations the grader marked passed; the agent's code is read, not
 executed. **With the skills, 72%. Without them, 27%** (267 against 99 of 370). Per skill,
-method and raw transcripts: [evals/results/20261108T053526Z-ee4f998](evals/results/20261108T053526Z-ee4f998/summary.md).
+method and raw transcripts: [evals/results/20261108T053526Z-ee4f998](evals/results/20261108T053526Z-ee4f998/summary.md). The prompts are development prompts: the skills were revised against
+earlier runs' failures on these same prompts, and a held-out set is the next step.
 <!-- /generated:headline -->
 
 ## Why
@@ -63,9 +64,9 @@ npx skills add felipealvarenga/fintech-skills
 Manual: copy `skills/<name>` into your project's `.claude/skills/` or `.agents/skills/`.
 
 Skills load when a session starts, so start a new session after installing. Then send
-`Audit this repository's money code with fintech-skills.` on a repo you know: the first tool call
-is the `fintech-audit` skill and the report lists file, line, rule, fix and test. The lint the
-audit runs needs Python 3.10 or newer on the machine.
+`Audit this repository's money code with fintech-skills.` on a repo you know: the agent should
+load the `fintech-audit` skill first and report file, line, rule, fix and test. If the transcript
+shows no skill read, start a new session. The lint the audit runs needs Python 3.10 or newer.
 
 ## Skills
 
@@ -82,7 +83,7 @@ in 8 files, 4 critical, each with file, line, rule, fix and test. Sonnet 5.5, 7 
 <!-- generated:skills-table -->
 | Skill | Use when | With / without | Vectors |
 |---|---|---|---|
-| [fintech-audit](skills/fintech-audit/SKILL.md) | Auditing a repo or a PR that touches money; the entry point | 77% / 50% | py |
+| [fintech-audit](skills/fintech-audit/SKILL.md)† | Auditing a repo or a PR that touches money; the entry point | 77% / 50% | py |
 | [money-arithmetic](skills/money-arithmetic/SKILL.md) | Storing, adding, allocating, converting, rounding or formatting amounts | 83% / 33% | py, ts |
 | [double-entry-ledger](skills/double-entry-ledger/SKILL.md) | Any table that answers "how much does X hold or owe" | 82% / 32% | py, ts |
 | [idempotent-payments](skills/idempotent-payments/SKILL.md) | Creating, capturing, refunding or paying out money; calling a processor | 93% / 25% | py, ts |
@@ -95,6 +96,8 @@ in 8 files, 4 critical, each with file, line, rule, fix and test. Sonnet 5.5, 7 
 | [interest-and-amortization](skills/interest-and-amortization/SKILL.md) | Interest, installments, schedules, accruals, effective rates | 68% / 18% | py |
 | [brazil-payment-rails](skills/brazil-payment-rails/SKILL.md) | Pix, boleto, card installments, CPF and CNPJ, NF-e in Brazil | 69% / 17% | py, ts |
 | [money-tests](skills/money-tests/SKILL.md) | Writing or reviewing tests for any of the above | 60% / 40% | py |
+
+One run per prompt. A cell of about 28 expectations carries about ±16 points (95% Wilson interval); the pack-level numbers carry about ±5. † fintech-audit was measured without the lint it runs: the eval sandbox has no shell, so its row and the sample report (produced with a shell) are not the same setup.
 <!-- /generated:skills-table -->
 
 Each `SKILL.md` has the same shape: when to use, numbered rules, how to apply, what to do when the
@@ -141,8 +144,9 @@ push. The graded evals run before each release and each run's failures change th
 next; the run summaries record what changed and why.
 
 <!-- generated:cut-rule -->
-A skill that does not move its own evals by at least 10 points gets folded or removed; in the latest
-run the lowest lift was 20.0 points (money-tests) and the highest 67.9 (idempotent-payments).
+The cut rule stated before the first run: a skill that does not move its own evals by at least 10 points
+is folded or removed. In the latest run the lowest lift was 20.0 points (money-tests) and the highest
+67.9 (idempotent-payments). One cell's noise is about ±16 points, so the rule is applied over repeated runs, not one.
 <!-- /generated:cut-rule -->
 
 ## Contributing

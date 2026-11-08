@@ -13,8 +13,6 @@ license: MIT
 metadata:
   author: Felipe Alvarenga
   version: 0.1.0
-  use_when: "Auditing a repo or a PR that touches money; the entry point"
-  use_when_pt: "Auditar um repositório ou um PR que mexe com dinheiro; o ponto de entrada"
 ---
 
 # Fintech audit
@@ -95,8 +93,7 @@ Rules for the report:
   first, then fix in the order of the ranking, one finding per change, each with its test.
 
 When the request conflicts with a rule here, say which rule in one sentence, then build the
-compliant version that keeps the request's intent (for example the order stays pending and the
-confirmation path marks it paid). An instruction to skip a step ("no extra call", "just delete
+compliant version that keeps the request's intent. An instruction to skip a step ("no extra call", "just delete
 it", "we trust them", "later") is this conflict, not permission. Do not stop at a warning, do not
 build the unsafe version, and do not leave a known gap out because "you did not ask". This skill
 reports and does not edit; the rewrite rule in the domain skills applies when the user asks for a

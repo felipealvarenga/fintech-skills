@@ -150,3 +150,5 @@ Tokens are the sums the Claude Code JSON result reports (input, output and cache
 - `results.json`: pack, per-skill and per-eval numbers, plus the method fields above.
 - `skills/<skill>.json`: one record per (eval, condition): the exact `claude` invocation, the subject's final answer, tokens, stop reason, wall time, the files it wrote with sha256, and the grader's verdict and evidence per expectation. Paths inside are relative to this folder.
 - `raw/<skill>/<eval>-<condition>-1/`: `subject-transcript.txt` (Claude Code stream-json, project path replaced by `<project>`), `grader-transcript.txt`, and `files/` with what the subject wrote. Grader stdin (a copy of the transcript), stderr and the runner log are not included.
+
+Raw transcripts and produced files (`raw/`) left the repository on 2026-11-08 so a plugin install stays small; they are attached to the GitHub release as `raw-20261108T035910Z-c7e767e.tar.gz`. The numbers in this file are unchanged.

@@ -13,6 +13,13 @@ import yaml
 
 ROOT = Path(__file__).resolve().parent.parent
 FILES = {"README.md": "en", "README.pt-BR.md": "pt", "evals/README.md": "evals"}
+STRINGS = json.loads((ROOT / "scripts/docs_strings.json").read_text(encoding="utf-8"))
+
+
+def wilson_half(p, n, z=1.96):
+    """Half-width of the 95% Wilson interval for a share p over n trials."""
+    import math
+    return z * math.sqrt(p * (1 - p) / n + z * z / (4 * n * n)) / (1 + z * z / n)
 
 
 def skills_in_order():
@@ -75,12 +82,14 @@ def headline(lang, latest, prompts):
                 f"`{latest['sha']}`), and {grader_en} graded each transcript against expectations written before\n"
                 f"the run. The score is the share of expectations the grader marked passed; the agent's code is read, not\n"
                 f"executed. **With the skills, {pct(w['rate'])}. Without them, {pct(wo['rate'])}** ({w['passed']} against {wo['passed']} of {of}). Per skill,\n"
-                f"method and raw transcripts: {link}.")
+                f"method and raw transcripts: {link}. The prompts are development prompts: the skills were revised against\n"
+                f"earlier runs' failures on these same prompts, and a held-out set is the next step.")
     return (f"**Medido.** Os mesmos {prompts} prompts rodaram no {model} com e sem as skills (skills em\n"
             f"`{latest['sha']}`), e {grader_pt} avaliou cada transcrição contra expectativas escritas antes\n"
             f"da execução. A nota é a fração das expectativas que o avaliador marcou como atendidas; o código do agente é\n"
             f"lido, não executado. **Com as skills, {pct(w['rate'])}. Sem elas, {pct(wo['rate'])}** ({w['passed']} contra {wo['passed']} de {of}). Por skill,\n"
-            f"método e transcrições brutas: {link}.")
+            f"método e transcrições brutas: {link}. Os prompts são prompts de desenvolvimento: as skills foram revisadas\n"
+            f"contra as falhas das execuções anteriores nestes mesmos prompts, e um conjunto reservado é o próximo passo.")
 
 
 def skills_table(lang, latest):
@@ -88,13 +97,21 @@ def skills_table(lang, latest):
     rows = [head, "|---|---|---|---|"]
     for skill in skills_in_order():
         fm = frontmatter(skill)
-        meta = fm.get("metadata") or {}
-        use = meta.get("use_when" if lang == "en" else "use_when_pt") or fm["description"].split(".")[0]
+        use = STRINGS.get(skill.name, {}).get(lang) or fm["description"].split(".")[0]
         r = latest["skills"].get(skill.name) if latest else None
         nums = f"{pct(r['with_rate'])} / {pct(r['without_rate'])}" if r else "n/a"
         py, ts, _ = vectors(skill)
         vec = ", ".join(x for x, has in (("py", py), ("ts", ts)) if has) or ("no" if lang == "en" else "não")
-        rows.append(f"| [{skill.name}]({rel(skill)}/SKILL.md) | {use} | {nums} | {vec} |")
+        mark = "†" if skill.name == "fintech-audit" else ""
+        rows.append(f"| [{skill.name}]({rel(skill)}/SKILL.md){mark} | {use} | {nums} | {vec} |")
+    if latest:
+        w = latest["pack"]["with"]; n_pack = w["passed"] + w["failed"]
+        cells = sorted(v["with"]["passed"] + v["with"]["failed"] for v in latest["skills"].values()); n_cell = cells[len(cells) // 2]
+        cell = round(wilson_half(w["rate"], n_cell) * 100); pack = round(wilson_half(w["rate"], n_pack) * 100)
+        if lang == "en":
+            rows += ["", f"One run per prompt. A cell of about {n_cell} expectations carries about ±{cell} points (95% Wilson interval); the pack-level numbers carry about ±{pack}. † fintech-audit was measured without the lint it runs: the eval sandbox has no shell, so its row and the sample report (produced with a shell) are not the same setup."]
+        else:
+            rows += ["", f"Uma execução por prompt. Uma célula de cerca de {n_cell} expectativas carrega cerca de ±{cell} pontos (intervalo de Wilson a 95%); os números do pacote carregam cerca de ±{pack}. † fintech-audit foi medida sem o lint que ela roda: o sandbox do eval não tem shell, então a linha e o relatório de exemplo (produzido com shell) não são o mesmo arranjo."]
     return "\n".join(rows)
 
 
@@ -123,11 +140,16 @@ def runs_block(lang, all_runs):
 def cut_rule(lang, latest):
     ranked = sorted(latest["skills"].items(), key=lambda kv: kv[1]["lift_points"])
     (lo, lov), (hi, hiv) = ranked[0], ranked[-1]
+    cells = sorted(v["with"]["passed"] + v["with"]["failed"] for v in latest["skills"].values()); n_cell = cells[len(cells) // 2]
+    noise = round(wilson_half(latest["pack"]["with"]["rate"], n_cell) * 100)
     if lang == "en":
-        return (f"A skill that does not move its own evals by at least 10 points gets folded or removed; in the latest\n"
-                f"run the lowest lift was {lov['lift_points']} points ({lo}) and the highest {hiv['lift_points']} ({hi}).")
-    return (f"Skill que não move os próprios evals em pelo menos 10 pontos é incorporada a outra ou removida; na\n"
-            f"última execução o menor ganho foi de {lov['lift_points']} pontos ({lo}) e o maior de {hiv['lift_points']} ({hi}).")
+        return (f"The cut rule stated before the first run: a skill that does not move its own evals by at least 10 points\n"
+                f"is folded or removed. In the latest run the lowest lift was {lov['lift_points']} points ({lo}) and the highest\n"
+                f"{hiv['lift_points']} ({hi}). One cell's noise is about ±{noise} points, so the rule is applied over repeated runs, not one.")
+    return (f"A regra de corte declarada antes da primeira execução: skill que não move os próprios evals em pelo menos\n"
+            f"10 pontos é incorporada a outra ou removida. Na última execução o menor ganho foi de {lov['lift_points']} pontos ({lo})\n"
+            f"e o maior de {hiv['lift_points']} ({hi}). O ruído de uma célula é de cerca de ±{noise} pontos, então a regra é aplicada\n"
+            f"sobre execuções repetidas, não sobre uma.")
 
 
 def required_names(py_files):

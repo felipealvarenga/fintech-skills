@@ -38,9 +38,10 @@ the skill folder: `evals/files/<file>` goes to `src/<file>`, while
 `evals/files/<fixture>/<rest>` goes to `<rest>` at the project root. Entries outside
 `evals/files/`, absolute paths, `..` segments, missing files and duplicate targets become prompt
 errors before its session starts. Only the with condition installs `.claude/skills/<name>/`:
-the skill folder without anything under `evals/` except `evals/vectors/`, and without local
-`__pycache__` artifacts. `SKILL.md`, scripts, references and vectors stay installed; `evals.json`,
-`evals/files/` and `sample-report.md` do not. For `fintech-audit` only, the with condition installs
+the skill folder without anything under `evals/` and without local `__pycache__` artifacts.
+`SKILL.md`, `scripts/` and `references/` are installed; `evals.json`, `evals/files/`,
+`evals/vectors/` (the reference implementations would leak the answers) and `sample-report.md`
+are not. For `fintech-audit` only, the with condition installs
 all 13 skill folders using the same rule: it measures the entry point with its pack. Every other
 skill installs alone; the without condition installs nothing under `.claude/`.
 Both conditions get Read, Write, Edit, Glob, Grep and Skill, with project-only settings, strict MCP configuration and

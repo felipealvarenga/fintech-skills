@@ -145,9 +145,8 @@ def install_skill(skill, project):
     installed = []
     for source in sorted(skill.rglob("*")):
         relative = source.relative_to(skill)
-        if (not source.is_file() or "__pycache__" in relative.parts
-                or (relative.parts[0] == "evals" and relative.parts[:2] != ("evals", "vectors"))):
-            continue
+        if not source.is_file() or "__pycache__" in relative.parts or relative.parts[0] == "evals":
+            continue  # nothing under evals/: the vectors carry reference implementations
         target = project / ".claude/skills" / skill.name / relative
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(source, target)

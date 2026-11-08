@@ -92,8 +92,7 @@ def test_installed_projects(name, skill_names, runner_args, tmp_path, monkeypatc
     original = runner.fake_session
     expected = {p.relative_to(runner.ROOT / "skills").as_posix(): p.read_bytes()
                 for skill_name in skill_names for p in (runner.ROOT / "skills" / skill_name).rglob("*")
-                if p.is_file() and "__pycache__" not in p.parts
-                and ("evals" not in p.parts or "vectors" in p.parts)}
+                if p.is_file() and "__pycache__" not in p.parts and "evals" not in p.parts}
     def inspect(role, project, prompt):
         assert not project.resolve().is_relative_to(runner.ROOT)
         projects.append(project)
@@ -102,13 +101,12 @@ def test_installed_projects(name, skill_names, runner_args, tmp_path, monkeypatc
                          for p in (project / ".claude/skills").rglob("*") if p.is_file()}
             assert installed == (expected if len(projects) == 1 else {})
             assert sorted(p.split("/")[0] for p in installed if p.endswith("/SKILL.md")) == (skill_names if len(projects) == 1 else [])
-            assert not any(p.endswith("evals.json") or "/evals/files/" in p or p.endswith("sample-report.md") for p in installed)
+            assert not any("/evals/" in p for p in installed), "nothing under evals/ reaches the subject"
             if len(projects) == 1:
-                assert "money-arithmetic/evals/vectors/test_money.py" in installed
+                assert "money-arithmetic/SKILL.md" in installed
                 if name == "fintech-audit":
                     assert len([p for p in installed if p.endswith("/SKILL.md")]) == 13
                     assert "fintech-audit/scripts/money_lint.py" in installed
-                    assert "fintech-audit/evals/vectors/test_lint.py" in installed
                 else:
                     assert len([p for p in installed if p.endswith("/SKILL.md")]) == 1
             if len(projects) != 1:

@@ -44,7 +44,8 @@ the skill folder without anything under `evals/` and without local `__pycache__`
 are not. For `fintech-audit` only, the with condition installs
 all 13 skill folders using the same rule: it measures the entry point with its pack. Every other
 skill installs alone; the without condition installs nothing under `.claude/`.
-Both conditions get Read, Write, Edit, Glob, Grep and Skill, with project-only settings, strict MCP configuration and
+Both conditions get Read, Write, Edit, Glob, Grep and Skill, with project-only settings, strict MCP configuration,
+effort `xhigh` (Claude Code's default; the runner passes it explicitly, `--effort` changes it and the run records it) and
 no session persistence. Both subject and grader run with an allowlisted environment (`HOME`, `PATH`, locale,
 `XDG_*` and `TMPDIR`, `CLAUDE_CONFIG_DIR`, `CLAUDE_CODE_OAUTH_TOKEN`, `ANTHROPIC_*`), plus
 `CLAUDE_CODE_DISABLE_CLAUDE_MDS=1` to disable `CLAUDE.md` discovery and `CLAUDE_CODE_DISABLE_BUNDLED_SKILLS=1`

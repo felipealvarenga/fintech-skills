@@ -26,7 +26,7 @@ def test_cli_defaults():
     args = runner.cli_parser().parse_args(["--all"])
     assert vars(args) == {
         "skill": None, "all": True, "subject_model": "claude-sonnet-5-5",
-        "grader_model": "claude-sonnet-5-5", "runs": 1, "max_turns": 30,
+        "grader_model": "claude-sonnet-5-5", "effort": "xhigh", "runs": 1, "max_turns": 30,
         "timeout": 900, "budget": 80, "results_dir": runner.ROOT / "evals" / "results", "agent": "claude", "evals": "dev"}
 
 
@@ -149,12 +149,12 @@ def test_cli_invocations(condition, runner_args, tmp_path):
     evaluation = {"id": 1, "prompt": "Synthetic", "expectations": ["Explains"]}
     record, _ = runner.evaluate_prompt(runner_args, runner.ROOT / "skills/money-tests", evaluation, condition, 1, tmp_path)
     assert record["subject"]["invocation"] == {
-        "argv": ["claude", "-p", "--output-format", "json", "--verbose", "--model", "claude-sonnet-5-5",
+        "argv": ["claude", "-p", "--output-format", "json", "--verbose", "--model", "claude-sonnet-5-5", "--effort", "xhigh",
                  "--max-turns", "30", "--tools", "Read,Write,Edit,Glob,Grep,Skill", "--setting-sources", "project",
                  "--strict-mcp-config", "--permission-mode", "acceptEdits", "--permission-prompts", "none", "--no-session-persistence"],
         "cwd": "<project>", "stdin": "Synthetic", "env": {"CLAUDE_CODE_DISABLE_CLAUDE_MDS": "1", "CLAUDE_CODE_DISABLE_BUNDLED_SKILLS": "1"}}
     assert record["grader"]["invocation"]["argv"] == [
-        "claude", "-p", "--output-format", "json", "--model", "claude-sonnet-5-5", "--tools", "",
+        "claude", "-p", "--output-format", "json", "--model", "claude-sonnet-5-5", "--effort", "xhigh", "--tools", "",
         "--setting-sources", "project", "--strict-mcp-config", "--no-session-persistence"]
     assert record["grader"]["invocation"]["env"] == runner.SESSION_ENV
 

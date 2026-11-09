@@ -29,6 +29,8 @@ def cli_parser():
     selection.add_argument("--all", action="store_true")
     parser.add_argument("--subject-model", default="claude-sonnet-5-5")
     parser.add_argument("--grader-model", default="claude-sonnet-5-5")
+    parser.add_argument("--effort", default="xhigh", choices=["low", "medium", "high", "xhigh", "max"],
+                        help="effort level for both roles; the published runs used xhigh, Claude Code's default")
     parser.add_argument("--runs", type=int, default=1)
     parser.add_argument("--max-turns", type=int, default=30)
     parser.add_argument("--timeout", type=float, default=900)
@@ -43,12 +45,12 @@ def cli_parser():
 def session_invocation(args, role):
     command = ["claude", "-p", "--output-format", "json"]
     if role == "subject":
-        command += ["--verbose", "--model", args.subject_model, "--max-turns", str(args.max_turns),
+        command += ["--verbose", "--model", args.subject_model, "--effort", args.effort, "--max-turns", str(args.max_turns),
                     "--tools", "Read,Write,Edit,Glob,Grep,Skill", "--setting-sources", "project",
                     "--strict-mcp-config", "--permission-mode", "acceptEdits",
                     "--permission-prompts", "none", "--no-session-persistence"]
     else:
-        command += ["--model", args.grader_model, "--tools", "", "--setting-sources", "project",
+        command += ["--model", args.grader_model, "--effort", args.effort, "--tools", "", "--setting-sources", "project",
                     "--strict-mcp-config", "--no-session-persistence"]
     return command
 
@@ -432,7 +434,7 @@ def eval_main(argv=None):
     if args.agent == "fake":
         args.subject_model = args.grader_model = "fake"
     metadata = {"run_id": run_id, "date": date, "subject_model": args.subject_model,
-                "grader_model": args.grader_model, "git_sha": sha, "skills_dirty": dirty, "prompt_set": args.evals}
+                "grader_model": args.grader_model, "effort": args.effort, "git_sha": sha, "skills_dirty": dirty, "prompt_set": args.evals}
     skills, started = {}, 0
     for name, items in evaluations.items():
         data = {**metadata, "skill": name, "installed_paths": [], "records": []}

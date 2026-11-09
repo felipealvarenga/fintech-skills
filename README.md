@@ -81,7 +81,7 @@ Audit this repository's money code with fintech-skills.
 in 8 files, 4 critical, each with file, line, rule, fix and test. Sonnet 5.5, 7 turns, USD 0.21.
 
 <!-- generated:skills-table -->
-| Skill | Use when | With / without | Vectors |
+| Skill | Use when | `claude-sonnet-5-5` with / without | Vectors |
 |---|---|---|---|
 | [fintech-audit](skills/fintech-audit/SKILL.md)† | Auditing a repo or a PR that touches money; the entry point | 77% / 33% | py |
 | [money-arithmetic](skills/money-arithmetic/SKILL.md) | Storing, adding, allocating, converting, rounding or formatting amounts | 83% / 33% | py, ts |
@@ -122,7 +122,7 @@ Old folders are never edited. Method and flags: [evals/README.md](evals/README.m
 | [20261108T180307Z-fa81209](evals/results/20261108T180307Z-fa81209/summary.md) | `fa81209` | development | `claude-sonnet-5-5` | 81% | 24% | 57.3 |
 | [20261108T194552Z-fa81209-heldout](evals/results/20261108T194552Z-fa81209-heldout/summary.md) | `fa81209` | held-out | `claude-sonnet-5-5` | 70% | 24% | 45.7 |
 
-In 2 of the 91 with-skill sessions of the latest run the agent never opened the skill; those sessions count against the skills.
+In 2 of the 91 with-skill sessions of the `claude-sonnet-5-5` run on `fa81209` the agent never opened the skill; those sessions count against the skills.
 <!-- /generated:runs -->
 
 ```sh
@@ -148,8 +148,8 @@ next; the run summaries record what changed and why.
 
 <!-- generated:cut-rule -->
 The cut rule stated before the first run: a skill that does not move its own evals by at least 10 points
-is folded or removed. In the latest run the lowest lift was 25.9 points (pii-and-card-data) and the highest
-79.3 (webhook-handling). One cell's noise is about ±14 points, so the rule is applied over repeated runs, not one.
+is folded or removed. In the `claude-sonnet-5-5` run on `fa81209` the lowest lift was 25.9 points (pii-and-card-data) and the highest 79.3 (webhook-handling).
+One cell's noise is about ±14 points, so the rule is applied over repeated runs, not one.
 <!-- /generated:cut-rule -->
 
 ## Contributing

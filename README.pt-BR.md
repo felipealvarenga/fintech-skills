@@ -68,7 +68,7 @@ plantados: 12 achados em 8 arquivos, 4 críticos, cada um com arquivo, linha, re
 teste. Sonnet 5.5, 7 turnos, USD 0,21.
 
 <!-- generated:skills-table -->
-| Skill | Use quando | Com / sem | Vetores |
+| Skill | Use quando | `claude-sonnet-5-5` com / sem | Vetores |
 |---|---|---|---|
 | [fintech-audit](skills/fintech-audit/SKILL.md)† | Auditar um repositório ou um PR que mexe com dinheiro; o ponto de entrada | 77% / 33% | py |
 | [money-arithmetic](skills/money-arithmetic/SKILL.md) | Guardar, somar, ratear, converter, arredondar ou formatar valores | 83% / 33% | py, ts |
@@ -111,7 +111,7 @@ arquivos que o agente escreveu. Pastas antigas nunca são editadas. Método e fl
 | [20261108T180307Z-fa81209](evals/results/20261108T180307Z-fa81209/summary.md) | `fa81209` | desenvolvimento | `claude-sonnet-5-5` | 81% | 24% | 57.3 |
 | [20261108T194552Z-fa81209-heldout](evals/results/20261108T194552Z-fa81209-heldout/summary.md) | `fa81209` | reservado | `claude-sonnet-5-5` | 70% | 24% | 45.7 |
 
-Em 2 das 91 sessões com skill da última execução o agente nunca abriu a skill; essas sessões contam contra as skills.
+Em 2 das 91 sessões com skill da execução `claude-sonnet-5-5` em `fa81209` o agente nunca abriu a skill; essas sessões contam contra as skills.
 <!-- /generated:runs -->
 
 ## Escopo
@@ -130,9 +130,8 @@ skills para a seguinte; os resumos das execuções registram o que mudou e por q
 
 <!-- generated:cut-rule -->
 A regra de corte declarada antes da primeira execução: skill que não move os próprios evals em pelo menos
-10 pontos é incorporada a outra ou removida. Na última execução o menor ganho foi de 25.9 pontos (pii-and-card-data)
-e o maior de 79.3 (webhook-handling). O ruído de uma célula é de cerca de ±14 pontos, então a regra é aplicada
-sobre execuções repetidas, não sobre uma.
+10 pontos é incorporada a outra ou removida. Na execução `claude-sonnet-5-5` em `fa81209` o menor ganho foi de 25.9 pontos (pii-and-card-data) e o maior de 79.3 (webhook-handling).
+O ruído de uma célula é de cerca de ±14 pontos, então a regra é aplicada sobre execuções repetidas, não sobre uma.
 <!-- /generated:cut-rule -->
 
 ## Licença

@@ -89,12 +89,19 @@ def heldout_sentence(lang, heldout):
     return "No conjunto reservado, prompts em `evals/heldout/` nunca lidos ao editar uma skill: " + "; ".join(parts) + "."
 
 
-def headline(lang, latest, prompts, all_runs=()):
-    """One sentence per subject model measured on the same skills commit as the latest run (latest run per model)."""
+def models_on_commit(latest, all_runs=()):
+    """Subject model -> its latest development run on the same skills commit as `latest`, in the order the
+    models were first measured there. Every README block that quotes a run quotes one run per model."""
     same_commit = [r for r in all_runs if r["sha"] == latest["sha"] and r["kind"] == "dev"] or [latest]
     per_model = {}
     for r in same_commit:
         per_model[r["meta"]["subject_model"]] = r  # sorted ascending, so the latest run per model wins
+    return per_model
+
+
+def headline(lang, latest, prompts, all_runs=()):
+    """One sentence per subject model measured on the same skills commit as the latest run (latest run per model)."""
+    per_model = models_on_commit(latest, all_runs)
     runs_here = list(per_model.values())
     heldout = {}
     for r in all_runs:
@@ -128,26 +135,41 @@ def headline(lang, latest, prompts, all_runs=()):
             f"contra as falhas das execuções anteriores neles. " + heldout_sentence("pt", heldout))
 
 
-def skills_table(lang, latest):
-    head = ("| Skill | Use when | With / without | Vectors |" if lang == "en" else "| Skill | Use quando | Com / sem | Vetores |")
-    rows = [head, "|---|---|---|---|"]
+def median_cell(run):
+    """Expectations in the median skill cell of a run (the table's cells are about this size)."""
+    cells = sorted(v["with"]["passed"] + v["with"]["failed"] for v in run["skills"].values())
+    return cells[len(cells) // 2]
+
+
+def skills_table(lang, latest, all_runs=()):
+    """One `with / without` column per subject model measured on the latest skills commit, named in the header."""
+    per_model = models_on_commit(latest, all_runs) if latest else {}
+    col = "`{m}` with / without" if lang == "en" else "`{m}` com / sem"
+    cols = [col.format(m=m) for m in per_model] or (["With / without"] if lang == "en" else ["Com / sem"])
+    head = ("| Skill | Use when | " if lang == "en" else "| Skill | Use quando | ") + " | ".join(cols) + (" | Vectors |" if lang == "en" else " | Vetores |")
+    rows = [head, "|" + "---|" * (3 + len(cols))]
     for skill in skills_in_order():
         fm = frontmatter(skill)
         use = STRINGS.get(skill.name, {}).get(lang) or fm["description"].split(".")[0]
-        r = latest["skills"].get(skill.name) if latest else None
-        nums = f"{pct(r['with_rate'])} / {pct(r['without_rate'])}" if r else "n/a"
+        cells = []
+        for run in per_model.values():
+            r = run["skills"].get(skill.name)
+            cells.append(f"{pct(r['with_rate'])} / {pct(r['without_rate'])}" if r else "n/a")
+        nums = " | ".join(cells) or "n/a"
         py, ts, _ = vectors(skill)
         vec = ", ".join(x for x, has in (("py", py), ("ts", ts)) if has) or ("no" if lang == "en" else "não")
         mark = "†" if skill.name == "fintech-audit" else ""
         rows.append(f"| [{skill.name}]({rel(skill)}/SKILL.md){mark} | {use} | {nums} | {vec} |")
-    if latest:
-        w = latest["pack"]["with"]; n_pack = w["passed"] + w["failed"]
-        cells = sorted(v["with"]["passed"] + v["with"]["failed"] for v in latest["skills"].values()); n_cell = cells[len(cells) // 2]
-        cell = round(wilson_half(w["rate"], n_cell) * 100); pack = round(wilson_half(w["rate"], n_pack) * 100)
+    if per_model:
+        n_cell = cell = pack = 0
+        for run in per_model.values():  # the widest interval over the models shown, so the caveat holds for every column
+            w = run["pack"]["with"]; n_pack = w["passed"] + w["failed"]; n_cell = max(n_cell, median_cell(run))
+            cell = max(cell, round(wilson_half(w["rate"], n_cell) * 100)); pack = max(pack, round(wilson_half(w["rate"], n_pack) * 100))
+        upto = ("up to " if lang == "en" else "até ") if len(per_model) > 1 else ""
         if lang == "en":
-            rows += ["", f"One run per prompt. A cell of about {n_cell} expectations carries about ±{cell} points (95% Wilson interval); the pack-level numbers carry about ±{pack}. † fintech-audit was measured without the lint it runs: the eval sandbox has no shell, so its row and the sample report (produced with a shell) are not the same setup."]
+            rows += ["", f"One run per prompt. A cell of about {n_cell} expectations carries {upto}about ±{cell} points (95% Wilson interval); the pack-level numbers carry {upto}about ±{pack}. † fintech-audit was measured without the lint it runs: the eval sandbox has no shell, so its row and the sample report (produced with a shell) are not the same setup."]
         else:
-            rows += ["", f"Uma execução por prompt. Uma célula de cerca de {n_cell} expectativas carrega cerca de ±{cell} pontos (intervalo de Wilson a 95%); os números do pacote carregam cerca de ±{pack}. † fintech-audit foi medida sem o lint que ela roda: o sandbox do eval não tem shell, então a linha e o relatório de exemplo (produzido com shell) não são o mesmo arranjo."]
+            rows += ["", f"Uma execução por prompt. Uma célula de cerca de {n_cell} expectativas carrega {upto}cerca de ±{cell} pontos (intervalo de Wilson a 95%); os números do pacote carregam {upto}cerca de ±{pack}. † fintech-audit foi medida sem o lint que ela roda: o sandbox do eval não tem shell, então a linha e o relatório de exemplo (produzido com shell) não são o mesmo arranjo."]
     return "\n".join(rows)
 
 
@@ -161,32 +183,40 @@ def runs_block(lang, all_runs):
         kind = ("development" if d["kind"] == "dev" else "held-out") if lang == "en" else ("desenvolvimento" if d["kind"] == "dev" else "reservado")
         rows.append(f"| [{d['id']}](evals/results/{d['id']}/summary.md) | `{d['sha']}` | {kind} | `{d['meta']['subject_model']}` | {pct(w)} | {pct(wo)} | {round((w - wo) * 100, 1)} |")
     latest = [r for r in all_runs if r["kind"] == "dev"][-1]
-    skipped = latest.get("method", {}).get("skill_not_opened_with", [])
-    n, total = len(skipped), sum(1 for e in latest["evals"] if e["condition"] == "with")
-    if lang == "en":
-        tail = (f"In all {total} with-skill sessions of the latest run the agent opened the skill." if n == 0 else
-                f"In {n} of the {total} with-skill sessions of the latest run the agent never opened the skill; "
-                + ("that session counts" if n == 1 else "those sessions count") + " against the skills.")
-    else:
-        tail = (f"Em todas as {total} sessões com skill da última execução o agente abriu a skill." if n == 0 else
-                f"Em {n} das {total} sessões com skill da última execução o agente nunca abriu a skill; "
-                + ("essa sessão conta" if n == 1 else "essas sessões contam") + " contra as skills.")
-    return "\n".join(rows) + "\n\n" + tail
+    parts = []
+    for m, r in models_on_commit(latest, all_runs).items():
+        skipped = r.get("method", {}).get("skill_not_opened_with", [])
+        n, total = len(skipped), sum(1 for e in r["evals"] if e["condition"] == "with")
+        if lang == "en":
+            parts.append(f"In all {total} with-skill sessions of the `{m}` run on `{r['sha']}` the agent opened the skill." if n == 0 else
+                         f"In {n} of the {total} with-skill sessions of the `{m}` run on `{r['sha']}` the agent never opened the skill; "
+                         + ("that session counts" if n == 1 else "those sessions count") + " against the skills.")
+        else:
+            parts.append(f"Em todas as {total} sessões com skill da execução `{m}` em `{r['sha']}` o agente abriu a skill." if n == 0 else
+                         f"Em {n} das {total} sessões com skill da execução `{m}` em `{r['sha']}` o agente nunca abriu a skill; "
+                         + ("essa sessão conta" if n == 1 else "essas sessões contam") + " contra as skills.")
+    return "\n".join(rows) + "\n\n" + " ".join(parts)
 
 
-def cut_rule(lang, latest):
-    ranked = sorted(latest["skills"].items(), key=lambda kv: kv[1]["lift_points"])
-    (lo, lov), (hi, hiv) = ranked[0], ranked[-1]
-    cells = sorted(v["with"]["passed"] + v["with"]["failed"] for v in latest["skills"].values()); n_cell = cells[len(cells) // 2]
-    noise = round(wilson_half(latest["pack"]["with"]["rate"], n_cell) * 100)
+def cut_rule(lang, latest, all_runs=()):
+    """The lowest and highest lift, named per subject model measured on the latest skills commit."""
+    noise, parts = 0, []
+    for m, r in models_on_commit(latest, all_runs).items():
+        ranked = sorted(r["skills"].items(), key=lambda kv: kv[1]["lift_points"])
+        (lo, lov), (hi, hiv) = ranked[0], ranked[-1]
+        noise = max(noise, round(wilson_half(r["pack"]["with"]["rate"], median_cell(r)) * 100))
+        if lang == "en":
+            parts.append(f"in the `{m}` run on `{r['sha']}` the lowest lift was {lov['lift_points']} points ({lo}) and the highest {hiv['lift_points']} ({hi})")
+        else:
+            parts.append(f"na execução `{m}` em `{r['sha']}` o menor ganho foi de {lov['lift_points']} pontos ({lo}) e o maior de {hiv['lift_points']} ({hi})")
+    lifts = "; ".join(parts); lifts = lifts[0].upper() + lifts[1:]
     if lang == "en":
         return (f"The cut rule stated before the first run: a skill that does not move its own evals by at least 10 points\n"
-                f"is folded or removed. In the latest run the lowest lift was {lov['lift_points']} points ({lo}) and the highest\n"
-                f"{hiv['lift_points']} ({hi}). One cell's noise is about ±{noise} points, so the rule is applied over repeated runs, not one.")
+                f"is folded or removed. {lifts}.\n"
+                f"One cell's noise is about ±{noise} points, so the rule is applied over repeated runs, not one.")
     return (f"A regra de corte declarada antes da primeira execução: skill que não move os próprios evals em pelo menos\n"
-            f"10 pontos é incorporada a outra ou removida. Na última execução o menor ganho foi de {lov['lift_points']} pontos ({lo})\n"
-            f"e o maior de {hiv['lift_points']} ({hi}). O ruído de uma célula é de cerca de ±{noise} pontos, então a regra é aplicada\n"
-            f"sobre execuções repetidas, não sobre uma.")
+            f"10 pontos é incorporada a outra ou removida. {lifts}.\n"
+            f"O ruído de uma célula é de cerca de ±{noise} pontos, então a regra é aplicada sobre execuções repetidas, não sobre uma.")
 
 
 def required_names(py_files):
@@ -212,31 +242,29 @@ def ts_ports():
     return text + (f"; {', '.join(missing)} are Python only." if missing else ".")
 
 
-def pinned_run(text):
-    """The run the README already points at. In check mode the README is rendered against that run, so a
-    results folder can land in its own pull request before the README is re-rendered on main; a newer
-    folder is reported, not failed."""
-    m = re.search(r"evals/results/(\d{8}T\d{6}Z-[0-9a-f]{7})/summary\.md", text)
-    return m.group(1) if m else None
+def named_runs(text):
+    """The results folders the README already links. In check mode the README is rendered against those
+    runs only, so a results folder can land in its own pull request before the README is re-rendered on
+    main; a folder the README does not name yet is reported, not failed."""
+    return set(re.findall(r"evals/results/(\d{8}T\d{6}Z-[0-9a-f]{7}(?:-heldout)?)/summary\.md", text))
 
 
 def render(path, lang, check=False):
     text = (ROOT / path).read_text(encoding="utf-8")
     all_runs = runs()
     if check and lang in ("en", "pt"):
-        pin = pinned_run(text)
-        if pin and any(r["id"] == pin for r in all_runs):
-            pin_sha = pin.split("-")[1]
-            newer = [r["id"] for r in all_runs if r["id"] > pin and not (r["kind"] == "heldout" and r["sha"] == pin_sha)]
-            all_runs = [r for r in all_runs if r["id"] <= pin or (r["kind"] == "heldout" and r["sha"] == pin_sha)]
-            if newer:
-                print(f"note: {path} points at {pin}; newer results on disk: {', '.join(newer)}. Run `python scripts/render_docs.py` to move it.")
+        named = named_runs(text)
+        if named:
+            unnamed = [r["id"] for r in all_runs if r["id"] not in named]
+            all_runs = [r for r in all_runs if r["id"] in named]
+            if unnamed:
+                print(f"note: {path} does not name {', '.join(unnamed)} yet. Run `python scripts/render_docs.py` to add them.")
     dev_runs = [r for r in all_runs if r["kind"] == "dev"]
     latest = dev_runs[-1] if dev_runs else None
     blocks = {}
     if lang in ("en", "pt"):
-        blocks = {"headline": headline(lang, latest, prompt_count(), all_runs), "skills-table": skills_table(lang, latest),
-                  "runs": runs_block(lang, all_runs), "cut-rule": cut_rule(lang, latest)}
+        blocks = {"headline": headline(lang, latest, prompt_count(), all_runs), "skills-table": skills_table(lang, latest, all_runs),
+                  "runs": runs_block(lang, all_runs), "cut-rule": cut_rule(lang, latest, all_runs)}
     else:
         blocks = {"vectors-table": vectors_table(), "ts-ports": ts_ports()}
     for name, body in blocks.items():

@@ -137,7 +137,15 @@ def call_session(args, role, project, prompt):
             "final_answer": result.get("result", ""), "reported": reported,
             "exit_code": exit_code,
             "tokens": {key: usage.get(key, 0) for key in TOKEN_KEYS},
+            "thinking_tokens": thinking_tokens(usage),  # part of output_tokens, reported when the CLI breaks it out
             "stop_reason": result.get("stop_reason"), "stopped": stopped, "wall_time": elapsed}
+
+
+def thinking_tokens(usage):
+    """Thinking tokens when the CLI reports them (`usage.output_tokens_details.thinking_tokens`), else None."""
+    details = usage.get("output_tokens_details") if isinstance(usage, dict) else None
+    value = details.get("thinking_tokens") if isinstance(details, dict) else None
+    return value if type(value) is int and value >= 0 else None
 
 
 def project_files(project):

@@ -626,3 +626,18 @@ def test_validate_flags_symlinks_under_skills(tmp_path):
     (skills / "demo").mkdir(parents=True)
     (skills / "demo" / "ref.md").symlink_to(tmp_path / "elsewhere.md")
     assert validate.check_symlinks(skills) == ["skills/demo/ref.md: symlinks are not allowed under skills/"]
+
+
+@pytest.mark.parametrize("usage,expected", [
+    ({"input_tokens": 2, "output_tokens": 40, "cache_read_input_tokens": 0, "cache_creation_input_tokens": 100,
+      "output_tokens_details": {"thinking_tokens": 30}}, 30),
+    ({"input_tokens": 2, "output_tokens": 40, "cache_read_input_tokens": 0, "cache_creation_input_tokens": 100}, None),
+    ({"output_tokens_details": {"thinking_tokens": "many"}}, None),
+])
+def test_thinking_tokens_recorded_beside_the_token_counts(usage, expected, runner_args, tmp_path, monkeypatch):
+    runner_args.agent = "claude"
+    stdout = json.dumps({"type": "result", "result": "done", "usage": usage})
+    monkeypatch.setattr(subprocess, "run", lambda *a, **k: SimpleNamespace(returncode=0, stdout=stdout, stderr=""))
+    session = runner.call_session(runner_args, "subject", tmp_path, "prompt")
+    assert session["thinking_tokens"] == expected
+    assert set(session["tokens"]) == set(runner.TOKEN_KEYS)  # thinking is not added to the summed counts

@@ -1,0 +1,2574 @@
+{
+  "run_id": "20261109T123830Z-fa81209",
+  "date": "20261109T123830Z",
+  "subject_model": "claude-opus-5-5",
+  "grader_model": "claude-sonnet-5-5",
+  "git_sha": "fa81209f644741b66d83bd8c61093385b29e3483",
+  "skills_dirty": false,
+  "prompt_set": "dev",
+  "skill": "reconciliation",
+  "installed_paths": [
+    ".claude/skills/reconciliation/SKILL.md"
+  ],
+  "records": [
+    {
+      "eval_id": 1,
+      "condition": "with",
+      "run": 1,
+      "installed_paths": [
+        ".claude/skills/reconciliation/SKILL.md"
+      ],
+      "files": [
+        {
+          "path": "recon/__init__.py",
+          "size": 210,
+          "sha256": "f1978e1e713538bebc576e41d9e61a1da30747a1db1f3bf3f6e907e72948ed55",
+          "raw_path": "raw/reconciliation/1-with-1/files/recon/__init__.py"
+        },
+        {
+          "path": "recon/adapters.py",
+          "size": 2778,
+          "sha256": "139a79b1c67b8e35112339243bfcc92a8ff8869a54f23571a4c8f9bdcd8482a8",
+          "raw_path": "raw/reconciliation/1-with-1/files/recon/adapters.py"
+        },
+        {
+          "path": "recon/cli.py",
+          "size": 3191,
+          "sha256": "ec1a42db2c51a6ad163077b04c0f0b7d65577da81549f83b79c06ecbf38200ec",
+          "raw_path": "raw/reconciliation/1-with-1/files/recon/cli.py"
+        },
+        {
+          "path": "recon/config.py",
+          "size": 2229,
+          "sha256": "7a7b8d5172f4890d87ddc09cbae0ea0f0d96cbcf4b8ee1d8a1c06f770f821136",
+          "raw_path": "raw/reconciliation/1-with-1/files/recon/config.py"
+        },
+        {
+          "path": "recon/engine.py",
+          "size": 10456,
+          "sha256": "4dcdaea4fe145d8003eec14bb9a0970a7ce1fe04734f7b26b8c8a141419b5077",
+          "raw_path": "raw/reconciliation/1-with-1/files/recon/engine.py"
+        },
+        {
+          "path": "tests/test_adapters.py",
+          "size": 1830,
+          "sha256": "0adcef52b95eae324d0e8827c9f8fcf5a09c76773cf7bf6f7f14b66c612e7169",
+          "raw_path": "raw/reconciliation/1-with-1/files/tests/test_adapters.py"
+        },
+        {
+          "path": "tests/test_engine.py",
+          "size": 7614,
+          "sha256": "00c1615d551d7f77766e60bcc6584b0dc46e5be13819efd03510c7e1f1cbd212",
+          "raw_path": "raw/reconciliation/1-with-1/files/tests/test_engine.py"
+        }
+      ],
+      "subject": {
+        "invocation": {
+          "argv": [
+            "claude",
+            "-p",
+            "--output-format",
+            "json",
+            "--verbose",
+            "--model",
+            "claude-opus-5-5",
+            "--max-turns",
+            "30",
+            "--tools",
+            "Read,Write,Edit,Glob,Grep,Skill",
+            "--setting-sources",
+            "project",
+            "--strict-mcp-config",
+            "--permission-mode",
+            "acceptEdits",
+            "--permission-prompts",
+            "none",
+            "--no-session-persistence"
+          ],
+          "cwd": "<project>",
+          "stdin": "Write a script that matches our ledger payments (src/ledger.csv) with the Stripe payout export (src/stripe_payout.csv).",
+          "env": {
+            "CLAUDE_CODE_DISABLE_CLAUDE_MDS": "1"
+          }
+        },
+        "error": null,
+        "final_answer": "I wrote the reconciliation script, but I haven't run it or its tests because there's no shell in this session. Run the tests with `python -m unittest discover tests` from the project root.\n\nRun the script with:\n\n```\npython -m recon.cli --ledger src/ledger.csv --stripe src/stripe_payout.csv --as-of 2026-05-11\n```\n\n**Files**\n- `recon/adapters.py` reads each CSV into one common line format and keeps the original row. A bad row stops the run with an error instead of being skipped silently. Stripe currencies are converted to upper case and transaction types are mapped to charge, refund, fee, payout or adjustment.\n- `recon/engine.py` does the matching, in this fixed order:\n  1. **Tier 1:** same reference, amount and currency.\n  2. **Tier 2:** same amount and currency, dates up to 2 business days apart, earliest candidate first. Two lines with different references are never paired.\n  3. **Tier 3:** a named rule checks that each Stripe payout equals the sum of the Stripe charges and fees before it.\n  \n  Each line matches at most one line on the other side, and inputs are sorted first so every run on the same data gives the same result. Unmatched lines get a reason (`timing`, `fee`, `missing_ours`, `missing_theirs`, `duplicate` or `unknown`), an owner and an age. An `unknown` item older than 2 business days pages someone.\n- `recon/config.py` holds the settings: the 2-business-day window, no amount tolerance, an owner for each reason, and alert thresholds.\n- `recon/cli.py` saves each run as a new file in `runs/` that is never overwritten. It records the input file hashes, settings, matches, unmatched items, metrics and alerts. It never writes to the ledger.\n\n**Expected result on your files** (also checked in `tests/test_engine.py::SampleFiles`)\n\n| Result | Lines |\n|---|---|\n| Tier 1 (reference) | pay_1\u2194txn_1, pay_2\u2194txn_2, pay_3\u2194txn_3 |\n| Tier 2 (amount + date) | pay_5\u2194txn_5 (Thu \u2192 Sat, 1 business day) |\n| Tier 3 payout | po_1 \u221244,784 = 46,234 in charges \u2212 1,450 in fees \u2714 |\n| Unmatched: `missing_theirs` | pay_4 (99,900 BRL, `ch_a4`): not in this Stripe export |\n| Unmatched: `fee` | txn_4 (\u22121,450 BRL): the Stripe fee isn't recorded in the ledger |\n\nBecause of `pay_4`, the ledger match rate is 80%, so the run raises an alert and exits with code 1. The script doesn't fix the ledger itself. Someone needs to add the fee entry and look into `ch_a4`.\n\n**Assumptions to check**\n- The Stripe export has no payout ID on each transaction. The payout rule therefore assumes every charge and fee dated on or before the payout belongs to it. If your real exports include a payout or balance-transaction ID column, grouping by that would be more reliable.\n- The team names that own each type of mismatch and the alert thresholds are placeholders. Replace them with real teams and approved values.\n- The 2-business-day window needs sign-off from whoever owns the reconciliation.\n- The skill mentions a reference test file under `evals/vectors/`, but that folder isn't in this workspace, so I couldn't run those tests against this code.",
+        "reported": {
+          "tools": [
+            "Edit",
+            "Glob",
+            "Grep",
+            "Read",
+            "Skill",
+            "Write"
+          ],
+          "skills": [
+            "reconciliation",
+            "design",
+            "doctor",
+            "plugin-authoring"
+          ],
+          "mcp_servers": [],
+          "model": "claude-opus-5-5"
+        },
+        "exit_code": 0,
+        "tokens": {
+          "input_tokens": 14,
+          "output_tokens": 24748,
+          "cache_read_input_tokens": 80962,
+          "cache_creation_input_tokens": 28345
+        },
+        "stop_reason": "end_turn",
+        "stopped": "end_turn",
+        "wall_time": 206.84372192800038,
+        "raw_paths": {
+          "transcript": "raw/reconciliation/1-with-1/subject-transcript.txt",
+          "stderr": "raw/reconciliation/1-with-1/subject-stderr.txt"
+        }
+      },
+      "grader": {
+        "invocation": {
+          "argv": [
+            "claude",
+            "-p",
+            "--output-format",
+            "json",
+            "--model",
+            "claude-sonnet-5-5",
+            "--tools",
+            "",
+            "--setting-sources",
+            "project",
+            "--strict-mcp-config",
+            "--no-session-persistence"
+          ],
+          "cwd": "<project>",
+          "env": {
+            "CLAUDE_CODE_DISABLE_CLAUDE_MDS": "1"
+          },
+          "stdin_path": "raw/reconciliation/1-with-1/grader-stdin.json"
+        },
+        "error": null,
+        "final_answer": "```json\n[\n  {\n    \"passed\": true,\n    \"evidence\": \"Both CSVs are parsed into the same frozen `Line` dataclass (source, id, date, amount_minor, currency, reference, kind, description, raw). `parse_ledger` and `parse_stripe_payout` in recon/adapters.py enforce integer minor-unit amounts, reject decimals, and upper-case a 3-letter currency code.\"\n  },\n  {\n    \"passed\": true,\n    \"evidence\": \"In recon/engine.py, Tier 1 (T1_reference) matches on reference, amount and currency. Tier 2 (T2_amount_date) matches on amount and currency within a 2-business-day window. Both inputs are sorted with `sorted(..., key=_key)` on (date, id), and a shuffled-input test, `test_shuffled_input_same_result`, checks the result is identical.\"\n  },\n  {\n    \"passed\": true,\n    \"evidence\": \"`used_ours` and `used_theirs` sets block any line from being paired twice in both tiers. `test_identical_amounts_match_one_to_one` shows two equal amounts on each side give two distinct pairs. Tier 3 `member_ids` repeat lines that already have pairwise matches or breaks, but the docstring says this is only an annotation.\"\n  },\n  {\n    \"passed\": true,\n    \"evidence\": \"The CLI prints `MATCH <tier> ours_id <-> theirs_id` for each pair, so the rule is named. It also prints a `BREAK` line for each unmatched line on both the ledger and Stripe sides, with reason (timing, fee, missing_ours, missing_theirs, duplicate, unknown), owner and age. `GROUP` lines show the tier 3 payout rule.\"\n  },\n  {\n    \"passed\": true,\n    \"evidence\": \"The only write in the code is `open(out, \\\"x\\\")` to `runs/<timestamp>_<hash>.json`. The two input CSVs are only read with `read_bytes()`. The cli.py docstring states it doesn't write to the ledger, and the engine is a pure function.\"\n  }\n]\n```",
+        "reported": {},
+        "exit_code": 0,
+        "tokens": {
+          "input_tokens": 2,
+          "output_tokens": 1283,
+          "cache_read_input_tokens": 649,
+          "cache_creation_input_tokens": 143367
+        },
+        "stop_reason": "end_turn",
+        "stopped": "end_turn",
+        "wall_time": 17.82090877599876,
+        "raw_paths": {
+          "transcript": "raw/reconciliation/1-with-1/grader-transcript.txt",
+          "stderr": "raw/reconciliation/1-with-1/grader-stderr.txt"
+        }
+      },
+      "verdicts": [
+        {
+          "expectation": "Both sources are normalized into the same line shape with amount in minor units and currency",
+          "status": "passed",
+          "grader_verdict": {
+            "passed": true,
+            "evidence": "Both CSVs are parsed into the same frozen `Line` dataclass (source, id, date, amount_minor, currency, reference, kind, description, raw). `parse_ledger` and `parse_stripe_payout` in recon/adapters.py enforce integer minor-unit amounts, reject decimals, and upper-case a 3-letter currency code."
+          },
+          "evidence": "Both CSVs are parsed into the same frozen `Line` dataclass (source, id, date, amount_minor, currency, reference, kind, description, raw). `parse_ledger` and `parse_stripe_payout` in recon/adapters.py enforce integer minor-unit amounts, reject decimals, and upper-case a 3-letter currency code.",
+          "code_checks": []
+        },
+        {
+          "expectation": "Matching runs in tiers: reference and amount first, then amount and date window; inputs are sorted so the result is deterministic",
+          "status": "passed",
+          "grader_verdict": {
+            "passed": true,
+            "evidence": "In recon/engine.py, Tier 1 (T1_reference) matches on reference, amount and currency. Tier 2 (T2_amount_date) matches on amount and currency within a 2-business-day window. Both inputs are sorted with `sorted(..., key=_key)` on (date, id), and a shuffled-input test, `test_shuffled_input_same_result`, checks the result is identical."
+          },
+          "evidence": "In recon/engine.py, Tier 1 (T1_reference) matches on reference, amount and currency. Tier 2 (T2_amount_date) matches on amount and currency within a 2-business-day window. Both inputs are sorted with `sorted(..., key=_key)` on (date, id), and a shuffled-input test, `test_shuffled_input_same_result`, checks the result is identical.",
+          "code_checks": []
+        },
+        {
+          "expectation": "Each line matches at most once; duplicated amounts match one-to-one",
+          "status": "passed",
+          "grader_verdict": {
+            "passed": true,
+            "evidence": "`used_ours` and `used_theirs` sets block any line from being paired twice in both tiers. `test_identical_amounts_match_one_to_one` shows two equal amounts on each side give two distinct pairs. Tier 3 `member_ids` repeat lines that already have pairwise matches or breaks, but the docstring says this is only an annotation."
+          },
+          "evidence": "`used_ours` and `used_theirs` sets block any line from being paired twice in both tiers. `test_identical_amounts_match_one_to_one` shows two equal amounts on each side give two distinct pairs. Tier 3 `member_ids` repeat lines that already have pairwise matches or breaks, but the docstring says this is only an annotation.",
+          "code_checks": []
+        },
+        {
+          "expectation": "Output lists matched pairs with the rule used and unmatched lines on both sides with reason codes",
+          "status": "passed",
+          "grader_verdict": {
+            "passed": true,
+            "evidence": "The CLI prints `MATCH <tier> ours_id <-> theirs_id` for each pair, so the rule is named. It also prints a `BREAK` line for each unmatched line on both the ledger and Stripe sides, with reason (timing, fee, missing_ours, missing_theirs, duplicate, unknown), owner and age. `GROUP` lines show the tier 3 payout rule."
+          },
+          "evidence": "The CLI prints `MATCH <tier> ours_id <-> theirs_id` for each pair, so the rule is named. It also prints a `BREAK` line for each unmatched line on both the ledger and Stripe sides, with reason (timing, fee, missing_ours, missing_theirs, duplicate, unknown), owner and age. `GROUP` lines show the tier 3 payout rule.",
+          "code_checks": []
+        },
+        {
+          "expectation": "The script does not write to the ledger",
+          "status": "passed",
+          "grader_verdict": {
+            "passed": true,
+            "evidence": "The only write in the code is `open(out, \"x\")` to `runs/<timestamp>_<hash>.json`. The two input CSVs are only read with `read_bytes()`. The cli.py docstring states it doesn't write to the ledger, and the engine is a pure function."
+          },
+          "evidence": "The only write in the code is `open(out, \"x\")` to `runs/<timestamp>_<hash>.json`. The two input CSVs are only read with `read_bytes()`. The cli.py docstring states it doesn't write to the ledger, and the engine is a pure function.",
+          "code_checks": []
+        }
+      ],
+      "files_raw_path": "raw/reconciliation/1-with-1/files.json"
+    },
+    {
+      "eval_id": 1,
+      "condition": "without",
+      "run": 1,
+      "installed_paths": [],
+      "files": [
+        {
+          "path": "reconcile.py",
+          "size": 9803,
+          "sha256": "ae61f044e0d475ef8b0950ee9b9ee67d138cb541fee1e2e1aa1dd787542fae72",
+          "raw_path": "raw/reconciliation/1-without-1/files/reconcile.py"
+        }
+      ],
+      "subject": {
+        "invocation": {
+          "argv": [
+            "claude",
+            "-p",
+            "--output-format",
+            "json",
+            "--verbose",
+            "--model",
+            "claude-opus-5-5",
+            "--max-turns",
+            "30",
+            "--tools",
+            "Read,Write,Edit,Glob,Grep,Skill",
+            "--setting-sources",
+            "project",
+            "--strict-mcp-config",
+            "--permission-mode",
+            "acceptEdits",
+            "--permission-prompts",
+            "none",
+            "--no-session-persistence"
+          ],
+          "cwd": "<project>",
+          "stdin": "Write a script that matches our ledger payments (src/ledger.csv) with the Stripe payout export (src/stripe_payout.csv).",
+          "env": {
+            "CLAUDE_CODE_DISABLE_CLAUDE_MDS": "1"
+          }
+        },
+        "error": null,
+        "final_answer": "I wrote `reconcile.py`, a single Python file that needs nothing beyond the standard library. I couldn't run it here because there's no shell tool in this session. The results below come from tracing the logic by hand against your two files, so please run it once to confirm:\n\n```bash\npython3 reconcile.py src/ledger.csv src/stripe_payout.csv -o reconciliation_report.csv\n```\n\n**How it matches:**\n1. **By reference first.** When the same reference appears once in each file, the rows are paired. Any difference in amount or date is reported, not hidden.\n2. **Then by amount, currency and date** for rows without a usable reference. The dates must be within `--date-tolerance` days of each other (default 3). It only pairs rows when the match is unique from both sides. Anything with more than one possible match is marked `AMBIGUOUS` for someone to check, rather than guessed.\n3. **Leftovers** are marked `MISSING_IN_STRIPE` or `MISSING_IN_LEDGER`.\n4. **Payout check:** for each currency, charges plus fees plus payouts should add up to zero.\n\nAmounts stay as whole numbers in minor units throughout. It writes a full CSV report and prints a summary, and it exits with code 1 if anything didn't reconcile, so you can use it in CI.\n\n**What it should report for your current files:**\n\n| Ledger | Stripe | Result |\n|---|---|---|\n| pay_1 | txn_1 | Matched |\n| pay_2 | txn_2 | Matched, Stripe date is 1 day later |\n| pay_3 | txn_3 | Matched |\n| pay_5 | txn_5 | Matched on amount and date (no reference), Stripe date is 2 days later |\n| **pay_4** | \u2014 | **Missing in Stripe: 999.00 BRL (ref `ch_a4`)** |\n\nThe payout balances: charges of 462.34 BRL minus the 14.50 BRL fee equals the 447.84 BRL payout. So the one real problem is `pay_4`, which is either still pending in Stripe or never settled.\n\n**Assumptions to check:**\n- Fees and payouts are only checked against each other, not matched to ledger rows. If your ledger records fees as separate entries, they'll need their own matching.\n- The fallback match is on exact amount only. A partial capture or a currency-converted amount will show up as unmatched instead of being guessed.\n- The 3-day date window is a guess. Change it with `--date-tolerance` to fit your settlement times.",
+        "reported": {
+          "tools": [
+            "Edit",
+            "Glob",
+            "Grep",
+            "Read",
+            "Skill",
+            "Write"
+          ],
+          "skills": [
+            "design",
+            "doctor",
+            "plugin-authoring"
+          ],
+          "mcp_servers": [],
+          "model": "claude-opus-5-5"
+        },
+        "exit_code": 0,
+        "tokens": {
+          "input_tokens": 10,
+          "output_tokens": 6125,
+          "cache_read_input_tokens": 38071,
+          "cache_creation_input_tokens": 8077
+        },
+        "stop_reason": "end_turn",
+        "stopped": "end_turn",
+        "wall_time": 52.8155967090006,
+        "raw_paths": {
+          "transcript": "raw/reconciliation/1-without-1/subject-transcript.txt",
+          "stderr": "raw/reconciliation/1-without-1/subject-stderr.txt"
+        }
+      },
+      "grader": {
+        "invocation": {
+          "argv": [
+            "claude",
+            "-p",
+            "--output-format",
+            "json",
+            "--model",
+            "claude-sonnet-5-5",
+            "--tools",
+            "",
+            "--setting-sources",
+            "project",
+            "--strict-mcp-config",
+            "--no-session-persistence"
+          ],
+          "cwd": "<project>",
+          "env": {
+            "CLAUDE_CODE_DISABLE_CLAUDE_MDS": "1"
+          },
+          "stdin_path": "raw/reconciliation/1-without-1/grader-stdin.json"
+        },
+        "error": null,
+        "final_answer": "```json\n[\n  {\n    \"passed\": true,\n    \"evidence\": \"Both files go through the same load() into one Row dataclass (id, date, amount in integer minor units, uppercased currency, reference, type). Amounts are parsed with int(r['amount_minor']), and the ledger gets a default type of 'payment'.\"\n  },\n  {\n    \"passed\": false,\n    \"evidence\": \"Pass 1 pairs rows on reference alone and only reports amount differences afterwards (compare() returns AMOUNT_MISMATCH), so it is not the 'reference and amount' tier. Pass 2 does use amount, currency and a date window. Inputs are not sorted up front: pass 1 iterates by_ref_l in file order, and candidates() iterates unmatched_s.values() in insertion order. Only the ledger rows in pass 2 and the final results are sorted.\"\n  },\n  {\n    \"passed\": false,\n    \"evidence\": \"No row is matched twice, because rows are deleted from the unmatched dicts after pairing. But duplicated amounts are not paired one-to-one. Pass 2 only pairs when exactly one candidate exists on each side, and otherwise records AMBIGUOUS (`if len(cands) > 1`). Repeated references are also marked AMBIGUOUS in pass 1 instead of being paired.\"\n  },\n  {\n    \"passed\": true,\n    \"evidence\": \"Each result row has a 'method' column (reference or amount+date) and a 'status' column. The unmatched statuses are MISSING_IN_STRIPE and MISSING_IN_LEDGER, with AMBIGUOUS, AMOUNT_MISMATCH and CURRENCY_MISMATCH alongside. The results are written to the CSV report and printed as a summary.\"\n  },\n  {\n    \"passed\": true,\n    \"evidence\": \"The ledger is opened only for reading in load(). The only write is the report CSV at args.output (default reconciliation_report.csv), and nothing modifies src/ledger.csv.\"\n  }\n]\n```",
+        "reported": {},
+        "exit_code": 0,
+        "tokens": {
+          "input_tokens": 2,
+          "output_tokens": 1288,
+          "cache_read_input_tokens": 649,
+          "cache_creation_input_tokens": 52782
+        },
+        "stop_reason": "end_turn",
+        "stopped": "end_turn",
+        "wall_time": 11.774374800999794,
+        "raw_paths": {
+          "transcript": "raw/reconciliation/1-without-1/grader-transcript.txt",
+          "stderr": "raw/reconciliation/1-without-1/grader-stderr.txt"
+        }
+      },
+      "verdicts": [
+        {
+          "expectation": "Both sources are normalized into the same line shape with amount in minor units and currency",
+          "status": "passed",
+          "grader_verdict": {
+            "passed": true,
+            "evidence": "Both files go through the same load() into one Row dataclass (id, date, amount in integer minor units, uppercased currency, reference, type). Amounts are parsed with int(r['amount_minor']), and the ledger gets a default type of 'payment'."
+          },
+          "evidence": "Both files go through the same load() into one Row dataclass (id, date, amount in integer minor units, uppercased currency, reference, type). Amounts are parsed with int(r['amount_minor']), and the ledger gets a default type of 'payment'.",
+          "code_checks": []
+        },
+        {
+          "expectation": "Matching runs in tiers: reference and amount first, then amount and date window; inputs are sorted so the result is deterministic",
+          "status": "failed",
+          "grader_verdict": {
+            "passed": false,
+            "evidence": "Pass 1 pairs rows on reference alone and only reports amount differences afterwards (compare() returns AMOUNT_MISMATCH), so it is not the 'reference and amount' tier. Pass 2 does use amount, currency and a date window. Inputs are not sorted up front: pass 1 iterates by_ref_l in file order, and candidates() iterates unmatched_s.values() in insertion order. Only the ledger rows in pass 2 and the final results are sorted."
+          },
+          "evidence": "Pass 1 pairs rows on reference alone and only reports amount differences afterwards (compare() returns AMOUNT_MISMATCH), so it is not the 'reference and amount' tier. Pass 2 does use amount, currency and a date window. Inputs are not sorted up front: pass 1 iterates by_ref_l in file order, and candidates() iterates unmatched_s.values() in insertion order. Only the ledger rows in pass 2 and the final results are sorted.",
+          "code_checks": []
+        },
+        {
+          "expectation": "Each line matches at most once; duplicated amounts match one-to-one",
+          "status": "failed",
+          "grader_verdict": {
+            "passed": false,
+            "evidence": "No row is matched twice, because rows are deleted from the unmatched dicts after pairing. But duplicated amounts are not paired one-to-one. Pass 2 only pairs when exactly one candidate exists on each side, and otherwise records AMBIGUOUS (`if len(cands) > 1`). Repeated references are also marked AMBIGUOUS in pass 1 instead of being paired."
+          },
+          "evidence": "No row is matched twice, because rows are deleted from the unmatched dicts after pairing. But duplicated amounts are not paired one-to-one. Pass 2 only pairs when exactly one candidate exists on each side, and otherwise records AMBIGUOUS (`if len(cands) > 1`). Repeated references are also marked AMBIGUOUS in pass 1 instead of being paired.",
+          "code_checks": []
+        },
+        {
+          "expectation": "Output lists matched pairs with the rule used and unmatched lines on both sides with reason codes",
+          "status": "passed",
+          "grader_verdict": {
+            "passed": true,
+            "evidence": "Each result row has a 'method' column (reference or amount+date) and a 'status' column. The unmatched statuses are MISSING_IN_STRIPE and MISSING_IN_LEDGER, with AMBIGUOUS, AMOUNT_MISMATCH and CURRENCY_MISMATCH alongside. The results are written to the CSV report and printed as a summary."
+          },
+          "evidence": "Each result row has a 'method' column (reference or amount+date) and a 'status' column. The unmatched statuses are MISSING_IN_STRIPE and MISSING_IN_LEDGER, with AMBIGUOUS, AMOUNT_MISMATCH and CURRENCY_MISMATCH alongside. The results are written to the CSV report and printed as a summary.",
+          "code_checks": []
+        },
+        {
+          "expectation": "The script does not write to the ledger",
+          "status": "passed",
+          "grader_verdict": {
+            "passed": true,
+            "evidence": "The ledger is opened only for reading in load(). The only write is the report CSV at args.output (default reconciliation_report.csv), and nothing modifies src/ledger.csv."
+          },
+          "evidence": "The ledger is opened only for reading in load(). The only write is the report CSV at args.output (default reconciliation_report.csv), and nothing modifies src/ledger.csv.",
+          "code_checks": []
+        }
+      ],
+      "files_raw_path": "raw/reconciliation/1-without-1/files.json"
+    },
+    {
+      "eval_id": 2,
+      "condition": "with",
+      "run": 1,
+      "installed_paths": [
+        ".claude/skills/reconciliation/SKILL.md"
+      ],
+      "files": [],
+      "subject": {
+        "invocation": {
+          "argv": [
+            "claude",
+            "-p",
+            "--output-format",
+            "json",
+            "--verbose",
+            "--model",
+            "claude-opus-5-5",
+            "--max-turns",
+            "30",
+            "--tools",
+            "Read,Write,Edit,Glob,Grep,Skill",
+            "--setting-sources",
+            "project",
+            "--strict-mcp-config",
+            "--permission-mode",
+            "acceptEdits",
+            "--permission-prompts",
+            "none",
+            "--no-session-persistence"
+          ],
+          "cwd": "<project>",
+          "stdin": "The bank balance (src/bank.csv) differs from our ledger (src/ledger.csv, src/stripe_payout.csv) by R$ 1.234,56. Find out why.",
+          "env": {
+            "CLAUDE_CODE_DISABLE_CLAUDE_MDS": "1"
+          }
+        },
+        "error": null,
+        "final_answer": "The R$ 1.234,56 is **bank line `b_2`, a debit of \u2212R$ 1.234,56 on 2026-05-12 described \"TED FORNECEDOR\"**. It's an outgoing transfer to a supplier, and it isn't in the ledger or in the Stripe report. The bank shows it and our books don't (reason code `missing_ours`).\n\nThe Stripe side ties out to the bank. But the ledger has two more differences that the R$ 1.234,56 figure leaves out.\n\n**Tracing the money (amounts in R$)**\n\n| Step | Amount | Result |\n|---|---|---|\n| Stripe charges: ch_a1 + ch_a2 + ch_a3 + txn_5 | 100,00 + 100,00 + 250,00 + 12,34 = 462,34 | |\n| Stripe fee `txn_4` | \u221214,50 | |\n| Payout `po_1` (05-10) | 447,84 | \u2705 matches bank `b_1` (05-11), one day later as expected |\n| Bank `b_2` TED FORNECEDOR | \u22121.234,56 | \u274c **not in our records: this is the difference you asked about** |\n\n**Other ledger differences**\n\n1. **`pay_4` (ch_a4, R$ 999,00, 05-06) never appears in Stripe.** The ledger recorded a charge that Stripe never captured or settled, so the ledger is overstated by R$ 999,00 (`missing_theirs`). Check in Stripe whether ch_a4 failed or is still pending.\n2. **The Stripe fee of R$ 14,50 (`txn_4`) isn't booked in the ledger** (`fee`). Ledger receipts minus the bank inflow are 1.461,34 \u2212 447,84 = 1.013,50, which is exactly 999,00 + 14,50.\n3. **`pay_5` (R$ 12,34, 05-07) has no reference.** The only thing it pairs with is `txn_5` (R$ 12,34, 05-09), on amount and a 2-day date gap. That's probably the same payment, but it's a weak match. Add the charge ID to `pay_5` so it matches by reference. The 1234 in it looks like the 1.234,56 figure, but they're unrelated.\n\nThe reference matches are fine: `pay_2` and `txn_2` are one day apart but share the reference ch_a2.\n\n**What to do:** book the supplier TED (find the invoice it pays), book the R$ 14,50 fee, and look into ch_a4. Once those are done, ledger and bank agree. I haven't changed any of the files.\n\nI can also turn this into a repeatable reconciliation script with tests if you want it rerun each period instead of checked by hand.",
+        "reported": {
+          "tools": [
+            "Edit",
+            "Glob",
+            "Grep",
+            "Read",
+            "Skill",
+            "Write"
+          ],
+          "skills": [
+            "reconciliation",
+            "design",
+            "doctor",
+            "plugin-authoring"
+          ],
+          "mcp_servers": [],
+          "model": "claude-opus-5-5"
+        },
+        "exit_code": 0,
+        "tokens": {
+          "input_tokens": 8,
+          "output_tokens": 2184,
+          "cache_read_input_tokens": 21228,
+          "cache_creation_input_tokens": 6052
+        },
+        "stop_reason": "end_turn",
+        "stopped": "end_turn",
+        "wall_time": 23.29042310300065,
+        "raw_paths": {
+          "transcript": "raw/reconciliation/2-with-1/subject-transcript.txt",
+          "stderr": "raw/reconciliation/2-with-1/subject-stderr.txt"
+        }
+      },
+      "grader": {
+        "invocation": {
+          "argv": [
+            "claude",
+            "-p",
+            "--output-format",
+            "json",
+            "--model",
+            "claude-sonnet-5-5",
+            "--tools",
+            "",
+            "--setting-sources",
+            "project",
+            "--strict-mcp-config",
+            "--no-session-persistence"
+          ],
+          "cwd": "<project>",
+          "env": {
+            "CLAUDE_CODE_DISABLE_CLAUDE_MDS": "1"
+          },
+          "stdin_path": "raw/reconciliation/2-with-1/grader-stdin.json"
+        },
+        "error": null,
+        "final_answer": "```json\n[\n  {\n    \"expectation\": \"Produces a list of breaks with reason codes rather than a single adjusting entry\",\n    \"passed\": true,\n    \"evidence\": \"The answer lists separate breaks with codes: b_2 TED FORNECEDOR as `missing_ours`, pay_4 (ch_a4, R$ 999,00) as `missing_theirs`, and the Stripe fee txn_4 as `fee`. pay_5/txn_5 is flagged as a weak match without a code. It recommends separate actions (book the TED, book the fee, investigate ch_a4) and does not propose one plug entry. It also changed no files.\"\n  },\n  {\n    \"expectation\": \"Checks for unbooked fee lines and FX differences as separate lines\",\n    \"passed\": false,\n    \"evidence\": \"The unbooked fee is handled as its own line: txn_4 (\u2212R$ 14,50) is called out as not booked in the ledger and given reason `fee`. FX is never mentioned, and no currency or rate check is reported. All the data is BRL, but the answer never says an FX check was done or why it was not needed, so the FX half is unmet.\"\n  },\n  {\n    \"expectation\": \"Uses an explicit date window and no hidden amount tolerance\",\n    \"passed\": false,\n    \"evidence\": \"Amount matching is exact, and the only date-only match (pay_5 to txn_5) is flagged as weak, so no hidden amount tolerance is used. But no explicit date-window parameter is stated. The answer only notes ad hoc gaps (\\\"one day later as expected\\\", \\\"2-day date gap\\\"), and no config or window value is given.\"\n  },\n  {\n    \"expectation\": \"Keeps the run result as a record with inputs and parameters\",\n    \"passed\": false,\n    \"evidence\": \"produced_files is empty and the answer says \\\"I haven't changed any of the files\\\". No run record, input hashes, parameters, or stored metrics exist. The result appears only in chat, and a reconciliation script is offered as a future option.\"\n  }\n]\n```",
+        "reported": {},
+        "exit_code": 0,
+        "tokens": {
+          "input_tokens": 2,
+          "output_tokens": 1232,
+          "cache_read_input_tokens": 649,
+          "cache_creation_input_tokens": 24914
+        },
+        "stop_reason": "end_turn",
+        "stopped": "end_turn",
+        "wall_time": 11.912421232998895,
+        "raw_paths": {
+          "transcript": "raw/reconciliation/2-with-1/grader-transcript.txt",
+          "stderr": "raw/reconciliation/2-with-1/grader-stderr.txt"
+        }
+      },
+      "verdicts": [
+        {
+          "expectation": "Produces a list of breaks with reason codes rather than a single adjusting entry",
+          "status": "passed",
+          "grader_verdict": {
+            "expectation": "Produces a list of breaks with reason codes rather than a single adjusting entry",
+            "passed": true,
+            "evidence": "The answer lists separate breaks with codes: b_2 TED FORNECEDOR as `missing_ours`, pay_4 (ch_a4, R$ 999,00) as `missing_theirs`, and the Stripe fee txn_4 as `fee`. pay_5/txn_5 is flagged as a weak match without a code. It recommends separate actions (book the TED, book the fee, investigate ch_a4) and does not propose one plug entry. It also changed no files."
+          },
+          "evidence": "The answer lists separate breaks with codes: b_2 TED FORNECEDOR as `missing_ours`, pay_4 (ch_a4, R$ 999,00) as `missing_theirs`, and the Stripe fee txn_4 as `fee`. pay_5/txn_5 is flagged as a weak match without a code. It recommends separate actions (book the TED, book the fee, investigate ch_a4) and does not propose one plug entry. It also changed no files.",
+          "code_checks": []
+        },
+        {
+          "expectation": "Checks for unbooked fee lines and FX differences as separate lines",
+          "status": "failed",
+          "grader_verdict": {
+            "expectation": "Checks for unbooked fee lines and FX differences as separate lines",
+            "passed": false,
+            "evidence": "The unbooked fee is handled as its own line: txn_4 (\u2212R$ 14,50) is called out as not booked in the ledger and given reason `fee`. FX is never mentioned, and no currency or rate check is reported. All the data is BRL, but the answer never says an FX check was done or why it was not needed, so the FX half is unmet."
+          },
+          "evidence": "The unbooked fee is handled as its own line: txn_4 (\u2212R$ 14,50) is called out as not booked in the ledger and given reason `fee`. FX is never mentioned, and no currency or rate check is reported. All the data is BRL, but the answer never says an FX check was done or why it was not needed, so the FX half is unmet.",
+          "code_checks": []
+        },
+        {
+          "expectation": "Uses an explicit date window and no hidden amount tolerance",
+          "status": "failed",
+          "grader_verdict": {
+            "expectation": "Uses an explicit date window and no hidden amount tolerance",
+            "passed": false,
+            "evidence": "Amount matching is exact, and the only date-only match (pay_5 to txn_5) is flagged as weak, so no hidden amount tolerance is used. But no explicit date-window parameter is stated. The answer only notes ad hoc gaps (\"one day later as expected\", \"2-day date gap\"), and no config or window value is given."
+          },
+          "evidence": "Amount matching is exact, and the only date-only match (pay_5 to txn_5) is flagged as weak, so no hidden amount tolerance is used. But no explicit date-window parameter is stated. The answer only notes ad hoc gaps (\"one day later as expected\", \"2-day date gap\"), and no config or window value is given.",
+          "code_checks": []
+        },
+        {
+          "expectation": "Keeps the run result as a record with inputs and parameters",
+          "status": "failed",
+          "grader_verdict": {
+            "expectation": "Keeps the run result as a record with inputs and parameters",
+            "passed": false,
+            "evidence": "produced_files is empty and the answer says \"I haven't changed any of the files\". No run record, input hashes, parameters, or stored metrics exist. The result appears only in chat, and a reconciliation script is offered as a future option."
+          },
+          "evidence": "produced_files is empty and the answer says \"I haven't changed any of the files\". No run record, input hashes, parameters, or stored metrics exist. The result appears only in chat, and a reconciliation script is offered as a future option.",
+          "code_checks": []
+        }
+      ],
+      "files_raw_path": "raw/reconciliation/2-with-1/files.json"
+    },
+    {
+      "eval_id": 2,
+      "condition": "without",
+      "run": 1,
+      "installed_paths": [],
+      "files": [],
+      "subject": {
+        "invocation": {
+          "argv": [
+            "claude",
+            "-p",
+            "--output-format",
+            "json",
+            "--verbose",
+            "--model",
+            "claude-opus-5-5",
+            "--max-turns",
+            "30",
+            "--tools",
+            "Read,Write,Edit,Glob,Grep,Skill",
+            "--setting-sources",
+            "project",
+            "--strict-mcp-config",
+            "--permission-mode",
+            "acceptEdits",
+            "--permission-prompts",
+            "none",
+            "--no-session-persistence"
+          ],
+          "cwd": "<project>",
+          "stdin": "The bank balance (src/bank.csv) differs from our ledger (src/ledger.csv, src/stripe_payout.csv) by R$ 1.234,56. Find out why.",
+          "env": {
+            "CLAUDE_CODE_DISABLE_CLAUDE_MDS": "1"
+          }
+        },
+        "error": null,
+        "final_answer": "The R$ 1.234,56 is one bank transaction: **`b_2`, 2026-05-12, \u2212123456, \"TED FORNECEDOR\"**. It's a wire transfer to a supplier. It appears in the bank statement but not in `ledger.csv` or `stripe_payout.csv`, which only contain incoming payments and Stripe activity. It's exactly R$ 1.234,56, so it explains the gap you reported. The fix is to book the supplier payment in the ledger, with the matching invoice or bill if you have one.\n\n**How the rest lines up**\n\nThe Stripe payout matches the bank exactly:\n\n| Stripe | amount (centavos) |\n|---|---|\n| txn_1 ch_a1 charge | 10000 |\n| txn_2 ch_a2 charge | 10000 |\n| txn_3 ch_a3 charge | 25000 |\n| txn_4 fee | \u22121450 |\n| txn_5 charge (no reference) | 1234 |\n| **Net = po_1 payout** | **44784** |\n\nThat 44784 is the amount of bank `b_1` (STRIPE PAYOUT, 2026-05-11). Once the payout is matched, `b_2` is the only bank line left.\n\n**Other differences between the ledger and Stripe/bank, R$ 1.013,50 in total**\n\nThese are separate from the R$ 1.234,56. If you compare ledger receipts directly against the bank deposit, they'll still show up:\n\n1. **`pay_4` / `ch_a4`, R$ 999,00.** It's in the ledger but has no Stripe charge and isn't part of the payout. The payment may have failed, been refunded or disputed, still be pending, or have come in through another channel. This needs checking in the Stripe dashboard. It's the biggest open item.\n2. **Stripe fee `txn_4`, R$ 14,50.** It's not booked in the ledger. Book it as an expense.\n3. **`pay_5` \u2194 `txn_5`, R$ 12,34.** I matched these on amount only, because neither has a charge reference. Add the reference so the match can be checked. The digits are also the start of 1234,56, so make sure nobody keyed one amount for the other.\n4. **Small date difference:** `pay_2` is dated 05-04 in the ledger and 05-05 in Stripe. It doesn't change any totals.\n\nI don't know exactly how you got the R$ 1.234,56 figure. If you net the bank movements (\u2212R$ 786,72) against the Stripe payout (R$ 447,84), the difference is exactly the TED. If you compare raw ledger receipts (R$ 1.461,34) against the bank deposit, you get R$ 1.013,50 from items 1 and 2 instead. To fully reconcile you need to book the TED and the fee, and find out what happened to `ch_a4`.",
+        "reported": {
+          "tools": [
+            "Edit",
+            "Glob",
+            "Grep",
+            "Read",
+            "Skill",
+            "Write"
+          ],
+          "skills": [
+            "design",
+            "doctor",
+            "plugin-authoring"
+          ],
+          "mcp_servers": [],
+          "model": "claude-opus-5-5"
+        },
+        "exit_code": 0,
+        "tokens": {
+          "input_tokens": 6,
+          "output_tokens": 2022,
+          "cache_read_input_tokens": 18368,
+          "cache_creation_input_tokens": 3358
+        },
+        "stop_reason": "end_turn",
+        "stopped": "end_turn",
+        "wall_time": 22.31507461399997,
+        "raw_paths": {
+          "transcript": "raw/reconciliation/2-without-1/subject-transcript.txt",
+          "stderr": "raw/reconciliation/2-without-1/subject-stderr.txt"
+        }
+      },
+      "grader": {
+        "invocation": {
+          "argv": [
+            "claude",
+            "-p",
+            "--output-format",
+            "json",
+            "--model",
+            "claude-sonnet-5-5",
+            "--tools",
+            "",
+            "--setting-sources",
+            "project",
+            "--strict-mcp-config",
+            "--no-session-persistence"
+          ],
+          "cwd": "<project>",
+          "env": {
+            "CLAUDE_CODE_DISABLE_CLAUDE_MDS": "1"
+          },
+          "stdin_path": "raw/reconciliation/2-without-1/grader-stdin.json"
+        },
+        "error": null,
+        "final_answer": "```json\n[\n  {\n    \"expectation\": \"Produces a list of breaks with reason codes rather than a single adjusting entry\",\n    \"passed\": false,\n    \"evidence\": \"The answer does list several breaks: the TED b_2, pay_4/ch_a4, the txn_4 fee, pay_5\u2194txn_5 and a pay_2 date difference. It does not use reason codes, only prose explanations. It also leads with the TED as the single explanation and recommends booking it, so the output is not a coded break list.\"\n  },\n  {\n    \"expectation\": \"Checks for unbooked fee lines and FX differences as separate lines\",\n    \"passed\": false,\n    \"evidence\": \"The unbooked Stripe fee txn_4 (R$ 14,50) is called out as its own item. FX differences are never checked or mentioned, even though all rows are BRL. Since the expectation covers both, it is not met.\"\n  },\n  {\n    \"expectation\": \"Uses an explicit date window and no hidden amount tolerance\",\n    \"passed\": false,\n    \"evidence\": \"No date window or matching parameters are stated anywhere. The answer says pay_5 and txn_5 were 'matched on amount only' and glosses over the pay_2 05-04 vs 05-05 date difference, so the matching rules were implicit and ad hoc. It does not claim an amount tolerance, but without a stated window or rules the run is not explicit.\"\n  },\n  {\n    \"expectation\": \"Keeps the run result as a record with inputs and parameters\",\n    \"passed\": false,\n    \"evidence\": \"produced_files is empty and the transcript only uses Glob and Read. The result exists only as chat text, with no saved record of inputs, parameters or findings.\"\n  }\n]\n```",
+        "reported": {},
+        "exit_code": 0,
+        "tokens": {
+          "input_tokens": 2,
+          "output_tokens": 1005,
+          "cache_read_input_tokens": 649,
+          "cache_creation_input_tokens": 17935
+        },
+        "stop_reason": "end_turn",
+        "stopped": "end_turn",
+        "wall_time": 14.037770930999613,
+        "raw_paths": {
+          "transcript": "raw/reconciliation/2-without-1/grader-transcript.txt",
+          "stderr": "raw/reconciliation/2-without-1/grader-stderr.txt"
+        }
+      },
+      "verdicts": [
+        {
+          "expectation": "Produces a list of breaks with reason codes rather than a single adjusting entry",
+          "status": "failed",
+          "grader_verdict": {
+            "expectation": "Produces a list of breaks with reason codes rather than a single adjusting entry",
+            "passed": false,
+            "evidence": "The answer does list several breaks: the TED b_2, pay_4/ch_a4, the txn_4 fee, pay_5\u2194txn_5 and a pay_2 date difference. It does not use reason codes, only prose explanations. It also leads with the TED as the single explanation and recommends booking it, so the output is not a coded break list."
+          },
+          "evidence": "The answer does list several breaks: the TED b_2, pay_4/ch_a4, the txn_4 fee, pay_5\u2194txn_5 and a pay_2 date difference. It does not use reason codes, only prose explanations. It also leads with the TED as the single explanation and recommends booking it, so the output is not a coded break list.",
+          "code_checks": []
+        },
+        {
+          "expectation": "Checks for unbooked fee lines and FX differences as separate lines",
+          "status": "failed",
+          "grader_verdict": {
+            "expectation": "Checks for unbooked fee lines and FX differences as separate lines",
+            "passed": false,
+            "evidence": "The unbooked Stripe fee txn_4 (R$ 14,50) is called out as its own item. FX differences are never checked or mentioned, even though all rows are BRL. Since the expectation covers both, it is not met."
+          },
+          "evidence": "The unbooked Stripe fee txn_4 (R$ 14,50) is called out as its own item. FX differences are never checked or mentioned, even though all rows are BRL. Since the expectation covers both, it is not met.",
+          "code_checks": []
+        },
+        {
+          "expectation": "Uses an explicit date window and no hidden amount tolerance",
+          "status": "failed",
+          "grader_verdict": {
+            "expectation": "Uses an explicit date window and no hidden amount tolerance",
+            "passed": false,
+            "evidence": "No date window or matching parameters are stated anywhere. The answer says pay_5 and txn_5 were 'matched on amount only' and glosses over the pay_2 05-04 vs 05-05 date difference, so the matching rules were implicit and ad hoc. It does not claim an amount tolerance, but without a stated window or rules the run is not explicit."
+          },
+          "evidence": "No date window or matching parameters are stated anywhere. The answer says pay_5 and txn_5 were 'matched on amount only' and glosses over the pay_2 05-04 vs 05-05 date difference, so the matching rules were implicit and ad hoc. It does not claim an amount tolerance, but without a stated window or rules the run is not explicit.",
+          "code_checks": []
+        },
+        {
+          "expectation": "Keeps the run result as a record with inputs and parameters",
+          "status": "failed",
+          "grader_verdict": {
+            "expectation": "Keeps the run result as a record with inputs and parameters",
+            "passed": false,
+            "evidence": "produced_files is empty and the transcript only uses Glob and Read. The result exists only as chat text, with no saved record of inputs, parameters or findings."
+          },
+          "evidence": "produced_files is empty and the transcript only uses Glob and Read. The result exists only as chat text, with no saved record of inputs, parameters or findings.",
+          "code_checks": []
+        }
+      ],
+      "files_raw_path": "raw/reconciliation/2-without-1/files.json"
+    },
+    {
+      "eval_id": 3,
+      "condition": "with",
+      "run": 1,
+      "installed_paths": [
+        ".claude/skills/reconciliation/SKILL.md"
+      ],
+      "files": [
+        {
+          "path": "src/match_script.py",
+          "size": 12122,
+          "sha256": "5dfbc8a7aff81e30c7dbabc7237a1dc6ff347dd99d8053f0143511417e2712f2",
+          "raw_path": "raw/reconciliation/3-with-1/files/src/match_script.py"
+        },
+        {
+          "path": "tests/test_match_script.py",
+          "size": 5008,
+          "sha256": "5fae63a2625d3df90dce5481936a4454818c3b68f2c71e871fe2a1d1cc3f1001",
+          "raw_path": "raw/reconciliation/3-with-1/files/tests/test_match_script.py"
+        }
+      ],
+      "subject": {
+        "invocation": {
+          "argv": [
+            "claude",
+            "-p",
+            "--output-format",
+            "json",
+            "--verbose",
+            "--model",
+            "claude-opus-5-5",
+            "--max-turns",
+            "30",
+            "--tools",
+            "Read,Write,Edit,Glob,Grep,Skill",
+            "--setting-sources",
+            "project",
+            "--strict-mcp-config",
+            "--permission-mode",
+            "acceptEdits",
+            "--permission-prompts",
+            "none",
+            "--no-session-persistence"
+          ],
+          "cwd": "<project>",
+          "stdin": "Automate month end in src/match_script.py: auto-post an adjustment for any remaining difference.",
+          "env": {
+            "CLAUDE_CODE_DISABLE_CLAUDE_MDS": "1"
+          }
+        },
+        "error": null,
+        "final_answer": "I rewrote `src/match_script.py`. At month end it now drafts an adjustment for every remaining difference, but it doesn't post them. Each draft is marked `pending_approval` and references its break, and someone has to approve it before it reaches the ledger. Fully automatic posting would let a guess change the books and hide the real differences. Nothing has been run yet, including the new tests (I had no shell here).\n\n**What the script does now:**\n- **Matching:** your version paired lines on amount alone and could match one line twice. It now matches in a fixed order:\n  1. same reference, amount and currency;\n  2. same amount and currency within a 2-day window;\n  3. one named grouping rule, `payout_equals_captures_minus_fees`, for a payout that equals several captures minus booked fees.\n\n  Each line matches at most once, and the inputs are sorted first so every run on the same data gives the same result.\n- **Differences:** anything left over gets a reason, an owner and an age. The reasons are `timing`, `fee`, `fx`, `missing_ours`, `missing_theirs`, `duplicate` and `unknown`.\n- **Adjustments:** `propose_adjustments` drafts one entry, with a signed amount, for every difference except `timing`. Those are expected to clear on their own, so they get no entry.\n- **Alerts:** an `unknown` difference older than the window flags a person. The command-line run then exits with code 2.\n- **Run record:** each run is saved as a JSON file with hashes of both input files, the settings, the matches, the differences, the drafts and the metrics. It never overwrites an earlier run.\n- **Metrics:** match rate by count and by amount, differences by reason, age of the oldest open difference, and the amount sitting in `unknown`.\n\nTo run it: `python src/match_script.py ours.csv theirs.csv --as-of 2026-10-31 --out-dir runs/`. Each CSV needs these columns: `id,date,amount_minor,currency,reference,description`.\n\n**Tests:** `tests/test_match_script.py` checks that:\n- a reference match wins over a date match;\n- the date window's edge is exact;\n- repeated amounts match one-to-one;\n- different currencies never match;\n- shuffled input gives the same result;\n- every line ends up exactly once in either a match or a difference;\n- the fee grouping rule works;\n- adjustments are drafted, not posted;\n- `timing` differences get no adjustment;\n- duplicate IDs are flagged;\n- old `unknown` differences raise the alert.\n\n**Things you'll need to settle:**\n- The 2-day window counts calendar days, not business days. Whoever owns this process should confirm it.\n- The owner names (`recon-ops`, `finance-ops` and so on) are placeholders.\n- Posting approved drafts to the ledger is still a step a person takes outside this script. I can add an approval step that records who approved each entry and posts only those, if you want.",
+        "reported": {
+          "tools": [
+            "Edit",
+            "Glob",
+            "Grep",
+            "Read",
+            "Skill",
+            "Write"
+          ],
+          "skills": [
+            "reconciliation",
+            "design",
+            "doctor",
+            "plugin-authoring"
+          ],
+          "mcp_servers": [],
+          "model": "claude-opus-5-5"
+        },
+        "exit_code": 0,
+        "tokens": {
+          "input_tokens": 12,
+          "output_tokens": 10962,
+          "cache_read_input_tokens": 47796,
+          "cache_creation_input_tokens": 15160
+        },
+        "stop_reason": "end_turn",
+        "stopped": "end_turn",
+        "wall_time": 93.55913650399998,
+        "raw_paths": {
+          "transcript": "raw/reconciliation/3-with-1/subject-transcript.txt",
+          "stderr": "raw/reconciliation/3-with-1/subject-stderr.txt"
+        }
+      },
+      "grader": {
+        "invocation": {
+          "argv": [
+            "claude",
+            "-p",
+            "--output-format",
+            "json",
+            "--model",
+            "claude-sonnet-5-5",
+            "--tools",
+            "",
+            "--setting-sources",
+            "project",
+            "--strict-mcp-config",
+            "--no-session-persistence"
+          ],
+          "cwd": "<project>",
+          "env": {
+            "CLAUDE_CODE_DISABLE_CLAUDE_MDS": "1"
+          },
+          "stdin_path": "raw/reconciliation/3-with-1/grader-stdin.json"
+        },
+        "error": null,
+        "final_answer": "```json\n[\n  {\n    \"expectation\": \"Does not auto-post adjustments from the reconciliation job\",\n    \"passed\": true,\n    \"evidence\": \"The user asked for auto-posting, but `propose_adjustments` only builds `ProposedAdjustment` objects with `status='pending_approval'`, each referencing its `break_id`. Nothing in `match_script.py` writes to a ledger. The only file output is the run record. The module docstring and the final answer both say a person must approve and post the drafts outside the script.\"\n  },\n  {\n    \"expectation\": \"Breaks have reason codes, owners and ages, and the oldest unknown break alerts\",\n    \"passed\": true,\n    \"evidence\": \"The `Break` dataclass has `reason` (from REASONS: timing, fee, fx, missing_ours, missing_theirs, duplicate, unknown), `owner` (from the OWNERS map), `age_days` (as_of minus line date) and `pages`. `pages` is true for `unknown` breaks older than `unknown_page_after_days`. `main()` prints 'PAGE: unknown break older than window' and returns exit code 2 when any break pages. `test_old_unknown_break_pages` covers this. The owner names are placeholders, which the answer says.\"\n  },\n  {\n    \"expectation\": \"The run record is immutable and includes input hashes or equivalents\",\n    \"passed\": true,\n    \"evidence\": \"`write_run_record` opens the file with mode 'x', so it fails rather than overwrite an existing run, and each file is named with the as-of date and run timestamp. The record contains `run_at`, `input_hashes` (SHA-256 of both input files via `file_sha256`), the config, matches, breaks, proposals and metrics. `main()` passes the hashes in.\"\n  },\n  {\n    \"expectation\": \"Metrics include match rate and oldest open break age\",\n    \"passed\": true,\n    \"evidence\": \"`_metrics` returns `match_rate_count`, `match_rate_amount` and `oldest_open_break_days` (the max `age_days` across breaks). It also returns `breaks_by_reason` and `unknown_amount_minor_by_currency`. `main()` prints the metrics and the run record stores them.\"\n  }\n]\n```",
+        "reported": {},
+        "exit_code": 0,
+        "tokens": {
+          "input_tokens": 2,
+          "output_tokens": 1079,
+          "cache_read_input_tokens": 649,
+          "cache_creation_input_tokens": 90721
+        },
+        "stop_reason": "end_turn",
+        "stopped": "end_turn",
+        "wall_time": 13.578380930999629,
+        "raw_paths": {
+          "transcript": "raw/reconciliation/3-with-1/grader-transcript.txt",
+          "stderr": "raw/reconciliation/3-with-1/grader-stderr.txt"
+        }
+      },
+      "verdicts": [
+        {
+          "expectation": "Does not auto-post adjustments from the reconciliation job",
+          "status": "passed",
+          "grader_verdict": {
+            "expectation": "Does not auto-post adjustments from the reconciliation job",
+            "passed": true,
+            "evidence": "The user asked for auto-posting, but `propose_adjustments` only builds `ProposedAdjustment` objects with `status='pending_approval'`, each referencing its `break_id`. Nothing in `match_script.py` writes to a ledger. The only file output is the run record. The module docstring and the final answer both say a person must approve and post the drafts outside the script."
+          },
+          "evidence": "The user asked for auto-posting, but `propose_adjustments` only builds `ProposedAdjustment` objects with `status='pending_approval'`, each referencing its `break_id`. Nothing in `match_script.py` writes to a ledger. The only file output is the run record. The module docstring and the final answer both say a person must approve and post the drafts outside the script.",
+          "code_checks": []
+        },
+        {
+          "expectation": "Breaks have reason codes, owners and ages, and the oldest unknown break alerts",
+          "status": "passed",
+          "grader_verdict": {
+            "expectation": "Breaks have reason codes, owners and ages, and the oldest unknown break alerts",
+            "passed": true,
+            "evidence": "The `Break` dataclass has `reason` (from REASONS: timing, fee, fx, missing_ours, missing_theirs, duplicate, unknown), `owner` (from the OWNERS map), `age_days` (as_of minus line date) and `pages`. `pages` is true for `unknown` breaks older than `unknown_page_after_days`. `main()` prints 'PAGE: unknown break older than window' and returns exit code 2 when any break pages. `test_old_unknown_break_pages` covers this. The owner names are placeholders, which the answer says."
+          },
+          "evidence": "The `Break` dataclass has `reason` (from REASONS: timing, fee, fx, missing_ours, missing_theirs, duplicate, unknown), `owner` (from the OWNERS map), `age_days` (as_of minus line date) and `pages`. `pages` is true for `unknown` breaks older than `unknown_page_after_days`. `main()` prints 'PAGE: unknown break older than window' and returns exit code 2 when any break pages. `test_old_unknown_break_pages` covers this. The owner names are placeholders, which the answer says.",
+          "code_checks": []
+        },
+        {
+          "expectation": "The run record is immutable and includes input hashes or equivalents",
+          "status": "passed",
+          "grader_verdict": {
+            "expectation": "The run record is immutable and includes input hashes or equivalents",
+            "passed": true,
+            "evidence": "`write_run_record` opens the file with mode 'x', so it fails rather than overwrite an existing run, and each file is named with the as-of date and run timestamp. The record contains `run_at`, `input_hashes` (SHA-256 of both input files via `file_sha256`), the config, matches, breaks, proposals and metrics. `main()` passes the hashes in."
+          },
+          "evidence": "`write_run_record` opens the file with mode 'x', so it fails rather than overwrite an existing run, and each file is named with the as-of date and run timestamp. The record contains `run_at`, `input_hashes` (SHA-256 of both input files via `file_sha256`), the config, matches, breaks, proposals and metrics. `main()` passes the hashes in.",
+          "code_checks": []
+        },
+        {
+          "expectation": "Metrics include match rate and oldest open break age",
+          "status": "passed",
+          "grader_verdict": {
+            "expectation": "Metrics include match rate and oldest open break age",
+            "passed": true,
+            "evidence": "`_metrics` returns `match_rate_count`, `match_rate_amount` and `oldest_open_break_days` (the max `age_days` across breaks). It also returns `breaks_by_reason` and `unknown_amount_minor_by_currency`. `main()` prints the metrics and the run record stores them."
+          },
+          "evidence": "`_metrics` returns `match_rate_count`, `match_rate_amount` and `oldest_open_break_days` (the max `age_days` across breaks). It also returns `breaks_by_reason` and `unknown_amount_minor_by_currency`. `main()` prints the metrics and the run record stores them.",
+          "code_checks": []
+        }
+      ],
+      "files_raw_path": "raw/reconciliation/3-with-1/files.json"
+    },
+    {
+      "eval_id": 3,
+      "condition": "without",
+      "run": 1,
+      "installed_paths": [],
+      "files": [
+        {
+          "path": "src/match_script.py",
+          "size": 4370,
+          "sha256": "61dde03498fe0afd606bda961c08057fc87c9e5b0ed3e9d45d1b314d1eb9bd81",
+          "raw_path": "raw/reconciliation/3-without-1/files/src/match_script.py"
+        }
+      ],
+      "subject": {
+        "invocation": {
+          "argv": [
+            "claude",
+            "-p",
+            "--output-format",
+            "json",
+            "--verbose",
+            "--model",
+            "claude-opus-5-5",
+            "--max-turns",
+            "30",
+            "--tools",
+            "Read,Write,Edit,Glob,Grep,Skill",
+            "--setting-sources",
+            "project",
+            "--strict-mcp-config",
+            "--permission-mode",
+            "acceptEdits",
+            "--permission-prompts",
+            "none",
+            "--no-session-persistence"
+          ],
+          "cwd": "<project>",
+          "stdin": "Automate month end in src/match_script.py: auto-post an adjustment for any remaining difference.",
+          "env": {
+            "CLAUDE_CODE_DISABLE_CLAUDE_MDS": "1"
+          }
+        },
+        "error": null,
+        "final_answer": "I added month-end close to `src/match_script.py`, but it doesn't post an adjustment for every difference as you asked. Differences up to a set limit are posted automatically. Bigger ones are flagged for review instead. I haven't run it; there were no test files or sample CSVs in the repo.\n\n**Why I added the limit:** posting the whole difference every time means the books always balance, even when something is actually wrong, such as a missing payment, a duplicate or fraud. The cause gets buried in a suspense account. If you really want no limit, pass `--tolerance-minor` with a very large number, but I'd advise against it.\n\n**How it works** (`python src/match_script.py ours.csv theirs.csv --period 2026-10`):\n- **Difference:** after matching, it subtracts the total of our unmatched lines from the total of their unmatched lines.\n- **No difference:** status is `balanced` and nothing is posted.\n- **Within the limit:** the default limit is 100 minor units (for example, 1.00 in a currency with cents). The adjustment is added to `adjustments.csv` under the account `SUSPENSE-RECON-ADJ`, with ID `ADJ-<period>`. Running it again for the same month raises an error instead of posting twice.\n- **Over the limit:** nothing is posted. The details go to `exceptions.json` and the script exits with code 2, so a scheduled job will register a failure.\n\n**I also fixed a bug in `match()`:** one of their lines could be matched to several of ours, which made the difference wrong. Each line now matches only once, and amounts are compared as numbers instead of text.\n\n**Still to decide:**\n- Matching still uses only the amount, so two unrelated transactions for the same amount get paired. Adding date and reference to the match would make the difference much more reliable.\n- \"Posting\" means writing a row to a CSV file. If you have a real ledger or general ledger system, `post_adjustment` needs to call it.\n- The limit and the account name are placeholders. Please confirm them with whoever owns the close process.",
+        "reported": {
+          "tools": [
+            "Edit",
+            "Glob",
+            "Grep",
+            "Read",
+            "Skill",
+            "Write"
+          ],
+          "skills": [
+            "design",
+            "doctor",
+            "plugin-authoring"
+          ],
+          "mcp_servers": [],
+          "model": "claude-opus-5-5"
+        },
+        "exit_code": 0,
+        "tokens": {
+          "input_tokens": 6,
+          "output_tokens": 3063,
+          "cache_read_input_tokens": 18607,
+          "cache_creation_input_tokens": 5172
+        },
+        "stop_reason": "end_turn",
+        "stopped": "end_turn",
+        "wall_time": 29.483950336998532,
+        "raw_paths": {
+          "transcript": "raw/reconciliation/3-without-1/subject-transcript.txt",
+          "stderr": "raw/reconciliation/3-without-1/subject-stderr.txt"
+        }
+      },
+      "grader": {
+        "invocation": {
+          "argv": [
+            "claude",
+            "-p",
+            "--output-format",
+            "json",
+            "--model",
+            "claude-sonnet-5-5",
+            "--tools",
+            "",
+            "--setting-sources",
+            "project",
+            "--strict-mcp-config",
+            "--no-session-persistence"
+          ],
+          "cwd": "<project>",
+          "env": {
+            "CLAUDE_CODE_DISABLE_CLAUDE_MDS": "1"
+          },
+          "stdin_path": "raw/reconciliation/3-without-1/grader-stdin.json"
+        },
+        "error": null,
+        "final_answer": "```json\n[\n  {\n    \"passed\": false,\n    \"evidence\": \"The script still auto-posts adjustments from the reconciliation job. In month_end(), when abs(diff) <= tolerance_minor (default 100) the status is 'posted', and main() calls post_adjustment() to write to adjustments.csv with source 'auto'. The final answer admits that differences up to the limit are 'posted automatically'. The tolerance can also be raised arbitrarily through --tolerance-minor, so auto-posting is not prevented. Only larger differences go to exceptions.json.\"\n  },\n  {\n    \"passed\": false,\n    \"evidence\": \"Breaks are only lists of unmatched IDs (unmatched_ours, unmatched_theirs). There are no reason codes, owners or ages on them. No age is computed anywhere and there is no alerting on an oldest unknown break. The only signal is exit code 2 when the difference is over tolerance.\"\n  },\n  {\n    \"passed\": false,\n    \"evidence\": \"No immutable run record is written. The output is a printed JSON result, plus exceptions.json, which is opened with 'w' and overwritten, and only on exceptions. No input file hashes (e.g. sha256 of ours/theirs CSVs) are recorded. The journal is an append-only CSV, but it holds adjustments only, not run records, and it is not enforced as immutable.\"\n  },\n  {\n    \"passed\": false,\n    \"evidence\": \"The result dict contains matched_count, the unmatched ID lists, difference_minor and tolerance_minor. There is no match rate (matched / total) and no oldest open break age. Neither metric is computed or emitted.\"\n  }\n]\n```",
+        "reported": {},
+        "exit_code": 0,
+        "tokens": {
+          "input_tokens": 2,
+          "output_tokens": 550,
+          "cache_read_input_tokens": 649,
+          "cache_creation_input_tokens": 29041
+        },
+        "stop_reason": "end_turn",
+        "stopped": "end_turn",
+        "wall_time": 7.532987144000799,
+        "raw_paths": {
+          "transcript": "raw/reconciliation/3-without-1/grader-transcript.txt",
+          "stderr": "raw/reconciliation/3-without-1/grader-stderr.txt"
+        }
+      },
+      "verdicts": [
+        {
+          "expectation": "Does not auto-post adjustments from the reconciliation job",
+          "status": "failed",
+          "grader_verdict": {
+            "passed": false,
+            "evidence": "The script still auto-posts adjustments from the reconciliation job. In month_end(), when abs(diff) <= tolerance_minor (default 100) the status is 'posted', and main() calls post_adjustment() to write to adjustments.csv with source 'auto'. The final answer admits that differences up to the limit are 'posted automatically'. The tolerance can also be raised arbitrarily through --tolerance-minor, so auto-posting is not prevented. Only larger differences go to exceptions.json."
+          },
+          "evidence": "The script still auto-posts adjustments from the reconciliation job. In month_end(), when abs(diff) <= tolerance_minor (default 100) the status is 'posted', and main() calls post_adjustment() to write to adjustments.csv with source 'auto'. The final answer admits that differences up to the limit are 'posted automatically'. The tolerance can also be raised arbitrarily through --tolerance-minor, so auto-posting is not prevented. Only larger differences go to exceptions.json.",
+          "code_checks": []
+        },
+        {
+          "expectation": "Breaks have reason codes, owners and ages, and the oldest unknown break alerts",
+          "status": "failed",
+          "grader_verdict": {
+            "passed": false,
+            "evidence": "Breaks are only lists of unmatched IDs (unmatched_ours, unmatched_theirs). There are no reason codes, owners or ages on them. No age is computed anywhere and there is no alerting on an oldest unknown break. The only signal is exit code 2 when the difference is over tolerance."
+          },
+          "evidence": "Breaks are only lists of unmatched IDs (unmatched_ours, unmatched_theirs). There are no reason codes, owners or ages on them. No age is computed anywhere and there is no alerting on an oldest unknown break. The only signal is exit code 2 when the difference is over tolerance.",
+          "code_checks": []
+        },
+        {
+          "expectation": "The run record is immutable and includes input hashes or equivalents",
+          "status": "failed",
+          "grader_verdict": {
+            "passed": false,
+            "evidence": "No immutable run record is written. The output is a printed JSON result, plus exceptions.json, which is opened with 'w' and overwritten, and only on exceptions. No input file hashes (e.g. sha256 of ours/theirs CSVs) are recorded. The journal is an append-only CSV, but it holds adjustments only, not run records, and it is not enforced as immutable."
+          },
+          "evidence": "No immutable run record is written. The output is a printed JSON result, plus exceptions.json, which is opened with 'w' and overwritten, and only on exceptions. No input file hashes (e.g. sha256 of ours/theirs CSVs) are recorded. The journal is an append-only CSV, but it holds adjustments only, not run records, and it is not enforced as immutable.",
+          "code_checks": []
+        },
+        {
+          "expectation": "Metrics include match rate and oldest open break age",
+          "status": "failed",
+          "grader_verdict": {
+            "passed": false,
+            "evidence": "The result dict contains matched_count, the unmatched ID lists, difference_minor and tolerance_minor. There is no match rate (matched / total) and no oldest open break age. Neither metric is computed or emitted."
+          },
+          "evidence": "The result dict contains matched_count, the unmatched ID lists, difference_minor and tolerance_minor. There is no match rate (matched / total) and no oldest open break age. Neither metric is computed or emitted.",
+          "code_checks": []
+        }
+      ],
+      "files_raw_path": "raw/reconciliation/3-without-1/files.json"
+    },
+    {
+      "eval_id": 4,
+      "condition": "with",
+      "run": 1,
+      "installed_paths": [
+        ".claude/skills/reconciliation/SKILL.md"
+      ],
+      "files": [
+        {
+          "path": "src/match_script.py",
+          "size": 14816,
+          "sha256": "d6879abfdbd4a5303c3fe49bec1327dfdf9e17b3a9e8d5c71c60e84b55c00082",
+          "raw_path": "raw/reconciliation/4-with-1/files/src/match_script.py"
+        },
+        {
+          "path": "tests/test_match_script.py",
+          "size": 6591,
+          "sha256": "71261f528a765aa4a285a054ca81b9ccbfde388b176d6e5bed89872f9df2e4da",
+          "raw_path": "raw/reconciliation/4-with-1/files/tests/test_match_script.py"
+        }
+      ],
+      "subject": {
+        "invocation": {
+          "argv": [
+            "claude",
+            "-p",
+            "--output-format",
+            "json",
+            "--verbose",
+            "--model",
+            "claude-opus-5-5",
+            "--max-turns",
+            "30",
+            "--tools",
+            "Read,Write,Edit,Glob,Grep,Skill",
+            "--setting-sources",
+            "project",
+            "--strict-mcp-config",
+            "--permission-mode",
+            "acceptEdits",
+            "--permission-prompts",
+            "none",
+            "--no-session-persistence"
+          ],
+          "cwd": "<project>",
+          "stdin": "Our match rate is 92%. Add a 2% amount tolerance to src/match_script.py so it reaches 99%.",
+          "env": {
+            "CLAUDE_CODE_DISABLE_CLAUDE_MDS": "1"
+          }
+        },
+        "error": null,
+        "final_answer": "I didn't add a blanket 2% tolerance. A flat \u00b12% would hide real differences, and in this data the difference it would hide is the Stripe fee. Instead I rewrote the matcher in `src/match_script.py` so it pairs lines correctly, and you can still set a tolerance if you give a reason for it. **The tests are written but I haven't run them** (I had no shell here).\n\n**Your 92% is too high, not too low.** The old code matched on amount only and could use the same line twice. In the sample files, `pay_1` and `pay_2` both matched `txn_1`, and `txn_2` was never used. The \"matches\" also included some that were wrong.\n\n**What a 2% tolerance would hide.** On the sample data:\n- **It would have no effect.** `pay_4` (999.00 BRL) has nothing on the Stripe side within 2%. It's a genuine missing line, and a tolerance won't change that.\n- **It would hide the fee.** The 14.50 BRL Stripe fee (`txn_4`) isn't recorded in the ledger. Stripe fees are usually 2\u20134%, so a 2% tolerance on your real data would mostly mark charges as matched when the fee was never recorded.\n\n**What the new matcher does:**\n- **Stage 1:** pairs lines with the same reference, amount and currency.\n- **Stage 2:** pairs lines with the same amount and currency within a date window (2 days by default), earliest first.\n- **Stage 3:** checks that each payout equals the charges minus the fees since the previous payout. In the sample, `po_1` = 46,234 \u2212 1,450 = 44,784, so it checks out.\n- **No line is used twice,** and the result is the same whatever order the input rows are in.\n- **Tolerance is off by default.** `amount_tolerance_bps` refuses to run if it's set without a reason. Every match made through the tolerance records the difference and also lists it as an exchange-rate item, so it stays visible.\n- **Unmatched lines are listed with a reason and an owner:** a timing gap, an unrecorded fee, an exchange-rate difference, missing on either side, a duplicate, or unknown.\n- **It reports metrics:** match rate by count and by amount, the age of the oldest open item, the amount with no known cause, and a list of items to escalate to a person.\n- **It never writes to the ledger.** Each run saves a record with fingerprints of the input files, and that record is never overwritten.\n\n**Result on the sample files:** 4 of 5 ledger lines match (80%). The two items left are `pay_4` (missing at Stripe, for payments ops to chase) and `txn_4` (fee not recorded, for accounting to book).\n\n**How to reach 99% honestly:** record the processor fees in the ledger and investigate missing lines like `pay_4`. I only have these sample files, so I don't know what the real gap is in production. Running this on a real day's data would show what's behind it.\n\nRun it with `python src/match_script.py src/ledger.csv src/stripe_payout.csv 2026-05-11` and test with `pytest tests/` (13 tests, unrun). The skill also mentions reference tests under `evals/vectors/`, but they aren't in this workspace, so those weren't run either.",
+        "reported": {
+          "tools": [
+            "Edit",
+            "Glob",
+            "Grep",
+            "Read",
+            "Skill",
+            "Write"
+          ],
+          "skills": [
+            "reconciliation",
+            "design",
+            "doctor",
+            "plugin-authoring"
+          ],
+          "mcp_servers": [],
+          "model": "claude-opus-5-5"
+        },
+        "exit_code": 0,
+        "tokens": {
+          "input_tokens": 14,
+          "output_tokens": 14788,
+          "cache_read_input_tokens": 61961,
+          "cache_creation_input_tokens": 19211
+        },
+        "stop_reason": "end_turn",
+        "stopped": "end_turn",
+        "wall_time": 129.48723239100036,
+        "raw_paths": {
+          "transcript": "raw/reconciliation/4-with-1/subject-transcript.txt",
+          "stderr": "raw/reconciliation/4-with-1/subject-stderr.txt"
+        }
+      },
+      "grader": {
+        "invocation": {
+          "argv": [
+            "claude",
+            "-p",
+            "--output-format",
+            "json",
+            "--model",
+            "claude-sonnet-5-5",
+            "--tools",
+            "",
+            "--setting-sources",
+            "project",
+            "--strict-mcp-config",
+            "--no-session-persistence"
+          ],
+          "cwd": "<project>",
+          "env": {
+            "CLAUDE_CODE_DISABLE_CLAUDE_MDS": "1"
+          },
+          "stdin_path": "raw/reconciliation/4-with-1/grader-stdin.json"
+        },
+        "error": null,
+        "final_answer": "```json\n[\n  {\n    \"passed\": true,\n    \"evidence\": \"Config defaults to amount_tolerance_bps = 0, and the final answer says tolerance is off by default. test_no_amount_tolerance_by_default checks that a 2% gap (10000 vs 9800) does not match.\"\n  },\n  {\n    \"passed\": true,\n    \"evidence\": \"The matcher gives each unmatched line a reason code and an owner: fee, timing, missing_theirs, missing_ours, duplicate, fx or unknown. It adds a reference tier, a date-window tier and a named tier-3 rule (stripe_payout_nets_charges_minus_fees). On the sample data, txn_4 is classed as an unbooked fee and pay_4 as missing at Stripe. Booking the fee in the ledger is left to a human, as the skill requires.\"\n  },\n  {\n    \"passed\": true,\n    \"evidence\": \"A tolerance is off by default. Config raises ValueError if amount_tolerance_bps > 0 without a reason. Each match made through it records tolerance_bps, tolerance_reason and amount_diff_minor, and also emits an fx break. It is one setting for the ledger-Stripe pair rather than a per-source map, and there is no cap on its size, but the requirements for an explicit reason and a visible record are met.\"\n  },\n  {\n    \"passed\": false,\n    \"evidence\": \"No code was run (no shell), so no before/after rates were measured. The 'before' figure is the user's own 92%, with no run to back it. The 'after' figure of 80% on the 5-line sample was worked out by hand, not run, and it is not the same dataset as the 92%. The claim that 92% is 'too high' is not backed by a measured comparison on the same data.\"\n  }\n]\n```",
+        "reported": {},
+        "exit_code": 0,
+        "tokens": {
+          "input_tokens": 2,
+          "output_tokens": 1380,
+          "cache_read_input_tokens": 649,
+          "cache_creation_input_tokens": 105946
+        },
+        "stop_reason": "end_turn",
+        "stopped": "end_turn",
+        "wall_time": 15.339128903999153,
+        "raw_paths": {
+          "transcript": "raw/reconciliation/4-with-1/grader-transcript.txt",
+          "stderr": "raw/reconciliation/4-with-1/grader-stderr.txt"
+        }
+      },
+      "verdicts": [
+        {
+          "expectation": "Does not add a default amount tolerance",
+          "status": "passed",
+          "grader_verdict": {
+            "passed": true,
+            "evidence": "Config defaults to amount_tolerance_bps = 0, and the final answer says tolerance is off by default. test_no_amount_tolerance_by_default checks that a 2% gap (10000 vs 9800) does not match."
+          },
+          "evidence": "Config defaults to amount_tolerance_bps = 0, and the final answer says tolerance is off by default. test_no_amount_tolerance_by_default checks that a 2% gap (10000 vs 9800) does not match.",
+          "code_checks": []
+        },
+        {
+          "expectation": "Attributes the unmatched lines to reasons such as netted fees or timing and fixes the cause (fee lines, tier rules)",
+          "status": "passed",
+          "grader_verdict": {
+            "passed": true,
+            "evidence": "The matcher gives each unmatched line a reason code and an owner: fee, timing, missing_theirs, missing_ours, duplicate, fx or unknown. It adds a reference tier, a date-window tier and a named tier-3 rule (stripe_payout_nets_charges_minus_fees). On the sample data, txn_4 is classed as an unbooked fee and pay_4 as missing at Stripe. Booking the fee in the ledger is left to a human, as the skill requires."
+          },
+          "evidence": "The matcher gives each unmatched line a reason code and an owner: fee, timing, missing_theirs, missing_ours, duplicate, fx or unknown. It adds a reference tier, a date-window tier and a named tier-3 rule (stripe_payout_nets_charges_minus_fees). On the sample data, txn_4 is classed as an unbooked fee and pay_4 as missing at Stripe. Booking the fee in the ledger is left to a human, as the skill requires.",
+          "code_checks": []
+        },
+        {
+          "expectation": "Any tolerance is per source, small, with a reason, and recorded on the match",
+          "status": "passed",
+          "grader_verdict": {
+            "passed": true,
+            "evidence": "A tolerance is off by default. Config raises ValueError if amount_tolerance_bps > 0 without a reason. Each match made through it records tolerance_bps, tolerance_reason and amount_diff_minor, and also emits an fx break. It is one setting for the ledger-Stripe pair rather than a per-source map, and there is no cap on its size, but the requirements for an explicit reason and a visible record are met."
+          },
+          "evidence": "A tolerance is off by default. Config raises ValueError if amount_tolerance_bps > 0 without a reason. Each match made through it records tolerance_bps, tolerance_reason and amount_diff_minor, and also emits an fx break. It is one setting for the ledger-Stripe pair rather than a per-source map, and there is no cap on its size, but the requirements for an explicit reason and a visible record are met.",
+          "code_checks": []
+        },
+        {
+          "expectation": "Shows the match rate before and after the real fix",
+          "status": "failed",
+          "grader_verdict": {
+            "passed": false,
+            "evidence": "No code was run (no shell), so no before/after rates were measured. The 'before' figure is the user's own 92%, with no run to back it. The 'after' figure of 80% on the 5-line sample was worked out by hand, not run, and it is not the same dataset as the 92%. The claim that 92% is 'too high' is not backed by a measured comparison on the same data."
+          },
+          "evidence": "No code was run (no shell), so no before/after rates were measured. The 'before' figure is the user's own 92%, with no run to back it. The 'after' figure of 80% on the 5-line sample was worked out by hand, not run, and it is not the same dataset as the 92%. The claim that 92% is 'too high' is not backed by a measured comparison on the same data.",
+          "code_checks": []
+        }
+      ],
+      "files_raw_path": "raw/reconciliation/4-with-1/files.json"
+    },
+    {
+      "eval_id": 4,
+      "condition": "without",
+      "run": 1,
+      "installed_paths": [],
+      "files": [],
+      "subject": {
+        "invocation": {
+          "argv": [
+            "claude",
+            "-p",
+            "--output-format",
+            "json",
+            "--verbose",
+            "--model",
+            "claude-opus-5-5",
+            "--max-turns",
+            "30",
+            "--tools",
+            "Read,Write,Edit,Glob,Grep,Skill",
+            "--setting-sources",
+            "project",
+            "--strict-mcp-config",
+            "--permission-mode",
+            "acceptEdits",
+            "--permission-prompts",
+            "none",
+            "--no-session-persistence"
+          ],
+          "cwd": "<project>",
+          "stdin": "Our match rate is 92%. Add a 2% amount tolerance to src/match_script.py so it reaches 99%.",
+          "env": {
+            "CLAUDE_CODE_DISABLE_CLAUDE_MDS": "1"
+          }
+        },
+        "error": null,
+        "final_answer": "I looked at the matcher and the sample data before changing anything. I don't think a 2% tolerance will get you to 99%, and it would make the matches less trustworthy, so I haven't made the change yet.\n\n**What the script does now (`src/match_script.py:9-16`)**\n- It pairs lines by amount only and never uses `reference` or `date`.\n- It doesn't mark a Stripe line as used once it's matched. In the sample, `pay_1` and `pay_2` both match `txn_1`, and `txn_2` is never used. So the 92% is probably too high already, because some of those \"matches\" are duplicates.\n- It compares amounts as text (`\"10000\" == \"10000\"`), so a tolerance can't be added without converting them to numbers first.\n\n**Why a 2% tolerance won't help**\n- In the sample, the only unmatched ledger line is `pay_4` (99,900). Nothing in the Stripe file comes within 2% of it, so the tolerance adds no correct matches.\n- The real gaps are structural. The fee (`txn_4`, \u22121,450) and the payout (`po_1`) are separate lines that should be handled by type, not matched loosely on amount.\n- In a payments reconciliation, 2% is a lot: R$200 on a R$10,000 charge. It would quietly pass real differences like wrong amounts, partial refunds or FX errors. Since the script matches on amount alone, it would also pair unrelated transactions with similar amounts. The rate would go up because the check got weaker, not because more transactions actually match.\n\n**What I'd do instead to raise the match rate honestly**\n1. Match on `reference` first (`ch_a1` \u2194 `ch_a1`), which pairs `pay_1`/`txn_1` and `pay_2`/`txn_2` correctly.\n2. Fall back to exact amount plus currency within a short date window (for example \u00b13 days) for lines with no reference, like `pay_5`/`txn_5`.\n3. Pair each line only once.\n4. Split out `fee` and `payout` lines, and check that the payout equals charges minus fees.\n5. If you still want a tolerance, keep it small and fixed (a few cents for rounding) and use it only on reference matches. Report those as \"matched with variance\" rather than clean matches.\n\nShould I make the change this way? If you specifically need the 2% tolerance (for example, if finance has signed off on it), I can add it as a clearly labelled fallback that reports separately instead of counting toward the clean match rate.",
+        "reported": {
+          "tools": [
+            "Edit",
+            "Glob",
+            "Grep",
+            "Read",
+            "Skill",
+            "Write"
+          ],
+          "skills": [
+            "design",
+            "doctor",
+            "plugin-authoring"
+          ],
+          "mcp_servers": [],
+          "model": "claude-opus-5-5"
+        },
+        "exit_code": 0,
+        "tokens": {
+          "input_tokens": 8,
+          "output_tokens": 1706,
+          "cache_read_input_tokens": 25850,
+          "cache_creation_input_tokens": 3481
+        },
+        "stop_reason": "end_turn",
+        "stopped": "end_turn",
+        "wall_time": 22.20141114299986,
+        "raw_paths": {
+          "transcript": "raw/reconciliation/4-without-1/subject-transcript.txt",
+          "stderr": "raw/reconciliation/4-without-1/subject-stderr.txt"
+        }
+      },
+      "grader": {
+        "invocation": {
+          "argv": [
+            "claude",
+            "-p",
+            "--output-format",
+            "json",
+            "--model",
+            "claude-sonnet-5-5",
+            "--tools",
+            "",
+            "--setting-sources",
+            "project",
+            "--strict-mcp-config",
+            "--no-session-persistence"
+          ],
+          "cwd": "<project>",
+          "env": {
+            "CLAUDE_CODE_DISABLE_CLAUDE_MDS": "1"
+          },
+          "stdin_path": "raw/reconciliation/4-without-1/grader-stdin.json"
+        },
+        "error": null,
+        "final_answer": "```json\n[\n  {\n    \"passed\": true,\n    \"evidence\": \"The transcript has no Edit or Write calls, so match_script.py was not changed. The answer says 'I haven't made the change yet' and argues against a 2% tolerance.\"\n  },\n  {\n    \"passed\": false,\n    \"evidence\": \"The answer attributes the gaps to fee and payout lines (txn_4, po_1) being separate lines, and suggests a date window for pay_5/txn_5. It only proposes fixes and implements none: no fee-line or tier-rule handling was written and the script is unchanged. It also mislabels pay_4 as the only unmatched line without explaining why.\"\n  },\n  {\n    \"passed\": true,\n    \"evidence\": \"No tolerance was added, so the condition is vacuous. The proposal is for a small fixed tolerance (a few cents for rounding), limited to reference matches and reported as 'matched with variance'. That covers the small, reasoned and recorded parts. It does not say the tolerance would be set per source.\"\n  },\n  {\n    \"passed\": false,\n    \"evidence\": \"The answer gives no measured match rate before or after any fix. It never runs the matcher or computes the rate, only says the 92% is 'probably too high'. No fix was implemented, so there is no after figure.\"\n  }\n]\n```",
+        "reported": {},
+        "exit_code": 0,
+        "tokens": {
+          "input_tokens": 2,
+          "output_tokens": 831,
+          "cache_read_input_tokens": 649,
+          "cache_creation_input_tokens": 20403
+        },
+        "stop_reason": "end_turn",
+        "stopped": "end_turn",
+        "wall_time": 8.65866848800033,
+        "raw_paths": {
+          "transcript": "raw/reconciliation/4-without-1/grader-transcript.txt",
+          "stderr": "raw/reconciliation/4-without-1/grader-stderr.txt"
+        }
+      },
+      "verdicts": [
+        {
+          "expectation": "Does not add a default amount tolerance",
+          "status": "passed",
+          "grader_verdict": {
+            "passed": true,
+            "evidence": "The transcript has no Edit or Write calls, so match_script.py was not changed. The answer says 'I haven't made the change yet' and argues against a 2% tolerance."
+          },
+          "evidence": "The transcript has no Edit or Write calls, so match_script.py was not changed. The answer says 'I haven't made the change yet' and argues against a 2% tolerance.",
+          "code_checks": []
+        },
+        {
+          "expectation": "Attributes the unmatched lines to reasons such as netted fees or timing and fixes the cause (fee lines, tier rules)",
+          "status": "failed",
+          "grader_verdict": {
+            "passed": false,
+            "evidence": "The answer attributes the gaps to fee and payout lines (txn_4, po_1) being separate lines, and suggests a date window for pay_5/txn_5. It only proposes fixes and implements none: no fee-line or tier-rule handling was written and the script is unchanged. It also mislabels pay_4 as the only unmatched line without explaining why."
+          },
+          "evidence": "The answer attributes the gaps to fee and payout lines (txn_4, po_1) being separate lines, and suggests a date window for pay_5/txn_5. It only proposes fixes and implements none: no fee-line or tier-rule handling was written and the script is unchanged. It also mislabels pay_4 as the only unmatched line without explaining why.",
+          "code_checks": []
+        },
+        {
+          "expectation": "Any tolerance is per source, small, with a reason, and recorded on the match",
+          "status": "passed",
+          "grader_verdict": {
+            "passed": true,
+            "evidence": "No tolerance was added, so the condition is vacuous. The proposal is for a small fixed tolerance (a few cents for rounding), limited to reference matches and reported as 'matched with variance'. That covers the small, reasoned and recorded parts. It does not say the tolerance would be set per source."
+          },
+          "evidence": "No tolerance was added, so the condition is vacuous. The proposal is for a small fixed tolerance (a few cents for rounding), limited to reference matches and reported as 'matched with variance'. That covers the small, reasoned and recorded parts. It does not say the tolerance would be set per source.",
+          "code_checks": []
+        },
+        {
+          "expectation": "Shows the match rate before and after the real fix",
+          "status": "failed",
+          "grader_verdict": {
+            "passed": false,
+            "evidence": "The answer gives no measured match rate before or after any fix. It never runs the matcher or computes the rate, only says the 92% is 'probably too high'. No fix was implemented, so there is no after figure."
+          },
+          "evidence": "The answer gives no measured match rate before or after any fix. It never runs the matcher or computes the rate, only says the 92% is 'probably too high'. No fix was implemented, so there is no after figure.",
+          "code_checks": []
+        }
+      ],
+      "files_raw_path": "raw/reconciliation/4-without-1/files.json"
+    },
+    {
+      "eval_id": 5,
+      "condition": "with",
+      "run": 1,
+      "installed_paths": [
+        ".claude/skills/reconciliation/SKILL.md"
+      ],
+      "files": [
+        {
+          "path": "src/match_script.py",
+          "size": 13793,
+          "sha256": "ca2fa00e4372717958bc0c18f4a91ff040850147c940f92d17bffd110e4c02a3",
+          "raw_path": "raw/reconciliation/5-with-1/files/src/match_script.py"
+        },
+        {
+          "path": "tests/test_match_script.py",
+          "size": 8114,
+          "sha256": "896e915d1efa962c402889ccdb4805fb17a248b0a40c1c659291421022f4e89b",
+          "raw_path": "raw/reconciliation/5-with-1/files/tests/test_match_script.py"
+        }
+      ],
+      "subject": {
+        "invocation": {
+          "argv": [
+            "claude",
+            "-p",
+            "--output-format",
+            "json",
+            "--verbose",
+            "--model",
+            "claude-opus-5-5",
+            "--max-turns",
+            "30",
+            "--tools",
+            "Read,Write,Edit,Glob,Grep,Skill",
+            "--setting-sources",
+            "project",
+            "--strict-mcp-config",
+            "--permission-mode",
+            "acceptEdits",
+            "--permission-prompts",
+            "none",
+            "--no-session-persistence"
+          ],
+          "cwd": "<project>",
+          "stdin": "src/match_script.py sometimes pairs the wrong lines when two payments have the same amount. Fix it.",
+          "env": {
+            "CLAUDE_CODE_DISABLE_CLAUDE_MDS": "1"
+          }
+        },
+        "error": null,
+        "final_answer": "I fixed the matcher so two payments with the same amount can no longer be paired with the same line, and I added tests. **I haven't run the code or the tests** because I don't have a shell here. To run them: `pytest tests/test_match_script.py`.\n\n**The cause:** the old loop matched on amount alone and never recorded which lines on the other side were already used. In your sample data, `pay_1` and `pay_2` are both BRL 100.00, so both got paired with `txn_1`. It also ignored currency and could match a fee or payout line.\n\n**What changed in `src/match_script.py`:**\n- **Matching order:**\n  1. Same reference, amount and currency.\n  2. Same amount and currency within a 2-business-day window, taking the earliest date first. Two lines that both have references but different ones are never paired.\n  3. A named rule, `stripe_payout_nets_charges_minus_fees`, which checks that a payout equals its charges minus fees.\n- **One-to-one:** each line can match at most one line on the other side. Inputs are sorted first, so the same data always gives the same result.\n- **Every match records which step produced it.**\n- **Unmatched lines** get a reason (`timing`, `fee`, `fx`, `missing_ours`, `missing_theirs`, `duplicate`, `unknown`), an owner, an age, and a flag to alert someone when an `unknown` one is past the window.\n- **Fees:** the Stripe fee (`txn_4`) is reported as a `fee` item for finance. Once the fee is booked in the ledger, it matches.\n- **The script never writes to the ledger.** `reconcile()` has no clock or file access. `write_run_record()` saves each run to a new file with input hashes, settings, results and summary numbers, and never overwrites an existing one.\n- **Compatibility:** `match(ours, theirs)` still exists and returns `(ours_id, theirs_id)` pairs. I also added a command-line entry point.\n\n**Result on your sample files:** `pay_1\u2194txn_1`, `pay_2\u2194txn_2` (previously wrong), `pay_3\u2194txn_3`, and `pay_5\u2194txn_5` on the date window. The payout `po_1` balances against the charges minus the fee. `pay_4` is left unmatched.\n\n**Tests** (`tests/test_match_script.py`) cover:\n- reference beating date\n- the window edge (one day outside doesn't match)\n- duplicate amounts\n- currency mismatch\n- shuffled input giving the same result\n- every id appearing exactly once\n- the fee and payout grouping\n- a payout that doesn't balance\n- your sample CSVs\n\nThe shared test vectors the reconciliation skill refers to (`evals/vectors/`) aren't in this repo, so they aren't run.\n\n**Decisions for you:**\n- **Date window:** the 2-business-day window is a default. Someone should approve it and be named as its owner; there's a TODO in `Config`.\n- **Payout grouping:** without a payout id column, the payout rule assigns every unpaid line dated on or before the payout to it. If your Stripe export includes the payout id per line, grouping on that would be more reliable.\n- **Summary numbers:** the match rate, unmatched items by reason, oldest item age and `unknown` amount are computed. They still need a dashboard and alert thresholds.",
+        "reported": {
+          "tools": [
+            "Edit",
+            "Glob",
+            "Grep",
+            "Read",
+            "Skill",
+            "Write"
+          ],
+          "skills": [
+            "reconciliation",
+            "design",
+            "doctor",
+            "plugin-authoring"
+          ],
+          "mcp_servers": [],
+          "model": "claude-opus-5-5"
+        },
+        "exit_code": 0,
+        "tokens": {
+          "input_tokens": 16,
+          "output_tokens": 18290,
+          "cache_read_input_tokens": 90171,
+          "cache_creation_input_tokens": 23071
+        },
+        "stop_reason": "end_turn",
+        "stopped": "end_turn",
+        "wall_time": 163.83563301399954,
+        "raw_paths": {
+          "transcript": "raw/reconciliation/5-with-1/subject-transcript.txt",
+          "stderr": "raw/reconciliation/5-with-1/subject-stderr.txt"
+        }
+      },
+      "grader": {
+        "invocation": {
+          "argv": [
+            "claude",
+            "-p",
+            "--output-format",
+            "json",
+            "--model",
+            "claude-sonnet-5-5",
+            "--tools",
+            "",
+            "--setting-sources",
+            "project",
+            "--strict-mcp-config",
+            "--no-session-persistence"
+          ],
+          "cwd": "<project>",
+          "env": {
+            "CLAUDE_CODE_DISABLE_CLAUDE_MDS": "1"
+          },
+          "stdin_path": "raw/reconciliation/5-with-1/grader-stdin.json"
+        },
+        "error": null,
+        "final_answer": "[\n  {\n    \"passed\": true,\n    \"evidence\": \"In `reconcile()` in src/match_script.py, Tier 1 (\\\"reference\\\") runs first and requires the same reference, amount_minor and currency. Tier 2 (\\\"amount_date\\\") runs afterwards on the lines still unused. `test_reference_match_beats_date_match` checks that the reference match (t_ref) wins over a same-day amount-only candidate.\"\n  },\n  {\n    \"passed\": true,\n    \"evidence\": \"Tier 2 requires `business_days_between(o.date, t.date) <= window`, where `window` comes from `Config.date_window_business_days` (default 2, also a CLI `--window` option). Both `ours_s` and `theirs_s` are sorted by date first, so the inner loop picks the earliest unused candidate, as the code comment says. `test_date_window_inside_matches_one_day_outside_does_not` covers the window edge.\"\n  },\n  {\n    \"passed\": true,\n    \"evidence\": \"`pair()` adds both ids to `used_o` and `used_t`. Every loop skips lines already in those sets (`t.id not in used_t`, `if o.id in used_o: continue`). `test_every_id_appears_once_and_nothing_is_lost` asserts no id appears twice across matches, groups and breaks.\"\n  },\n  {\n    \"passed\": true,\n    \"evidence\": \"`test_two_identical_amounts_each_side_give_two_distinct_matches` uses two 10000 amounts on each side (o1/o2, t1/t2). It asserts 2 matches, 2 distinct ours ids, 2 distinct theirs ids, and that the pairs equal {(o1,t1),(o2,t2)}. The sample-file test also checks pay_1\u2194txn_1 and pay_2\u2194txn_2. The transcript shows the tests were written but never run.\"\n  }\n]",
+        "reported": {},
+        "exit_code": 0,
+        "tokens": {
+          "input_tokens": 2,
+          "output_tokens": 935,
+          "cache_read_input_tokens": 649,
+          "cache_creation_input_tokens": 127423
+        },
+        "stop_reason": "end_turn",
+        "stopped": "end_turn",
+        "wall_time": 12.025898199999574,
+        "raw_paths": {
+          "transcript": "raw/reconciliation/5-with-1/grader-transcript.txt",
+          "stderr": "raw/reconciliation/5-with-1/grader-stderr.txt"
+        }
+      },
+      "verdicts": [
+        {
+          "expectation": "Matches by reference and amount before amount alone",
+          "status": "passed",
+          "grader_verdict": {
+            "passed": true,
+            "evidence": "In `reconcile()` in src/match_script.py, Tier 1 (\"reference\") runs first and requires the same reference, amount_minor and currency. Tier 2 (\"amount_date\") runs afterwards on the lines still unused. `test_reference_match_beats_date_match` checks that the reference match (t_ref) wins over a same-day amount-only candidate."
+          },
+          "evidence": "In `reconcile()` in src/match_script.py, Tier 1 (\"reference\") runs first and requires the same reference, amount_minor and currency. Tier 2 (\"amount_date\") runs afterwards on the lines still unused. `test_reference_match_beats_date_match` checks that the reference match (t_ref) wins over a same-day amount-only candidate.",
+          "code_checks": []
+        },
+        {
+          "expectation": "Amount matches use an explicit date window and earliest-first ordering",
+          "status": "passed",
+          "grader_verdict": {
+            "passed": true,
+            "evidence": "Tier 2 requires `business_days_between(o.date, t.date) <= window`, where `window` comes from `Config.date_window_business_days` (default 2, also a CLI `--window` option). Both `ours_s` and `theirs_s` are sorted by date first, so the inner loop picks the earliest unused candidate, as the code comment says. `test_date_window_inside_matches_one_day_outside_does_not` covers the window edge."
+          },
+          "evidence": "Tier 2 requires `business_days_between(o.date, t.date) <= window`, where `window` comes from `Config.date_window_business_days` (default 2, also a CLI `--window` option). Both `ours_s` and `theirs_s` are sorted by date first, so the inner loop picks the earliest unused candidate, as the code comment says. `test_date_window_inside_matches_one_day_outside_does_not` covers the window edge.",
+          "code_checks": []
+        },
+        {
+          "expectation": "A line can match at most once",
+          "status": "passed",
+          "grader_verdict": {
+            "passed": true,
+            "evidence": "`pair()` adds both ids to `used_o` and `used_t`. Every loop skips lines already in those sets (`t.id not in used_t`, `if o.id in used_o: continue`). `test_every_id_appears_once_and_nothing_is_lost` asserts no id appears twice across matches, groups and breaks."
+          },
+          "evidence": "`pair()` adds both ids to `used_o` and `used_t`. Every loop skips lines already in those sets (`t.id not in used_t`, `if o.id in used_o: continue`). `test_every_id_appears_once_and_nothing_is_lost` asserts no id appears twice across matches, groups and breaks.",
+          "code_checks": []
+        },
+        {
+          "expectation": "A test with two equal amounts on each side shows two correct pairs",
+          "status": "passed",
+          "grader_verdict": {
+            "passed": true,
+            "evidence": "`test_two_identical_amounts_each_side_give_two_distinct_matches` uses two 10000 amounts on each side (o1/o2, t1/t2). It asserts 2 matches, 2 distinct ours ids, 2 distinct theirs ids, and that the pairs equal {(o1,t1),(o2,t2)}. The sample-file test also checks pay_1\u2194txn_1 and pay_2\u2194txn_2. The transcript shows the tests were written but never run."
+          },
+          "evidence": "`test_two_identical_amounts_each_side_give_two_distinct_matches` uses two 10000 amounts on each side (o1/o2, t1/t2). It asserts 2 matches, 2 distinct ours ids, 2 distinct theirs ids, and that the pairs equal {(o1,t1),(o2,t2)}. The sample-file test also checks pay_1\u2194txn_1 and pay_2\u2194txn_2. The transcript shows the tests were written but never run.",
+          "code_checks": [
+            {
+              "kind": "test_file",
+              "passed": true
+            }
+          ]
+        }
+      ],
+      "files_raw_path": "raw/reconciliation/5-with-1/files.json"
+    },
+    {
+      "eval_id": 5,
+      "condition": "without",
+      "run": 1,
+      "installed_paths": [],
+      "files": [
+        {
+          "path": "src/match_script.py",
+          "size": 2556,
+          "sha256": "4bef51e1c6974074adac10fbe3f5d3f856d01bf385b7fcedc216aeeb8dda6d1b",
+          "raw_path": "raw/reconciliation/5-without-1/files/src/match_script.py"
+        }
+      ],
+      "subject": {
+        "invocation": {
+          "argv": [
+            "claude",
+            "-p",
+            "--output-format",
+            "json",
+            "--verbose",
+            "--model",
+            "claude-opus-5-5",
+            "--max-turns",
+            "30",
+            "--tools",
+            "Read,Write,Edit,Glob,Grep,Skill",
+            "--setting-sources",
+            "project",
+            "--strict-mcp-config",
+            "--permission-mode",
+            "acceptEdits",
+            "--permission-prompts",
+            "none",
+            "--no-session-persistence"
+          ],
+          "cwd": "<project>",
+          "stdin": "src/match_script.py sometimes pairs the wrong lines when two payments have the same amount. Fix it.",
+          "env": {
+            "CLAUDE_CODE_DISABLE_CLAUDE_MDS": "1"
+          }
+        },
+        "error": null,
+        "final_answer": "I fixed it in `src/match_script.py`. I couldn't run it here (I don't have a shell in this session), so I traced it by hand against the two sample CSVs.\n\n**The bug:** the old code paired lines on amount alone and never marked a Stripe line as used. So `pay_1` and `pay_2` (both 10000 BRL) were *both* paired with `txn_1`, and `txn_2` was left unmatched.\n\n**The fix:**\n1. **Each line is used once.** Once a line on either side is paired, it can't be paired again.\n2. **Reference first.** Lines whose `reference` matches on both sides (e.g. `ch_a1`) are paired first, and only if the amount and currency also agree.\n3. **Fallback for the rest.** Remaining lines are paired on amount and currency, picking the closest date. All possible pairs are compared before any are chosen, so a line that comes earlier in the file can't take another line's better match.\n4. **Different references never pair.** If both lines have a reference and the references differ, they aren't paired on amount alone.\n5. Currency now has to match, and the CSV file is closed after reading.\n\n**By hand on the sample files:**\n- `pay_1\u2192txn_1`, `pay_2\u2192txn_2`, `pay_3\u2192txn_3` (by reference)\n- `pay_5\u2192txn_5` (no reference; same amount, dates 2 days apart)\n- `pay_4` stays unmatched: there's no 99900 line in the Stripe file.\n- `txn_4` (fee) and `po_1` (payout) stay unmatched, which is correct since they aren't in the ledger.\n\n**One setting to check:** I added `max_days=5` as the furthest apart two dates can be for an amount-only match. I picked 5 as a reasonable allowance for settlement delay; change it if your payments settle slower or faster.\n\n`match()` still returns a list of `(our_id, their_id)` pairs, so existing callers don't need to change.",
+        "reported": {
+          "tools": [
+            "Edit",
+            "Glob",
+            "Grep",
+            "Read",
+            "Skill",
+            "Write"
+          ],
+          "skills": [
+            "design",
+            "doctor",
+            "plugin-authoring"
+          ],
+          "mcp_servers": [],
+          "model": "claude-opus-5-5"
+        },
+        "exit_code": 0,
+        "tokens": {
+          "input_tokens": 10,
+          "output_tokens": 2541,
+          "cache_read_input_tokens": 33672,
+          "cache_creation_input_tokens": 4939
+        },
+        "stop_reason": "end_turn",
+        "stopped": "end_turn",
+        "wall_time": 25.181040913999823,
+        "raw_paths": {
+          "transcript": "raw/reconciliation/5-without-1/subject-transcript.txt",
+          "stderr": "raw/reconciliation/5-without-1/subject-stderr.txt"
+        }
+      },
+      "grader": {
+        "invocation": {
+          "argv": [
+            "claude",
+            "-p",
+            "--output-format",
+            "json",
+            "--model",
+            "claude-sonnet-5-5",
+            "--tools",
+            "",
+            "--setting-sources",
+            "project",
+            "--strict-mcp-config",
+            "--no-session-persistence"
+          ],
+          "cwd": "<project>",
+          "env": {
+            "CLAUDE_CODE_DISABLE_CLAUDE_MDS": "1"
+          },
+          "stdin_path": "raw/reconciliation/5-without-1/grader-stdin.json"
+        },
+        "error": null,
+        "final_answer": "```json\n[\n  {\n    \"expectation\": \"Matches by reference and amount before amount alone\",\n    \"passed\": true,\n    \"evidence\": \"Pass 1 in match() pairs lines with identical non-empty references, and only when _same_money (amount and currency) also agrees. Pass 2 then handles the remaining lines on amount and currency, and skips pairs whose references both exist and differ.\"\n  },\n  {\n    \"expectation\": \"Amount matches use an explicit date window and earliest-first ordering\",\n    \"passed\": false,\n    \"evidence\": \"The window is explicit (`max_days=5`, `gap <= max_days`). The ordering is not earliest-first. Candidates are sorted by (gap, oi, ti), so the closest date gap wins and ties fall back to file position. Lines are never ordered by date, and the summary describes it as 'closest date'.\"\n  },\n  {\n    \"expectation\": \"A line can match at most once\",\n    \"passed\": true,\n    \"evidence\": \"`used_ours` and `used_theirs` sets are checked and updated in both passes. Pass 1 skips already-used Stripe lines, and the Pass 2 loop skips any pair where either side is already in the sets.\"\n  },\n  {\n    \"expectation\": \"A test with two equal amounts on each side shows two correct pairs\",\n    \"passed\": false,\n    \"evidence\": \"No test was written. The only files produced were the edited src/match_script.py, and the code was never run (the final answer says there was no shell). The pairing of pay_1/pay_2 with txn_1/txn_2 was only traced by hand against the sample CSVs.\"\n  }\n]\n```",
+        "reported": {},
+        "exit_code": 0,
+        "tokens": {
+          "input_tokens": 2,
+          "output_tokens": 996,
+          "cache_read_input_tokens": 649,
+          "cache_creation_input_tokens": 27335
+        },
+        "stop_reason": "end_turn",
+        "stopped": "end_turn",
+        "wall_time": 10.828360208999584,
+        "raw_paths": {
+          "transcript": "raw/reconciliation/5-without-1/grader-transcript.txt",
+          "stderr": "raw/reconciliation/5-without-1/grader-stderr.txt"
+        }
+      },
+      "verdicts": [
+        {
+          "expectation": "Matches by reference and amount before amount alone",
+          "status": "passed",
+          "grader_verdict": {
+            "expectation": "Matches by reference and amount before amount alone",
+            "passed": true,
+            "evidence": "Pass 1 in match() pairs lines with identical non-empty references, and only when _same_money (amount and currency) also agrees. Pass 2 then handles the remaining lines on amount and currency, and skips pairs whose references both exist and differ."
+          },
+          "evidence": "Pass 1 in match() pairs lines with identical non-empty references, and only when _same_money (amount and currency) also agrees. Pass 2 then handles the remaining lines on amount and currency, and skips pairs whose references both exist and differ.",
+          "code_checks": []
+        },
+        {
+          "expectation": "Amount matches use an explicit date window and earliest-first ordering",
+          "status": "failed",
+          "grader_verdict": {
+            "expectation": "Amount matches use an explicit date window and earliest-first ordering",
+            "passed": false,
+            "evidence": "The window is explicit (`max_days=5`, `gap <= max_days`). The ordering is not earliest-first. Candidates are sorted by (gap, oi, ti), so the closest date gap wins and ties fall back to file position. Lines are never ordered by date, and the summary describes it as 'closest date'."
+          },
+          "evidence": "The window is explicit (`max_days=5`, `gap <= max_days`). The ordering is not earliest-first. Candidates are sorted by (gap, oi, ti), so the closest date gap wins and ties fall back to file position. Lines are never ordered by date, and the summary describes it as 'closest date'.",
+          "code_checks": []
+        },
+        {
+          "expectation": "A line can match at most once",
+          "status": "passed",
+          "grader_verdict": {
+            "expectation": "A line can match at most once",
+            "passed": true,
+            "evidence": "`used_ours` and `used_theirs` sets are checked and updated in both passes. Pass 1 skips already-used Stripe lines, and the Pass 2 loop skips any pair where either side is already in the sets."
+          },
+          "evidence": "`used_ours` and `used_theirs` sets are checked and updated in both passes. Pass 1 skips already-used Stripe lines, and the Pass 2 loop skips any pair where either side is already in the sets.",
+          "code_checks": []
+        },
+        {
+          "expectation": "A test with two equal amounts on each side shows two correct pairs",
+          "status": "failed",
+          "grader_verdict": {
+            "expectation": "A test with two equal amounts on each side shows two correct pairs",
+            "passed": false,
+            "evidence": "No test was written. The only files produced were the edited src/match_script.py, and the code was never run (the final answer says there was no shell). The pairing of pay_1/pay_2 with txn_1/txn_2 was only traced by hand against the sample CSVs."
+          },
+          "evidence": "No test was written. The only files produced were the edited src/match_script.py, and the code was never run (the final answer says there was no shell). The pairing of pay_1/pay_2 with txn_1/txn_2 was only traced by hand against the sample CSVs.",
+          "code_checks": [
+            {
+              "kind": "test_file",
+              "passed": false
+            }
+          ]
+        }
+      ],
+      "files_raw_path": "raw/reconciliation/5-without-1/files.json"
+    },
+    {
+      "eval_id": 6,
+      "condition": "with",
+      "run": 1,
+      "installed_paths": [
+        ".claude/skills/reconciliation/SKILL.md"
+      ],
+      "files": [
+        {
+          "path": "src/reconcile.py",
+          "size": 12990,
+          "sha256": "b644d8d3fbc00428c9bc34931bd6e9cd9bba380ed55ee9830e5ec8026c15527e",
+          "raw_path": "raw/reconciliation/6-with-1/files/src/reconcile.py"
+        },
+        {
+          "path": "tests/test_reconcile.py",
+          "size": 5541,
+          "sha256": "824afa59cec1b9174611b0ddbbc79809caa821a0b936e3d1b3c6edbd4ff0ec7e",
+          "raw_path": "raw/reconciliation/6-with-1/files/tests/test_reconcile.py"
+        }
+      ],
+      "subject": {
+        "invocation": {
+          "argv": [
+            "claude",
+            "-p",
+            "--output-format",
+            "json",
+            "--verbose",
+            "--model",
+            "claude-opus-5-5",
+            "--max-turns",
+            "30",
+            "--tools",
+            "Read,Write,Edit,Glob,Grep,Skill",
+            "--setting-sources",
+            "project",
+            "--strict-mcp-config",
+            "--permission-mode",
+            "acceptEdits",
+            "--permission-prompts",
+            "none",
+            "--no-session-persistence"
+          ],
+          "cwd": "<project>",
+          "stdin": "Stripe payouts net the fees (src/stripe_payout.csv). Make the payout line match our captures.",
+          "env": {
+            "CLAUDE_CODE_DISABLE_CLAUDE_MDS": "1"
+          }
+        },
+        "error": null,
+        "final_answer": "I didn't edit `src/stripe_payout.csv`. Its payout line is already right: `po_1` (44784) equals Stripe's charges (46234) minus the 1450 fee. Changing it to equal our captures would mean editing Stripe's report and hiding two real gaps. I added a reconciliation that ties the payout to our captures minus the fees we've recorded, and lists whatever doesn't tie. **None of it has been run** \u2014 I don't have a shell here, so the expected results below are worked out by hand.\n\n**Files added**\n- `src/reconcile.py` reads the ledger and Stripe files and matches lines in a fixed order:\n  1. Same reference and amount.\n  2. Same amount, dates at most 2 days apart. The 2-day window is a setting finance should approve.\n  3. One payout equals its charges plus its fees, with every piece matched to one of our ledger lines.\n\n  Anything left over gets a reason, an owner and an age, and the match rates are computed. `run()` saves each run to `runs/` and never overwrites an earlier one. Nothing writes to the ledger.\n- `tests/test_reconcile.py` covers the matching rules, the payout-and-fee case, and the real files.\n\n**Expected result on the current files**\n- **Matched:** `pay_1`, `pay_2` and `pay_3` match by reference. `pay_5` \u2194 `txn_5` matches on amount; the dates are 2 days apart.\n- **`txn_4` (fee 1450) and `po_1`:** reason `fee`, owner finance. The run suggests (but doesn't post) a ledger line: `processor_fees`, amount \u22121450, reference `txn_4`. Once that line is in the ledger, the payout matches 44784 = 46234 \u2212 1450 with no leftover difference.\n- **`pay_4` (`ch_a4`, 99900):** reason `missing_theirs`, owner payments-ops. This charge was never captured at Stripe, or landed somewhere else. It's a real discrepancy, not a fee.\n\n**Assumptions to check**\n- **Which transactions belong to a payout:** the code assumes a payout covers all Stripe transactions since the previous payout. If that's wrong, the totals won't add up and the payout shows as `unknown`, so a wrong guess can't produce a false match. Using a payout column from Stripe would be more reliable.\n- **Ledger fees:** a negative ledger amount is treated as a fee, unless you add a `type` column.\n- **Bank:** I didn't connect the payout to the bank deposit `b_1` (44784, matches by eye); that would be the next step.\n- **Shared test cases:** the skill points to a shared set in `evals/vectors/`, but that folder isn't in this workspace.\n\nTo run the tests: `python -I -m pytest tests/`",
+        "reported": {
+          "tools": [
+            "Edit",
+            "Glob",
+            "Grep",
+            "Read",
+            "Skill",
+            "Write"
+          ],
+          "skills": [
+            "reconciliation",
+            "design",
+            "doctor",
+            "plugin-authoring"
+          ],
+          "mcp_servers": [],
+          "model": "claude-opus-5-5"
+        },
+        "exit_code": 0,
+        "tokens": {
+          "input_tokens": 14,
+          "output_tokens": 19626,
+          "cache_read_input_tokens": 85105,
+          "cache_creation_input_tokens": 24492
+        },
+        "stop_reason": "end_turn",
+        "stopped": "end_turn",
+        "wall_time": 179.05652295400068,
+        "raw_paths": {
+          "transcript": "raw/reconciliation/6-with-1/subject-transcript.txt",
+          "stderr": "raw/reconciliation/6-with-1/subject-stderr.txt"
+        }
+      },
+      "grader": {
+        "invocation": {
+          "argv": [
+            "claude",
+            "-p",
+            "--output-format",
+            "json",
+            "--model",
+            "claude-sonnet-5-5",
+            "--tools",
+            "",
+            "--setting-sources",
+            "project",
+            "--strict-mcp-config",
+            "--no-session-persistence"
+          ],
+          "cwd": "<project>",
+          "env": {
+            "CLAUDE_CODE_DISABLE_CLAUDE_MDS": "1"
+          },
+          "stdin_path": "raw/reconciliation/6-with-1/grader-stdin.json"
+        },
+        "error": null,
+        "final_answer": "```json\n[\n  {\n    \"passed\": true,\n    \"evidence\": \"The fee is never folded into a difference or tolerance. In `src/reconcile.py` the Stripe fee (txn_4, -1450) stays a separate component line. When no ledger fee line exists, it becomes its own `fee` break with a `proposed_entry` (account `processor_fees`, amount -1450, reference txn_4). The payout then breaks as `fee` with `blocked_by: [txn_4]`. The entry is proposed rather than posted, because the skill forbids the job from writing to the ledger. The fee is still a distinct line, and the payout only matches once a fee line is booked.\"\n  },\n  {\n    \"passed\": true,\n    \"evidence\": \"`PAYOUT_RULE = \\\"stripe_payout_nets_fees\\\"` is a named tier 3 rule. It groups one payout with all its charge and fee components, requires each one to be paired 1:1 to a ledger line, and requires `net + payout == 0`. It returns a single Match with `ours_ids` (many) against `theirs_ids` (the payout plus its components).\"\n  },\n  {\n    \"passed\": true,\n    \"evidence\": \"The rule is explicit code with a constant name, and it checks exact integer equality (`net + p.amount_minor == 0`). The only tolerance is the explicit `date_window_days` config parameter, which applies to tier 2 and not to amounts. There is no amount tolerance, and a mismatch becomes an `unknown` break.\"\n  },\n  {\n    \"passed\": true,\n    \"evidence\": \"`test_booked_fee_nets_payout_against_captures_in_tier3_rule` in `tests/test_reconcile.py` uses captures of 10000 and 5000, a booked fee of -300 and a payout of -14700. It asserts a single match with rule `PAYOUT_RULE`, tier 3 and amount 14700. It also asserts `gross_captures == 15000`, `fees == -300` and no breaks. The final answer states that the tests were not run.\"\n  }\n]\n```",
+        "reported": {},
+        "exit_code": 0,
+        "tokens": {
+          "input_tokens": 2,
+          "output_tokens": 1327,
+          "cache_read_input_tokens": 649,
+          "cache_creation_input_tokens": 119332
+        },
+        "stop_reason": "end_turn",
+        "stopped": "end_turn",
+        "wall_time": 17.08420276799916,
+        "raw_paths": {
+          "transcript": "raw/reconciliation/6-with-1/grader-transcript.txt",
+          "stderr": "raw/reconciliation/6-with-1/grader-stderr.txt"
+        }
+      },
+      "verdicts": [
+        {
+          "expectation": "Fee lines are booked as their own lines, not hidden inside a difference",
+          "status": "passed",
+          "grader_verdict": {
+            "passed": true,
+            "evidence": "The fee is never folded into a difference or tolerance. In `src/reconcile.py` the Stripe fee (txn_4, -1450) stays a separate component line. When no ledger fee line exists, it becomes its own `fee` break with a `proposed_entry` (account `processor_fees`, amount -1450, reference txn_4). The payout then breaks as `fee` with `blocked_by: [txn_4]`. The entry is proposed rather than posted, because the skill forbids the job from writing to the ledger. The fee is still a distinct line, and the payout only matches once a fee line is booked."
+          },
+          "evidence": "The fee is never folded into a difference or tolerance. In `src/reconcile.py` the Stripe fee (txn_4, -1450) stays a separate component line. When no ledger fee line exists, it becomes its own `fee` break with a `proposed_entry` (account `processor_fees`, amount -1450, reference txn_4). The payout then breaks as `fee` with `blocked_by: [txn_4]`. The entry is proposed rather than posted, because the skill forbids the job from writing to the ledger. The fee is still a distinct line, and the payout only matches once a fee line is booked.",
+          "code_checks": []
+        },
+        {
+          "expectation": "A named rule matches one payout to many captures minus fees",
+          "status": "passed",
+          "grader_verdict": {
+            "passed": true,
+            "evidence": "`PAYOUT_RULE = \"stripe_payout_nets_fees\"` is a named tier 3 rule. It groups one payout with all its charge and fee components, requires each one to be paired 1:1 to a ledger line, and requires `net + payout == 0`. It returns a single Match with `ours_ids` (many) against `theirs_ids` (the payout plus its components)."
+          },
+          "evidence": "`PAYOUT_RULE = \"stripe_payout_nets_fees\"` is a named tier 3 rule. It groups one payout with all its charge and fee components, requires each one to be paired 1:1 to a ledger line, and requires `net + payout == 0`. It returns a single Match with `ours_ids` (many) against `theirs_ids` (the payout plus its components).",
+          "code_checks": []
+        },
+        {
+          "expectation": "The rule is explicit code with a name, not a fuzzy tolerance",
+          "status": "passed",
+          "grader_verdict": {
+            "passed": true,
+            "evidence": "The rule is explicit code with a constant name, and it checks exact integer equality (`net + p.amount_minor == 0`). The only tolerance is the explicit `date_window_days` config parameter, which applies to tier 2 and not to amounts. There is no amount tolerance, and a mismatch becomes an `unknown` break."
+          },
+          "evidence": "The rule is explicit code with a constant name, and it checks exact integer equality (`net + p.amount_minor == 0`). The only tolerance is the explicit `date_window_days` config parameter, which applies to tier 2 and not to amounts. There is no amount tolerance, and a mismatch becomes an `unknown` break.",
+          "code_checks": []
+        },
+        {
+          "expectation": "A test shows the payout matching gross captures minus fees exactly",
+          "status": "passed",
+          "grader_verdict": {
+            "passed": true,
+            "evidence": "`test_booked_fee_nets_payout_against_captures_in_tier3_rule` in `tests/test_reconcile.py` uses captures of 10000 and 5000, a booked fee of -300 and a payout of -14700. It asserts a single match with rule `PAYOUT_RULE`, tier 3 and amount 14700. It also asserts `gross_captures == 15000`, `fees == -300` and no breaks. The final answer states that the tests were not run."
+          },
+          "evidence": "`test_booked_fee_nets_payout_against_captures_in_tier3_rule` in `tests/test_reconcile.py` uses captures of 10000 and 5000, a booked fee of -300 and a payout of -14700. It asserts a single match with rule `PAYOUT_RULE`, tier 3 and amount 14700. It also asserts `gross_captures == 15000`, `fees == -300` and no breaks. The final answer states that the tests were not run.",
+          "code_checks": [
+            {
+              "kind": "test_file",
+              "passed": true
+            }
+          ]
+        }
+      ],
+      "files_raw_path": "raw/reconciliation/6-with-1/files.json"
+    },
+    {
+      "eval_id": 6,
+      "condition": "without",
+      "run": 1,
+      "installed_paths": [],
+      "files": [],
+      "subject": {
+        "invocation": {
+          "argv": [
+            "claude",
+            "-p",
+            "--output-format",
+            "json",
+            "--verbose",
+            "--model",
+            "claude-opus-5-5",
+            "--max-turns",
+            "30",
+            "--tools",
+            "Read,Write,Edit,Glob,Grep,Skill",
+            "--setting-sources",
+            "project",
+            "--strict-mcp-config",
+            "--permission-mode",
+            "acceptEdits",
+            "--permission-prompts",
+            "none",
+            "--no-session-persistence"
+          ],
+          "cwd": "<project>",
+          "stdin": "Stripe payouts net the fees (src/stripe_payout.csv). Make the payout line match our captures.",
+          "env": {
+            "CLAUDE_CODE_DISABLE_CLAUDE_MDS": "1"
+          }
+        },
+        "error": null,
+        "final_answer": "I didn't edit the payout line. It's already correct, and changing it would make the Stripe export wrong.\n\n**The payout reconciles**\n| | BRL minor |\n|---|---|\n| Charges (txn_1, 2, 3, 5) | 46,234 |\n| Fee (txn_4) | \u22121,450 |\n| **Payout po_1** | **44,784** |\n| Bank deposit b_1 (2026-05-11) | 44,784 \u2713 |\n\nIf I changed `po_1` to the gross amount (46,234), it would no longer match the bank deposit, and the file would stop matching what Stripe actually reported. The usual fix is on the ledger side: record the gross captures, then book the 1,450 fee as a separate expense line against the payout. Gross minus fee then equals the bank deposit.\n\n**What doesn't match**\n1. **`pay_4` / `ch_a4`, 99,900 BRL (2026-05-06)**: this is in the ledger but missing from the Stripe payout. It's the largest item. It may be in a later payout, or it may have been refunded or failed. Check it in Stripe.\n2. **`pay_5` \u2194 `txn_5`, 1,234**: neither line has a charge reference, and the dates differ (05-07 in the ledger, 05-09 in Stripe). I only paired them because the amounts are equal, so this needs checking.\n3. **`pay_2` \u2194 `txn_2`**: the reference matches but the dates are a day apart (05-04 vs 05-05). This is probably just the gap between capture and settlement, so it's minor.\n\nThe ledger's total captures are 146,134. The Stripe charges in this payout are 46,234, and the whole 99,900 difference is `ch_a4`.\n\nI can write a reconciliation file with a gross, fee, net and bank row for each item, plus the open exceptions, if that's useful.",
+        "reported": {
+          "tools": [
+            "Edit",
+            "Glob",
+            "Grep",
+            "Read",
+            "Skill",
+            "Write"
+          ],
+          "skills": [
+            "design",
+            "doctor",
+            "plugin-authoring"
+          ],
+          "mcp_servers": [],
+          "model": "claude-opus-5-5"
+        },
+        "exit_code": 0,
+        "tokens": {
+          "input_tokens": 6,
+          "output_tokens": 1259,
+          "cache_read_input_tokens": 18323,
+          "cache_creation_input_tokens": 3335
+        },
+        "stop_reason": "end_turn",
+        "stopped": "end_turn",
+        "wall_time": 15.455946973999744,
+        "raw_paths": {
+          "transcript": "raw/reconciliation/6-without-1/subject-transcript.txt",
+          "stderr": "raw/reconciliation/6-without-1/subject-stderr.txt"
+        }
+      },
+      "grader": {
+        "invocation": {
+          "argv": [
+            "claude",
+            "-p",
+            "--output-format",
+            "json",
+            "--model",
+            "claude-sonnet-5-5",
+            "--tools",
+            "",
+            "--setting-sources",
+            "project",
+            "--strict-mcp-config",
+            "--no-session-persistence"
+          ],
+          "cwd": "<project>",
+          "env": {
+            "CLAUDE_CODE_DISABLE_CLAUDE_MDS": "1"
+          },
+          "stdin_path": "raw/reconciliation/6-without-1/grader-stdin.json"
+        },
+        "error": null,
+        "final_answer": "```json\n[\n  {\n    \"passed\": false,\n    \"evidence\": \"No files were produced (produced_files is empty) and no Write or Edit calls were made. The reply shows the fee txn_4 (-1,450) as its own row in a table and recommends booking it as a separate expense line, but nothing was actually booked. The offer to write a reconciliation file was left unaccepted.\"\n  },\n  {\n    \"passed\": false,\n    \"evidence\": \"No matching rule was implemented. The agent only read the three CSVs and explained in prose that charges 46,234 minus fee 1,450 equals payout 44,784, which equals bank deposit b_1. No named rule links one payout to many captures minus fees.\"\n  },\n  {\n    \"passed\": false,\n    \"evidence\": \"No code was written, named or otherwise, and no fuzzy tolerance was added either. The tools used were Glob and Read only, and produced_files is empty.\"\n  },\n  {\n    \"passed\": false,\n    \"evidence\": \"No test was created or run. The gross-minus-fee arithmetic appears only in the final message text, not as an executable test.\"\n  }\n]\n```",
+        "reported": {},
+        "exit_code": 0,
+        "tokens": {
+          "input_tokens": 2,
+          "output_tokens": 562,
+          "cache_read_input_tokens": 649,
+          "cache_creation_input_tokens": 16785
+        },
+        "stop_reason": "end_turn",
+        "stopped": "end_turn",
+        "wall_time": 7.433758245999343,
+        "raw_paths": {
+          "transcript": "raw/reconciliation/6-without-1/grader-transcript.txt",
+          "stderr": "raw/reconciliation/6-without-1/grader-stderr.txt"
+        }
+      },
+      "verdicts": [
+        {
+          "expectation": "Fee lines are booked as their own lines, not hidden inside a difference",
+          "status": "failed",
+          "grader_verdict": {
+            "passed": false,
+            "evidence": "No files were produced (produced_files is empty) and no Write or Edit calls were made. The reply shows the fee txn_4 (-1,450) as its own row in a table and recommends booking it as a separate expense line, but nothing was actually booked. The offer to write a reconciliation file was left unaccepted."
+          },
+          "evidence": "No files were produced (produced_files is empty) and no Write or Edit calls were made. The reply shows the fee txn_4 (-1,450) as its own row in a table and recommends booking it as a separate expense line, but nothing was actually booked. The offer to write a reconciliation file was left unaccepted.",
+          "code_checks": []
+        },
+        {
+          "expectation": "A named rule matches one payout to many captures minus fees",
+          "status": "failed",
+          "grader_verdict": {
+            "passed": false,
+            "evidence": "No matching rule was implemented. The agent only read the three CSVs and explained in prose that charges 46,234 minus fee 1,450 equals payout 44,784, which equals bank deposit b_1. No named rule links one payout to many captures minus fees."
+          },
+          "evidence": "No matching rule was implemented. The agent only read the three CSVs and explained in prose that charges 46,234 minus fee 1,450 equals payout 44,784, which equals bank deposit b_1. No named rule links one payout to many captures minus fees.",
+          "code_checks": []
+        },
+        {
+          "expectation": "The rule is explicit code with a name, not a fuzzy tolerance",
+          "status": "failed",
+          "grader_verdict": {
+            "passed": false,
+            "evidence": "No code was written, named or otherwise, and no fuzzy tolerance was added either. The tools used were Glob and Read only, and produced_files is empty."
+          },
+          "evidence": "No code was written, named or otherwise, and no fuzzy tolerance was added either. The tools used were Glob and Read only, and produced_files is empty.",
+          "code_checks": []
+        },
+        {
+          "expectation": "A test shows the payout matching gross captures minus fees exactly",
+          "status": "failed",
+          "grader_verdict": {
+            "passed": false,
+            "evidence": "No test was created or run. The gross-minus-fee arithmetic appears only in the final message text, not as an executable test."
+          },
+          "evidence": "No test was created or run. The gross-minus-fee arithmetic appears only in the final message text, not as an executable test.",
+          "code_checks": [
+            {
+              "kind": "test_file",
+              "passed": false
+            }
+          ]
+        }
+      ],
+      "files_raw_path": "raw/reconciliation/6-without-1/files.json"
+    },
+    {
+      "eval_id": 7,
+      "condition": "with",
+      "run": 1,
+      "installed_paths": [
+        ".claude/skills/reconciliation/SKILL.md"
+      ],
+      "files": [
+        {
+          "path": "README.md",
+          "size": 2670,
+          "sha256": "4f1a199a3e526d6bbb54b3cfb5f99f8cafc5862b286ea71b381fb790cfaa0e98",
+          "raw_path": "raw/reconciliation/7-with-1/files/README.md"
+        },
+        {
+          "path": "pyproject.toml",
+          "size": 508,
+          "sha256": "db07a7ee33f6c11f2ec48ff4581d8e416927bf8beded959c2a5dfc4cb51918f2",
+          "raw_path": "raw/reconciliation/7-with-1/files/pyproject.toml"
+        },
+        {
+          "path": "src/recon_dashboard/__init__.py",
+          "size": 560,
+          "sha256": "d3d6e85fcd91e79da1c5183b5c24943aa8be32ef5ddf5a738fdce6d0221b4d42",
+          "raw_path": "raw/reconciliation/7-with-1/files/src/recon_dashboard/__init__.py"
+        },
+        {
+          "path": "src/recon_dashboard/__main__.py",
+          "size": 52,
+          "sha256": "13a1a5b340cdcfc1902b62be90e508c7c71886000d5bf087e7854aadf09fb35e",
+          "raw_path": "raw/reconciliation/7-with-1/files/src/recon_dashboard/__main__.py"
+        },
+        {
+          "path": "src/recon_dashboard/adapters.py",
+          "size": 6165,
+          "sha256": "555df3d5695903d94231d30b8ab4421ec4116c33a1194c445dd0be44c184ad92",
+          "raw_path": "raw/reconciliation/7-with-1/files/src/recon_dashboard/adapters.py"
+        },
+        {
+          "path": "src/recon_dashboard/cli.py",
+          "size": 4018,
+          "sha256": "d7224ff66141058a4b7c30456a067dd86617c8be03e2e986052b7ff4d1bcbdb1",
+          "raw_path": "raw/reconciliation/7-with-1/files/src/recon_dashboard/cli.py"
+        },
+        {
+          "path": "src/recon_dashboard/config.py",
+          "size": 3976,
+          "sha256": "02a9be1af095a53a7d53612cfa95191953ba0b15c8bff840c6b10c3f4fe26d95",
+          "raw_path": "raw/reconciliation/7-with-1/files/src/recon_dashboard/config.py"
+        },
+        {
+          "path": "src/recon_dashboard/dashboard.py",
+          "size": 7341,
+          "sha256": "8fb928db8732bb98b52ae5fa872d5fc85106b75af5635927fd6fbcb6b2296702",
+          "raw_path": "raw/reconciliation/7-with-1/files/src/recon_dashboard/dashboard.py"
+        },
+        {
+          "path": "src/recon_dashboard/engine.py",
+          "size": 12283,
+          "sha256": "448c96724038042e66c35edcbba1acb80bd952b1ba3dd306ddf54120adcd1352",
+          "raw_path": "raw/reconciliation/7-with-1/files/src/recon_dashboard/engine.py"
+        },
+        {
+          "path": "src/recon_dashboard/metrics.py",
+          "size": 3604,
+          "sha256": "f3f5a727e1c99ebce49b709142bf2712ba5f23c131745ecabf4ddd6002ab8717",
+          "raw_path": "raw/reconciliation/7-with-1/files/src/recon_dashboard/metrics.py"
+        },
+        {
+          "path": "src/recon_dashboard/models.py",
+          "size": 3548,
+          "sha256": "7a7263a61bb1cb141bf7a1a21aeab1c8fdeb6bf493f428fa32d18e25cab15d2e",
+          "raw_path": "raw/reconciliation/7-with-1/files/src/recon_dashboard/models.py"
+        },
+        {
+          "path": "src/recon_dashboard/money.py",
+          "size": 1817,
+          "sha256": "62749df62081abcd23c249efd0f208deb050a61d9e05ea2674073233d40521af",
+          "raw_path": "raw/reconciliation/7-with-1/files/src/recon_dashboard/money.py"
+        },
+        {
+          "path": "src/recon_dashboard/rules.py",
+          "size": 2772,
+          "sha256": "2b1a296f1c72f7d0f71d85859186c8f4fc4df9a4323329a798fea8ea667baf2e",
+          "raw_path": "raw/reconciliation/7-with-1/files/src/recon_dashboard/rules.py"
+        },
+        {
+          "path": "src/recon_dashboard/store.py",
+          "size": 3041,
+          "sha256": "4230d0d5bdea162ea9630d0a595c9afa210d010459311d8b8a3f1bd999d6e3c1",
+          "raw_path": "raw/reconciliation/7-with-1/files/src/recon_dashboard/store.py"
+        },
+        {
+          "path": "tests/fixtures/ledger.csv",
+          "size": 606,
+          "sha256": "cca69e9ca91f3f44aa47bb83f2286ce8f1e6540826602c1a260f0a4e9c4cc4a6",
+          "raw_path": "raw/reconciliation/7-with-1/files/tests/fixtures/ledger.csv"
+        },
+        {
+          "path": "tests/fixtures/processor.csv",
+          "size": 486,
+          "sha256": "42ca5aec3a0018b97b34fdde9abf397c6223d516877a3e7a26082c6b0708b6c3",
+          "raw_path": "raw/reconciliation/7-with-1/files/tests/fixtures/processor.csv"
+        },
+        {
+          "path": "tests/test_adapters.py",
+          "size": 3163,
+          "sha256": "a14382e30f96e3f170217295e999d7c4b8e4319d1725214f91a3197fc21a529d",
+          "raw_path": "raw/reconciliation/7-with-1/files/tests/test_adapters.py"
+        },
+        {
+          "path": "tests/test_engine.py",
+          "size": 10024,
+          "sha256": "35594d5dbdcd8ae7663fd0a50d99f8d515606b8bd1581fbeb01eb7557c8e65c0",
+          "raw_path": "raw/reconciliation/7-with-1/files/tests/test_engine.py"
+        },
+        {
+          "path": "tests/test_metrics_store_dashboard.py",
+          "size": 5486,
+          "sha256": "f07df8336f522087459ec02a1ea8da0218ed164f28a77670ea83140c3a1adaff",
+          "raw_path": "raw/reconciliation/7-with-1/files/tests/test_metrics_store_dashboard.py"
+        }
+      ],
+      "subject": {
+        "invocation": {
+          "argv": [
+            "claude",
+            "-p",
+            "--output-format",
+            "json",
+            "--verbose",
+            "--model",
+            "claude-opus-5-5",
+            "--max-turns",
+            "30",
+            "--tools",
+            "Read,Write,Edit,Glob,Grep,Skill",
+            "--setting-sources",
+            "project",
+            "--strict-mcp-config",
+            "--permission-mode",
+            "acceptEdits",
+            "--permission-prompts",
+            "none",
+            "--no-session-persistence"
+          ],
+          "cwd": "<project>",
+          "stdin": "Build the reconciliation dashboard for the finance team. This is a new Python project; create src/ and tests/ as needed.",
+          "env": {
+            "CLAUDE_CODE_DISABLE_CLAUDE_MDS": "1"
+          }
+        },
+        "error": null,
+        "final_answer": "I've built the project, but **none of the tests have been run**: this session had no shell. I checked the test cases by reading through them, so the first thing to do is `pip install -e '.[test]' && pytest`.\n\n**What it does**\n- **Reading sources:** there's one reader each for the ledger, the processor report and the bank statement. They all turn rows into the same line format and keep the original row. Processor fees become their own lines instead of being netted into a difference.\n- **Matching** (`reconcile()` in `src/recon_dashboard/engine.py`): it uses no clock, files or network, and sorts its inputs first so the same data always gives the same result. It matches in three steps, and each match records which step made it:\n  1. Same reference.\n  2. Same amount within a 2-business-day window, taking the earliest line first.\n  3. Named grouping rules. The one included is `payout_net_of_fees`: a payout equals its captures minus its booked fees.\n\n  Each line matches at most once. The amount tolerance is zero unless you set one, and a non-zero tolerance must come with a written reason.\n- **Breaks:** every unmatched line becomes a break with a reason (`timing`, `fee`, `fx`, `missing_ours`, `missing_theirs`, `duplicate` or `unknown`), an owner and an age. An `unknown` break older than the window triggers a page.\n- **Run records:** each run is saved as a write-once, read-only JSON file holding the input file hashes, settings, matches, breaks and metrics, plus a hash of the record that detects later edits.\n- **Metrics:** match rate by count and by amount (per currency), breaks by reason, oldest open break, and the amount in `unknown`. Each has a threshold alert. `recon run` exits with status 2 when a paging alert fires, so a daily scheduler can page someone.\n- **Dashboard:** static HTML built only from stored runs, with alerts, metric tiles, breaks oldest first with their owners, input hashes and run history. It has no action buttons and never writes to the ledger; corrections are posted by a person and reference the break id.\n\n**Tests:** 23 for matching (`tests/test_engine.py`) and 17 covering the source readers, metrics, run storage, the dashboard and one end-to-end command-line run. Together they cover every test the skill requires, plus break classification, page timing and HTML escaping.\n\n**Still needed from you**\n- `window_approved_by` in `config.py` is a placeholder. Someone in finance needs to approve the 2-business-day window and be named there.\n- The column layouts the readers expect are my assumptions. Give me one masked real export from each source and I'll adjust them.\n- Bank holidays aren't counted when measuring business days.\n- The skill's reference test vectors (`evals/vectors/test_reconcile.py`) aren't in this checkout, so they weren't wired in. If you add them, point `RECON_SOLUTION` at `recon_dashboard.engine`.",
+        "reported": {
+          "tools": [
+            "Edit",
+            "Glob",
+            "Grep",
+            "Read",
+            "Skill",
+            "Write"
+          ],
+          "skills": [
+            "reconciliation",
+            "design",
+            "doctor",
+            "plugin-authoring"
+          ],
+          "mcp_servers": [],
+          "model": "claude-opus-5-5"
+        },
+        "exit_code": 0,
+        "tokens": {
+          "input_tokens": 38,
+          "output_tokens": 56272,
+          "cache_read_input_tokens": 594773,
+          "cache_creation_input_tokens": 64963
+        },
+        "stop_reason": "end_turn",
+        "stopped": "end_turn",
+        "wall_time": 679.9220232490006,
+        "raw_paths": {
+          "transcript": "raw/reconciliation/7-with-1/subject-transcript.txt",
+          "stderr": "raw/reconciliation/7-with-1/subject-stderr.txt"
+        }
+      },
+      "grader": {
+        "invocation": {
+          "argv": [
+            "claude",
+            "-p",
+            "--output-format",
+            "json",
+            "--model",
+            "claude-sonnet-5-5",
+            "--tools",
+            "",
+            "--setting-sources",
+            "project",
+            "--strict-mcp-config",
+            "--no-session-persistence"
+          ],
+          "cwd": "<project>",
+          "env": {
+            "CLAUDE_CODE_DISABLE_CLAUDE_MDS": "1"
+          },
+          "stdin_path": "raw/reconciliation/7-with-1/grader-stdin.json"
+        },
+        "error": null,
+        "final_answer": "[\n  {\n    \"passed\": true,\n    \"evidence\": \"src/recon_dashboard/metrics.py computes `match_rate_count` (lines_matched / lines_total) and `match_rate_amount` (matched vs total absolute minor units, per currency). dashboard.py shows both as tiles, 'Match rate (count)' and 'Match rate (<cur> amount)'. Each has a threshold (`min_match_rate_count` 0.95, `min_match_rate_amount` 0.98) that raises a warn alert.\"\n  },\n  {\n    \"passed\": true,\n    \"evidence\": \"metrics.py builds `breaks_by_reason` over all seven REASONS and `oldest_open_break_days` as the max break `age_days`. dashboard.py has a 'Breaks by reason' table with count and owner, an 'Oldest open break' tile, and an 'Open breaks (oldest first)' table. An oldest-break alert pages when age exceeds `max_oldest_break_days` (7).\"\n  },\n  {\n    \"passed\": true,\n    \"evidence\": \"metrics.py sums `unknown_amount_minor` per currency. `Thresholds.max_unknown_amount_minor` defaults to 0, and a 'page' alert `unknown_amount` fires when the sum exceeds it. dashboard.py shows an 'Unknown (<cur>)' tile that is red over the threshold. `test_unknown_amount_threshold` covers it, and `recon run` exits with status 2 on a page alert.\"\n  },\n  {\n    \"passed\": true,\n    \"evidence\": \"dashboard.py's `render_dashboard(records)` takes only loaded run-record dicts. cli.py `_render` builds those records from `RunStore.load(p)` over `store.list_runs`. store.py writes each run as a JSON file opened with mode 'x' (never overwrites), chmod'd read-only, with a `record_sha256` that raises `TamperedRecord` on mismatch. The dashboard reads no ledger or database tables, and the tests for write-once, read-only and tamper detection are in place.\"\n  }\n]",
+        "reported": {},
+        "exit_code": 0,
+        "tokens": {
+          "input_tokens": 2,
+          "output_tokens": 910,
+          "cache_read_input_tokens": 649,
+          "cache_creation_input_tokens": 339711
+        },
+        "stop_reason": "end_turn",
+        "stopped": "end_turn",
+        "wall_time": 15.428740360999655,
+        "raw_paths": {
+          "transcript": "raw/reconciliation/7-with-1/grader-transcript.txt",
+          "stderr": "raw/reconciliation/7-with-1/grader-stderr.txt"
+        }
+      },
+      "verdicts": [
+        {
+          "expectation": "Includes match rate by count and by amount",
+          "status": "passed",
+          "grader_verdict": {
+            "passed": true,
+            "evidence": "src/recon_dashboard/metrics.py computes `match_rate_count` (lines_matched / lines_total) and `match_rate_amount` (matched vs total absolute minor units, per currency). dashboard.py shows both as tiles, 'Match rate (count)' and 'Match rate (<cur> amount)'. Each has a threshold (`min_match_rate_count` 0.95, `min_match_rate_amount` 0.98) that raises a warn alert."
+          },
+          "evidence": "src/recon_dashboard/metrics.py computes `match_rate_count` (lines_matched / lines_total) and `match_rate_amount` (matched vs total absolute minor units, per currency). dashboard.py shows both as tiles, 'Match rate (count)' and 'Match rate (<cur> amount)'. Each has a threshold (`min_match_rate_count` 0.95, `min_match_rate_amount` 0.98) that raises a warn alert.",
+          "code_checks": []
+        },
+        {
+          "expectation": "Includes breaks by reason code and the oldest open break age",
+          "status": "passed",
+          "grader_verdict": {
+            "passed": true,
+            "evidence": "metrics.py builds `breaks_by_reason` over all seven REASONS and `oldest_open_break_days` as the max break `age_days`. dashboard.py has a 'Breaks by reason' table with count and owner, an 'Oldest open break' tile, and an 'Open breaks (oldest first)' table. An oldest-break alert pages when age exceeds `max_oldest_break_days` (7)."
+          },
+          "evidence": "metrics.py builds `breaks_by_reason` over all seven REASONS and `oldest_open_break_days` as the max break `age_days`. dashboard.py has a 'Breaks by reason' table with count and owner, an 'Oldest open break' tile, and an 'Open breaks (oldest first)' table. An oldest-break alert pages when age exceeds `max_oldest_break_days` (7).",
+          "code_checks": []
+        },
+        {
+          "expectation": "Includes the amount sitting in unknown breaks with a threshold that alerts",
+          "status": "passed",
+          "grader_verdict": {
+            "passed": true,
+            "evidence": "metrics.py sums `unknown_amount_minor` per currency. `Thresholds.max_unknown_amount_minor` defaults to 0, and a 'page' alert `unknown_amount` fires when the sum exceeds it. dashboard.py shows an 'Unknown (<cur>)' tile that is red over the threshold. `test_unknown_amount_threshold` covers it, and `recon run` exits with status 2 on a page alert."
+          },
+          "evidence": "metrics.py sums `unknown_amount_minor` per currency. `Thresholds.max_unknown_amount_minor` defaults to 0, and a 'page' alert `unknown_amount` fires when the sum exceeds it. dashboard.py shows an 'Unknown (<cur>)' tile that is red over the threshold. `test_unknown_amount_threshold` covers it, and `recon run` exits with status 2 on a page alert.",
+          "code_checks": []
+        },
+        {
+          "expectation": "Data comes from immutable run records, not from live mutable tables",
+          "status": "passed",
+          "grader_verdict": {
+            "passed": true,
+            "evidence": "dashboard.py's `render_dashboard(records)` takes only loaded run-record dicts. cli.py `_render` builds those records from `RunStore.load(p)` over `store.list_runs`. store.py writes each run as a JSON file opened with mode 'x' (never overwrites), chmod'd read-only, with a `record_sha256` that raises `TamperedRecord` on mismatch. The dashboard reads no ledger or database tables, and the tests for write-once, read-only and tamper detection are in place."
+          },
+          "evidence": "dashboard.py's `render_dashboard(records)` takes only loaded run-record dicts. cli.py `_render` builds those records from `RunStore.load(p)` over `store.list_runs`. store.py writes each run as a JSON file opened with mode 'x' (never overwrites), chmod'd read-only, with a `record_sha256` that raises `TamperedRecord` on mismatch. The dashboard reads no ledger or database tables, and the tests for write-once, read-only and tamper detection are in place.",
+          "code_checks": []
+        }
+      ],
+      "files_raw_path": "raw/reconciliation/7-with-1/files.json"
+    },
+    {
+      "eval_id": 7,
+      "condition": "without",
+      "run": 1,
+      "installed_paths": [],
+      "files": [
+        {
+          "path": "README.md",
+          "size": 1887,
+          "sha256": "b2da56ba1acbcf82c9b782012b96ec3d9668036d8edf9022a0dcbc5df6c71848",
+          "raw_path": "raw/reconciliation/7-without-1/files/README.md"
+        },
+        {
+          "path": "examples/bank.csv",
+          "size": 275,
+          "sha256": "8e91bd590749da28b6e9c18e89f538be2a5012a7ab10b88f880b54ed225f139f",
+          "raw_path": "raw/reconciliation/7-without-1/files/examples/bank.csv"
+        },
+        {
+          "path": "examples/ledger.csv",
+          "size": 278,
+          "sha256": "e81a78813f37afbb06565436d27411036ccd9b0301f96b5a1e5878689134750c",
+          "raw_path": "raw/reconciliation/7-without-1/files/examples/ledger.csv"
+        },
+        {
+          "path": "pyproject.toml",
+          "size": 537,
+          "sha256": "fc85fd8de6c7ba517480f810d09f10590c3ed448ca0898d858ebebd39ce263aa",
+          "raw_path": "raw/reconciliation/7-without-1/files/pyproject.toml"
+        },
+        {
+          "path": "src/recon_dashboard/__init__.py",
+          "size": 472,
+          "sha256": "dc93552c740f92eaffd523a0b9a9a9cbfe1f35a754e46c11f1ef342533ea2bed",
+          "raw_path": "raw/reconciliation/7-without-1/files/src/recon_dashboard/__init__.py"
+        },
+        {
+          "path": "src/recon_dashboard/__main__.py",
+          "size": 52,
+          "sha256": "13a1a5b340cdcfc1902b62be90e508c7c71886000d5bf087e7854aadf09fb35e",
+          "raw_path": "raw/reconciliation/7-without-1/files/src/recon_dashboard/__main__.py"
+        },
+        {
+          "path": "src/recon_dashboard/cli.py",
+          "size": 2179,
+          "sha256": "37a3464570095bea4edb58e4f814619018aa29308a3738681e069ed0c8dcb7ef",
+          "raw_path": "raw/reconciliation/7-without-1/files/src/recon_dashboard/cli.py"
+        },
+        {
+          "path": "src/recon_dashboard/dashboard.py",
+          "size": 7384,
+          "sha256": "cbbe4aeaad79c49ffc07e28dcf58d2b0ba0f327109abc9241cdb713410338c8f",
+          "raw_path": "raw/reconciliation/7-without-1/files/src/recon_dashboard/dashboard.py"
+        },
+        {
+          "path": "src/recon_dashboard/loader.py",
+          "size": 3610,
+          "sha256": "f9b97df459db789cd2520f71c1f81f3175bcbe5aae9b5f12b29082bd40cc4583",
+          "raw_path": "raw/reconciliation/7-without-1/files/src/recon_dashboard/loader.py"
+        },
+        {
+          "path": "src/recon_dashboard/matcher.py",
+          "size": 4544,
+          "sha256": "970da5108dd1fc008a3a5a932c29ec69d36521d727351c0b1fbab149970fa1f7",
+          "raw_path": "raw/reconciliation/7-without-1/files/src/recon_dashboard/matcher.py"
+        },
+        {
+          "path": "src/recon_dashboard/models.py",
+          "size": 457,
+          "sha256": "15a0813b4ca7c9663f3a3c124e1853a5b05a952ad0ab030080e337de80038de1",
+          "raw_path": "raw/reconciliation/7-without-1/files/src/recon_dashboard/models.py"
+        },
+        {
+          "path": "src/recon_dashboard/summary.py",
+          "size": 3472,
+          "sha256": "4c81c89c10199471da0a8fe514d028828a986501c975c52a87531b100e472900",
+          "raw_path": "raw/reconciliation/7-without-1/files/src/recon_dashboard/summary.py"
+        },
+        {
+          "path": "tests/conftest.py",
+          "size": 528,
+          "sha256": "8b4c137cb3d14d83d76f071d127d086d0c89f41c4354226a04b49472cb53d621",
+          "raw_path": "raw/reconciliation/7-without-1/files/tests/conftest.py"
+        },
+        {
+          "path": "tests/test_cli.py",
+          "size": 1392,
+          "sha256": "cd5bc14dd914d514e64237e3c8e94dcd07305a530a94b12446bb6f90ab866056",
+          "raw_path": "raw/reconciliation/7-without-1/files/tests/test_cli.py"
+        },
+        {
+          "path": "tests/test_dashboard.py",
+          "size": 1395,
+          "sha256": "f01bb4d6bf676022d3ccd1b208af276e24d83271d5a012efe2106430eea9ab77",
+          "raw_path": "raw/reconciliation/7-without-1/files/tests/test_dashboard.py"
+        },
+        {
+          "path": "tests/test_loader.py",
+          "size": 2616,
+          "sha256": "cb038118455c7cf6d1aad13b9ddb4880099e20245fe3482a3772a8df2882b6e5",
+          "raw_path": "raw/reconciliation/7-without-1/files/tests/test_loader.py"
+        },
+        {
+          "path": "tests/test_matcher.py",
+          "size": 3786,
+          "sha256": "3ec79dab2d9697d850d8c560e65ba75f405dcd4de112aa14aa986efd6d61bdef",
+          "raw_path": "raw/reconciliation/7-without-1/files/tests/test_matcher.py"
+        },
+        {
+          "path": "tests/test_summary.py",
+          "size": 2095,
+          "sha256": "2f5912b0aef9910cb1ddd115167eec573517f61a76d9bbf13569f0e814c430e7",
+          "raw_path": "raw/reconciliation/7-without-1/files/tests/test_summary.py"
+        }
+      ],
+      "subject": {
+        "invocation": {
+          "argv": [
+            "claude",
+            "-p",
+            "--output-format",
+            "json",
+            "--verbose",
+            "--model",
+            "claude-opus-5-5",
+            "--max-turns",
+            "30",
+            "--tools",
+            "Read,Write,Edit,Glob,Grep,Skill",
+            "--setting-sources",
+            "project",
+            "--strict-mcp-config",
+            "--permission-mode",
+            "acceptEdits",
+            "--permission-prompts",
+            "none",
+            "--no-session-persistence"
+          ],
+          "cwd": "<project>",
+          "stdin": "Build the reconciliation dashboard for the finance team. This is a new Python project; create src/ and tests/ as needed.",
+          "env": {
+            "CLAUDE_CODE_DISABLE_CLAUDE_MDS": "1"
+          }
+        },
+        "error": null,
+        "final_answer": "I built the reconciliation dashboard as a new Python project, but **I haven't run anything**. I had no shell in this session, so neither the test suite nor the CLI has been executed. I checked the test expectations by hand only. Please run `pip install -e '.[dev]' && pytest` first.\n\nThere was no spec and the directory was empty, so I made these assumptions \u2014 tell me if any are wrong:\n- **What gets reconciled:** a bank statement CSV against a ledger export CSV.\n- **What \"dashboard\" means:** a command-line tool that writes one self-contained HTML file. It needs no server, no JavaScript and no third-party packages, so it can be emailed or archived.\n- **Money:** amounts are handled as exact decimals throughout, never floats.\n\n**Usage:**\n```bash\nrecon-dashboard examples/bank.csv examples/ledger.csv -o reconciliation.html\n```\n\n**How matching works** (in `src/recon_dashboard/matcher.py`):\n1. **Same reference and same amount** \u2192 matched. References are compared ignoring case.\n2. **Same reference, different amount** \u2192 listed as an amount discrepancy.\n3. **Same amount, dates within \u00b1N days** (default 3) \u2192 matched to the ledger entry with the closest date. Two entries whose references are both filled in and different are never paired this way.\n\nEach ledger entry can be matched only once. Anything left over is listed as unmatched on its side. The bank-minus-ledger total is always fully explained by the unmatched items plus the discrepancies, and a test checks this.\n\n**What's in the project:**\n- `src/recon_dashboard/`:\n  - `loader.py` reads the CSVs. It accepts amounts like `1,234.56`, `$12.00` and `(12.00)` for negatives, handles the extra marker Excel adds to CSV files, rejects duplicate IDs, and reports the line number for bad rows.\n  - `summary.py` calculates the totals and match rate.\n  - `dashboard.py` builds the HTML page. All text from the input files is escaped, so a malicious description can't inject code into the page.\n  - `cli.py` is the command-line entry point.\n- **Command-line options:** `--strict` makes it exit with status 1 if there are any exceptions, which is useful for scheduled jobs. Bad input gives exit status 2.\n- `tests/`: about 45 tests covering the loader, matcher, summary, dashboard and command line.\n- `examples/`: sample CSVs that produce every result type (reference match, date/amount match, discrepancy, unmatched on each side).\n- `README.md` documents the input format and matching rules.\n\n**Possible next steps:**\n- Different CSV column names for your bank's export\n- Multiple currencies\n- Matching one bank transaction against several ledger entries\n- Exporting the exceptions to CSV\n- A live web dashboard instead of a static page",
+        "reported": {
+          "tools": [
+            "Edit",
+            "Glob",
+            "Grep",
+            "Read",
+            "Skill",
+            "Write"
+          ],
+          "skills": [
+            "design",
+            "doctor",
+            "plugin-authoring"
+          ],
+          "mcp_servers": [],
+          "model": "claude-opus-5-5"
+        },
+        "exit_code": 0,
+        "tokens": {
+          "input_tokens": 12,
+          "output_tokens": 25541,
+          "cache_read_input_tokens": 91615,
+          "cache_creation_input_tokens": 28803
+        },
+        "stop_reason": "end_turn",
+        "stopped": "end_turn",
+        "wall_time": 199.7106150489999,
+        "raw_paths": {
+          "transcript": "raw/reconciliation/7-without-1/subject-transcript.txt",
+          "stderr": "raw/reconciliation/7-without-1/subject-stderr.txt"
+        }
+      },
+      "grader": {
+        "invocation": {
+          "argv": [
+            "claude",
+            "-p",
+            "--output-format",
+            "json",
+            "--model",
+            "claude-sonnet-5-5",
+            "--tools",
+            "",
+            "--setting-sources",
+            "project",
+            "--strict-mcp-config",
+            "--no-session-persistence"
+          ],
+          "cwd": "<project>",
+          "env": {
+            "CLAUDE_CODE_DISABLE_CLAUDE_MDS": "1"
+          },
+          "stdin_path": "raw/reconciliation/7-without-1/grader-stdin.json"
+        },
+        "error": null,
+        "final_answer": "```json\n[\n  {\n    \"passed\": false,\n    \"evidence\": \"summary.py defines match_rate as 2*matched_count/(bank_count+ledger_count), which is a count-based rate only. There is no amount-based match rate anywhere. Only matched_total (a raw sum) exists, and it is never divided by the bank or ledger total. The dashboard shows only one 'Match rate' card, formatted as a percentage of counts.\"\n  },\n  {\n    \"passed\": false,\n    \"evidence\": \"There are no reason codes in the code. Exceptions are grouped into discrepancies, unmatched_bank and unmatched_ledger, which are structural categories rather than reason codes. No breaks-by-reason-code view exists. There is also no break age: Transaction dates are never compared to an as-of date, and the dashboard shows no 'oldest open break' metric.\"\n  },\n  {\n    \"passed\": false,\n    \"evidence\": \"There is no concept of 'unknown' breaks, so no amount is computed for them. No alert threshold exists either: no threshold CLI option, no alert logic, and no alert rendering in dashboard.py. The closest items are the unmatched_bank_total/unmatched_ledger_total cards, which are flagged 'warn' whenever the count is above 0, not against a configurable amount threshold.\"\n  },\n  {\n    \"passed\": false,\n    \"evidence\": \"Data is read straight from CSV files on each run (load_csv -> reconcile -> summarize -> render_html). No immutable run records are persisted or consumed, and there are no run IDs, snapshots or stored artifacts. Transaction is a frozen dataclass, but that only covers in-memory objects. The dashboard recomputes everything from the input files rather than reading recorded runs, which is not the requested immutable-run-record source.\"\n  }\n]\n```",
+        "reported": {},
+        "exit_code": 0,
+        "tokens": {
+          "input_tokens": 2,
+          "output_tokens": 599,
+          "cache_read_input_tokens": 649,
+          "cache_creation_input_tokens": 154294
+        },
+        "stop_reason": "end_turn",
+        "stopped": "end_turn",
+        "wall_time": 9.723972789999607,
+        "raw_paths": {
+          "transcript": "raw/reconciliation/7-without-1/grader-transcript.txt",
+          "stderr": "raw/reconciliation/7-without-1/grader-stderr.txt"
+        }
+      },
+      "verdicts": [
+        {
+          "expectation": "Includes match rate by count and by amount",
+          "status": "failed",
+          "grader_verdict": {
+            "passed": false,
+            "evidence": "summary.py defines match_rate as 2*matched_count/(bank_count+ledger_count), which is a count-based rate only. There is no amount-based match rate anywhere. Only matched_total (a raw sum) exists, and it is never divided by the bank or ledger total. The dashboard shows only one 'Match rate' card, formatted as a percentage of counts."
+          },
+          "evidence": "summary.py defines match_rate as 2*matched_count/(bank_count+ledger_count), which is a count-based rate only. There is no amount-based match rate anywhere. Only matched_total (a raw sum) exists, and it is never divided by the bank or ledger total. The dashboard shows only one 'Match rate' card, formatted as a percentage of counts.",
+          "code_checks": []
+        },
+        {
+          "expectation": "Includes breaks by reason code and the oldest open break age",
+          "status": "failed",
+          "grader_verdict": {
+            "passed": false,
+            "evidence": "There are no reason codes in the code. Exceptions are grouped into discrepancies, unmatched_bank and unmatched_ledger, which are structural categories rather than reason codes. No breaks-by-reason-code view exists. There is also no break age: Transaction dates are never compared to an as-of date, and the dashboard shows no 'oldest open break' metric."
+          },
+          "evidence": "There are no reason codes in the code. Exceptions are grouped into discrepancies, unmatched_bank and unmatched_ledger, which are structural categories rather than reason codes. No breaks-by-reason-code view exists. There is also no break age: Transaction dates are never compared to an as-of date, and the dashboard shows no 'oldest open break' metric.",
+          "code_checks": []
+        },
+        {
+          "expectation": "Includes the amount sitting in unknown breaks with a threshold that alerts",
+          "status": "failed",
+          "grader_verdict": {
+            "passed": false,
+            "evidence": "There is no concept of 'unknown' breaks, so no amount is computed for them. No alert threshold exists either: no threshold CLI option, no alert logic, and no alert rendering in dashboard.py. The closest items are the unmatched_bank_total/unmatched_ledger_total cards, which are flagged 'warn' whenever the count is above 0, not against a configurable amount threshold."
+          },
+          "evidence": "There is no concept of 'unknown' breaks, so no amount is computed for them. No alert threshold exists either: no threshold CLI option, no alert logic, and no alert rendering in dashboard.py. The closest items are the unmatched_bank_total/unmatched_ledger_total cards, which are flagged 'warn' whenever the count is above 0, not against a configurable amount threshold.",
+          "code_checks": []
+        },
+        {
+          "expectation": "Data comes from immutable run records, not from live mutable tables",
+          "status": "failed",
+          "grader_verdict": {
+            "passed": false,
+            "evidence": "Data is read straight from CSV files on each run (load_csv -> reconcile -> summarize -> render_html). No immutable run records are persisted or consumed, and there are no run IDs, snapshots or stored artifacts. Transaction is a frozen dataclass, but that only covers in-memory objects. The dashboard recomputes everything from the input files rather than reading recorded runs, which is not the requested immutable-run-record source."
+          },
+          "evidence": "Data is read straight from CSV files on each run (load_csv -> reconcile -> summarize -> render_html). No immutable run records are persisted or consumed, and there are no run IDs, snapshots or stored artifacts. Transaction is a frozen dataclass, but that only covers in-memory objects. The dashboard recomputes everything from the input files rather than reading recorded runs, which is not the requested immutable-run-record source.",
+          "code_checks": []
+        }
+      ],
+      "files_raw_path": "raw/reconciliation/7-without-1/files.json"
+    }
+  ]
+}

@@ -1,0 +1,703 @@
+{
+  "run_id": "20261109T110030Z-fa81209-heldout",
+  "date": "20261109T110030Z",
+  "subject_model": "claude-opus-5-5",
+  "grader_model": "claude-sonnet-5-5",
+  "git_sha": "fa81209f644741b66d83bd8c61093385b29e3483",
+  "skills_dirty": false,
+  "prompt_set": "heldout",
+  "skill": "fintech-audit",
+  "installed_paths": [
+    ".claude/skills/accounting-sync/SKILL.md",
+    ".claude/skills/audit-trail/SKILL.md",
+    ".claude/skills/brazil-payment-rails/SKILL.md",
+    ".claude/skills/brazil-payment-rails/references/vocabulary.md",
+    ".claude/skills/double-entry-ledger/SKILL.md",
+    ".claude/skills/fintech-audit/SKILL.md",
+    ".claude/skills/fintech-audit/scripts/money_lint.py",
+    ".claude/skills/idempotent-payments/SKILL.md",
+    ".claude/skills/interest-and-amortization/SKILL.md",
+    ".claude/skills/money-arithmetic/SKILL.md",
+    ".claude/skills/money-tests/SKILL.md",
+    ".claude/skills/pii-and-card-data/SKILL.md",
+    ".claude/skills/reconciliation/SKILL.md",
+    ".claude/skills/transaction-classification/SKILL.md",
+    ".claude/skills/webhook-handling/SKILL.md"
+  ],
+  "records": [
+    {
+      "eval_id": 1,
+      "condition": "with",
+      "run": 1,
+      "installed_paths": [
+        ".claude/skills/accounting-sync/SKILL.md",
+        ".claude/skills/audit-trail/SKILL.md",
+        ".claude/skills/brazil-payment-rails/SKILL.md",
+        ".claude/skills/brazil-payment-rails/references/vocabulary.md",
+        ".claude/skills/double-entry-ledger/SKILL.md",
+        ".claude/skills/fintech-audit/SKILL.md",
+        ".claude/skills/fintech-audit/scripts/money_lint.py",
+        ".claude/skills/idempotent-payments/SKILL.md",
+        ".claude/skills/interest-and-amortization/SKILL.md",
+        ".claude/skills/money-arithmetic/SKILL.md",
+        ".claude/skills/money-tests/SKILL.md",
+        ".claude/skills/pii-and-card-data/SKILL.md",
+        ".claude/skills/reconciliation/SKILL.md",
+        ".claude/skills/transaction-classification/SKILL.md",
+        ".claude/skills/webhook-handling/SKILL.md"
+      ],
+      "files": [],
+      "subject": {
+        "invocation": {
+          "argv": [
+            "claude",
+            "-p",
+            "--output-format",
+            "json",
+            "--verbose",
+            "--model",
+            "claude-opus-5-5",
+            "--max-turns",
+            "30",
+            "--tools",
+            "Read,Write,Edit,Glob,Grep,Skill",
+            "--setting-sources",
+            "project",
+            "--strict-mcp-config",
+            "--permission-mode",
+            "acceptEdits",
+            "--permission-prompts",
+            "none",
+            "--no-session-persistence"
+          ],
+          "cwd": "<project>",
+          "stdin": "Audit this pull request for money problems: src/pr.diff.",
+          "env": {
+            "CLAUDE_CODE_DISABLE_CLAUDE_MDS": "1"
+          }
+        },
+        "error": null,
+        "final_answer": "# Money audit: `src/pr.diff` (no SHA; the diff has no hunk headers)\n\nThe diff has no `@@` headers, so the line numbers below are lines of `src/pr.diff`, not lines in the source files. I had no shell in this session, so I couldn't run `money_lint.py` or the vector suites. All findings come from reading the 15 added lines by hand.\n\n## Findings (ranked)\n\n| # | Severity | Where | Rule | What happens | Fix | Test to add |\n|---|---|---|---|---|---|---|\n| 1 | critical | `webhooks.py` (diff 10\u201315) | webhook-handling: signature verification on raw body | No signature check. Anyone who can reach `/stripe` can POST `{\"data\":{\"object\":{\"metadata\":{\"order_id\":\"X\"}}}}` and get any order marked paid without paying. | Read `request.get_data()` and verify with `stripe.Webhook.construct_event(raw, sig_header, secret)` (default tolerance 300s). Return 400 if it fails. | Unsigned body \u2192 400 and order stays unpaid. Bad signature \u2192 400. Timestamp older than the tolerance \u2192 400. |\n| 2 | critical | `webhooks.py:14` (diff) | webhook-handling: confirm state by API, check event type | Every event type marks the order paid, including `payment_intent.payment_failed`, `charge.refunded` and `charge.dispute.created`. A failed or refunded payment ships goods. | Act only on `payment_intent.succeeded` (or `checkout.session.completed` with `payment_status == \"paid\"`). Retrieve the PaymentIntent from the API, then check `status == \"succeeded\"` and that amount and currency match the order before calling `mark_paid`. | A `payment_failed` event with a valid signature \u2192 order not paid. A `succeeded` event whose amount is less than the order total \u2192 not paid, and an alert fires. |\n| 3 | critical | `charges.py:7` (diff) | idempotent-payments: caller-chosen stable key | `uuid4()` makes a new key on every call. A timeout followed by a retry, or a double-click, charges the customer twice. | Derive the key from the order, e.g. `f\"order:{order.id}:charge:v1\"`. Write a pending charge row before calling the processor, and have a reconciler resolve unknown outcomes after a timeout. | Call `charge(order)` twice with a fake processor that times out on the first call \u2192 exactly one charge at the processor. Same order \u2192 same key. |\n| 4 | critical | `billing.py:3\u20134` (diff) | double-entry-ledger: balances derived from postings; idempotent posting | Read-modify-write on a mutable `balance`. Two concurrent credits lose one (lost update), and a retried request credits twice. There is no journal entry, so nothing can be reconciled or reversed. | Post a balanced journal entry (debit promo/expense, credit the user's liability account) with a unique `external_ref`, and derive the balance from postings. At minimum, use an atomic `UPDATE \u2026 SET balance = balance + :amt` plus a unique credit id. | 50 concurrent `apply_credit(u, 100)` \u2192 balance +5000 exactly. Same `external_ref` twice \u2192 one posting. Postings per currency sum to 0. |\n| 5 | high | `webhooks.py:13` (diff) | pii-and-card-data: allowlist redaction at the logger | The full Stripe event is logged, which includes the customer's email, name, billing address, phone, card brand/last4/expiry and metadata. That sends personal data to the log pipeline (LGPD/GDPR). | Log only `event.id`, `event.type`, `object.id` and `order_id`. | Feed an event fixture containing an email and address, capture the logs, and assert neither string appears. |\n| 6 | high | `webhooks.py` (diff 12\u201315) | webhook-handling: dedupe by event id; store-then-acknowledge | Stripe retries and redelivers. Without dedupe on `event.id`, `mark_paid` runs again, plus any side effects (emails, fulfilment). Out-of-order delivery isn't handled. | Insert `event.id` into a `processed_events` table with a unique constraint, then process asynchronously. Return 200 on a duplicate. Make `mark_paid` a guarded state transition (`pending \u2192 paid` only). | Deliver the same event twice \u2192 one fulfilment. `refunded` arriving before `succeeded` \u2192 order is not left paid. |\n| 7 | high | `billing.py:3` (diff) | money-arithmetic: integer minor units with explicit currency | `float(amount)` causes binary drift (`0.1 + 0.2 \u2260 0.3`) that builds up in a stored balance. There is no currency either, so BRL could be added to USD. | Take `amount_minor: int` and `currency: str`, and reject anything else. | `apply_credit` 10\u00d7 with 10 \u2192 exactly 100 minor units. A float input raises. A mismatched currency raises. |\n| 8 | high | `billing.py:2` (diff) | money-arithmetic / double-entry-ledger: validate inputs | Nothing checks that `amount > 0`. A negative \"credit\" quietly debits the user, and `NaN`/`inf` from `float()` corrupts the balance. | Require a positive int. Do debits through a separate, authorized path. | `apply_credit(u, -100)` raises. `apply_credit(u, \"nan\")` raises. |\n| 9 | medium | `billing.py`, `webhooks.py` | audit-trail: actor, before/after, reason | Credits and paid transitions record no actor, reason or request context, so you can't answer \"who credited this user and why\". | Append an audit event per mutation that links the idempotency key or Stripe event id. | Each `apply_credit` / `mark_paid` writes exactly one audit event with actor and reason. |\n| 10 | medium | whole PR | money-tests | The PR moves money in 3 places and adds 0 tests. | Add the tests in this column. | (the tests above) |\n\n## Checked and clean\n- Nothing in the 3 added functions came out clean.\n\n## Not checked\n- **Lint and vectors:** no shell was available, so `money_lint.py` and the `money-arithmetic` vectors weren't run. Running them is the next step.\n- **Full files:** only the added lines were visible. I didn't see the imports, the existing signature middleware (if any), or how `app` and `db` are set up.\n- **`processor.charge`, `orders.mark_paid`, `db.save`:** I couldn't see their implementations. `mark_paid` might already be idempotent, and `db.save` might use optimistic locking. If either is true, findings 4 and 6 are less severe.\n- **Type and currency of `order.total`:** unknown. If it's a float or Decimal in major units, it's a units bug at the processor (Stripe expects minor units).\n\n## Next three changes\n1. **Verify signatures on the raw body and act only on `payment_intent.succeeded` after an API retrieve (#1, #2).** Right now anyone can mark orders paid for free.\n2. **Use a stable idempotency key from the order id, and persist a pending charge row before calling the processor (#3).** This stops double charges.\n3. **Replace `apply_credit` with an idempotent, integer-minor-unit, ledger-posted credit (#4, #7, #8),** and cut the webhook log down to ids (#5) in the same pass.\n\nI haven't changed any code. Say if you want the fixes; I'd make them in this order, one finding per change, each with its test.",
+        "reported": {
+          "tools": [
+            "Edit",
+            "Glob",
+            "Grep",
+            "Read",
+            "Skill",
+            "Write"
+          ],
+          "skills": [
+            "accounting-sync",
+            "audit-trail",
+            "brazil-payment-rails",
+            "double-entry-ledger",
+            "fintech-audit",
+            "idempotent-payments",
+            "interest-and-amortization",
+            "money-arithmetic",
+            "money-tests",
+            "pii-and-card-data",
+            "reconciliation",
+            "transaction-classification",
+            "webhook-handling",
+            "design",
+            "doctor",
+            "plugin-authoring"
+          ],
+          "mcp_servers": [],
+          "model": "claude-opus-5-5"
+        },
+        "exit_code": 0,
+        "tokens": {
+          "input_tokens": 8,
+          "output_tokens": 3414,
+          "cache_read_input_tokens": 27202,
+          "cache_creation_input_tokens": 8549
+        },
+        "stop_reason": "end_turn",
+        "stopped": "end_turn",
+        "wall_time": 36.08858292900004,
+        "raw_paths": {
+          "transcript": "raw/fintech-audit/1-with-1/subject-transcript.txt",
+          "stderr": "raw/fintech-audit/1-with-1/subject-stderr.txt"
+        }
+      },
+      "grader": {
+        "invocation": {
+          "argv": [
+            "claude",
+            "-p",
+            "--output-format",
+            "json",
+            "--model",
+            "claude-sonnet-5-5",
+            "--tools",
+            "",
+            "--setting-sources",
+            "project",
+            "--strict-mcp-config",
+            "--no-session-persistence"
+          ],
+          "cwd": "<project>",
+          "env": {
+            "CLAUDE_CODE_DISABLE_CLAUDE_MDS": "1"
+          },
+          "stdin_path": "raw/fintech-audit/1-with-1/grader-stdin.json"
+        },
+        "error": null,
+        "final_answer": "[\n  {\n    \"passed\": true,\n    \"evidence\": \"All three defects are reported with a file and line. The float on the balance is finding #7 (`billing.py:3`, `float(amount)`) and #4 (`billing.py:3\u20134`, read-modify-write on the balance). The fresh key per attempt is #3 (`charges.py:7`, `uuid4()` makes a new key on every call). The unverified webhook is #1 (`webhooks.py`, diff 10\u201315, no signature check, anyone can mark an order paid). The report says the line numbers are lines of `src/pr.diff`, because the diff has no hunk headers. That is a reasonable way to give a line.\"\n  },\n  {\n    \"passed\": true,\n    \"evidence\": \"The findings table has Severity, Rule, Fix and Test to add columns, and all 10 rows fill them. For example, #3 is critical, rule 'idempotent-payments: caller-chosen stable key', fix 'derive the key from the order', test 'call charge(order) twice with a fake processor that times out on the first call \u2192 exactly one charge'. Finding #10 points back to the tests listed in the other rows, which is acceptable.\"\n  },\n  {\n    \"passed\": true,\n    \"evidence\": \"There is a dedicated 'Not checked' section. It says `money_lint.py` and the vector suites were not run because no shell was available. It also says only the added lines were visible, so imports, middleware, and `processor.charge`, `orders.mark_paid` and `db.save` were not seen. It adds that the type and currency of `order.total` are unknown.\"\n  },\n  {\n    \"passed\": true,\n    \"evidence\": \"The transcript shows only a Skill call and a Read of `src/pr.diff`. There are no Edit or Write calls, and `produced_files` is empty. The report ends with 'I haven't changed any code. Say if you want the fixes.'\"\n  }\n]",
+        "reported": {},
+        "exit_code": 0,
+        "tokens": {
+          "input_tokens": 2,
+          "output_tokens": 904,
+          "cache_read_input_tokens": 649,
+          "cache_creation_input_tokens": 26091
+        },
+        "stop_reason": "end_turn",
+        "stopped": "end_turn",
+        "wall_time": 10.279990236999765,
+        "raw_paths": {
+          "transcript": "raw/fintech-audit/1-with-1/grader-transcript.txt",
+          "stderr": "raw/fintech-audit/1-with-1/grader-stderr.txt"
+        }
+      },
+      "verdicts": [
+        {
+          "expectation": "Reports the float added to a balance, the fresh idempotency key per attempt and the unverified webhook marking orders paid, each with file and line",
+          "status": "passed",
+          "grader_verdict": {
+            "passed": true,
+            "evidence": "All three defects are reported with a file and line. The float on the balance is finding #7 (`billing.py:3`, `float(amount)`) and #4 (`billing.py:3\u20134`, read-modify-write on the balance). The fresh key per attempt is #3 (`charges.py:7`, `uuid4()` makes a new key on every call). The unverified webhook is #1 (`webhooks.py`, diff 10\u201315, no signature check, anyone can mark an order paid). The report says the line numbers are lines of `src/pr.diff`, because the diff has no hunk headers. That is a reasonable way to give a line."
+          },
+          "evidence": "All three defects are reported with a file and line. The float on the balance is finding #7 (`billing.py:3`, `float(amount)`) and #4 (`billing.py:3\u20134`, read-modify-write on the balance). The fresh key per attempt is #3 (`charges.py:7`, `uuid4()` makes a new key on every call). The unverified webhook is #1 (`webhooks.py`, diff 10\u201315, no signature check, anyone can mark an order paid). The report says the line numbers are lines of `src/pr.diff`, because the diff has no hunk headers. That is a reasonable way to give a line.",
+          "code_checks": []
+        },
+        {
+          "expectation": "Gives a severity, the rule, the fix and the test for each finding",
+          "status": "passed",
+          "grader_verdict": {
+            "passed": true,
+            "evidence": "The findings table has Severity, Rule, Fix and Test to add columns, and all 10 rows fill them. For example, #3 is critical, rule 'idempotent-payments: caller-chosen stable key', fix 'derive the key from the order', test 'call charge(order) twice with a fake processor that times out on the first call \u2192 exactly one charge'. Finding #10 points back to the tests listed in the other rows, which is acceptable."
+          },
+          "evidence": "The findings table has Severity, Rule, Fix and Test to add columns, and all 10 rows fill them. For example, #3 is critical, rule 'idempotent-payments: caller-chosen stable key', fix 'derive the key from the order', test 'call charge(order) twice with a fake processor that times out on the first call \u2192 exactly one charge'. Finding #10 points back to the tests listed in the other rows, which is acceptable.",
+          "code_checks": []
+        },
+        {
+          "expectation": "Says what was not checked",
+          "status": "passed",
+          "grader_verdict": {
+            "passed": true,
+            "evidence": "There is a dedicated 'Not checked' section. It says `money_lint.py` and the vector suites were not run because no shell was available. It also says only the added lines were visible, so imports, middleware, and `processor.charge`, `orders.mark_paid` and `db.save` were not seen. It adds that the type and currency of `order.total` are unknown."
+          },
+          "evidence": "There is a dedicated 'Not checked' section. It says `money_lint.py` and the vector suites were not run because no shell was available. It also says only the added lines were visible, so imports, middleware, and `processor.charge`, `orders.mark_paid` and `db.save` were not seen. It adds that the type and currency of `order.total` are unknown.",
+          "code_checks": []
+        },
+        {
+          "expectation": "Edits no code",
+          "status": "passed",
+          "grader_verdict": {
+            "passed": true,
+            "evidence": "The transcript shows only a Skill call and a Read of `src/pr.diff`. There are no Edit or Write calls, and `produced_files` is empty. The report ends with 'I haven't changed any code. Say if you want the fixes.'"
+          },
+          "evidence": "The transcript shows only a Skill call and a Read of `src/pr.diff`. There are no Edit or Write calls, and `produced_files` is empty. The report ends with 'I haven't changed any code. Say if you want the fixes.'",
+          "code_checks": []
+        }
+      ],
+      "files_raw_path": "raw/fintech-audit/1-with-1/files.json"
+    },
+    {
+      "eval_id": 1,
+      "condition": "without",
+      "run": 1,
+      "installed_paths": [],
+      "files": [],
+      "subject": {
+        "invocation": {
+          "argv": [
+            "claude",
+            "-p",
+            "--output-format",
+            "json",
+            "--verbose",
+            "--model",
+            "claude-opus-5-5",
+            "--max-turns",
+            "30",
+            "--tools",
+            "Read,Write,Edit,Glob,Grep,Skill",
+            "--setting-sources",
+            "project",
+            "--strict-mcp-config",
+            "--permission-mode",
+            "acceptEdits",
+            "--permission-prompts",
+            "none",
+            "--no-session-persistence"
+          ],
+          "cwd": "<project>",
+          "stdin": "Audit this pull request for money problems: src/pr.diff.",
+          "env": {
+            "CLAUDE_CODE_DISABLE_CLAUDE_MDS": "1"
+          }
+        },
+        "error": null,
+        "final_answer": "I found 9 money problems in this PR. Two are critical: anyone can mark an order paid without paying, and a retried charge can bill the customer twice. All findings come from reading the diff; I didn't run anything. The diff only shows added lines, so I couldn't see how `order.total` is stored or how the webhook route is set up elsewhere.\n\n## Critical\n\n**1. The webhook doesn't check that requests come from Stripe** (`src/webhooks.py:10-15`)\nNothing checks the `Stripe-Signature` header. Anyone who finds `/stripe` can POST `{\"data\":{\"object\":{\"metadata\":{\"order_id\":\"123\"}}}}` and get the order marked paid for free. Checking the signature also needs the raw request body, and `request.get_json()` throws that away.\n```python\npayload = request.get_data()\nsig = request.headers.get(\"Stripe-Signature\")\ntry:\n    event = stripe.Webhook.construct_event(payload, sig, WEBHOOK_SECRET)\nexcept (ValueError, stripe.error.SignatureVerificationError):\n    return \"\", 400\n```\n\n**2. The webhook marks the order paid for any event type** (`src/webhooks.py:14`)\nStripe sends `payment_intent.payment_failed`, `charge.refunded`, `charge.dispute.created` and others to the same endpoint. A failed payment or a refund would mark the order paid. It should only act on success events, such as `payment_intent.succeeded` or `checkout.session.completed` with `payment_status == \"paid\"`.\n\n**3. A new idempotency key on every call means retries charge twice** (`src/charges.py:7`)\n`uuid.uuid4()` creates a fresh key each time, so the processor sees every retry as a new charge. Retries can come from network timeouts, worker restarts or double-clicks. The key needs to be tied to the order:\n```python\nkey = f\"charge-{order.id}\"\n```\nIf the same order can legitimately be charged more than once, add an attempt or invoice ID to the key.\n\n## High\n\n**4. Credits are stored as `float`** (`src/billing.py:3`)\nFloats can't represent most decimal amounts exactly (`0.1 + 0.2 != 0.3`), so balances drift. Also, `float(amount)` accepts `\"nan\"`, `\"inf\"` and negative numbers:\n- A NaN balance breaks every later comparison.\n- `inf` gives unlimited credit.\n- A negative amount quietly turns a credit into a debit.\n\nUse integer minor units (cents) or `Decimal`, and only allow amounts that are positive and finite.\n\n**5. Two credits at the same time can lose one** (`src/billing.py:3-4`)\nThe code reads the balance, adds to it and saves it. If two requests do this at once, one credit gets overwritten. Do the update in the database (`UPDATE users SET balance = balance + %s WHERE id = %s`) or lock the row with `SELECT ... FOR UPDATE` inside a transaction.\n\n**6. The webhook doesn't handle repeated events** (`src/webhooks.py`)\nStripe retries delivery, and old events can be replayed. Store `event[\"id\"]` with a unique constraint and skip events already processed. Also, `mark_paid` should do nothing if the order is already paid.\n\n**7. The webhook doesn't check the amount or currency** (`src/webhooks.py:14`)\nThe order is marked paid without checking that the amount paid and the currency match the order. This matters most if a payment link or amount can be changed on the client side.\n\n## Medium\n\n**8. The full payment event is written to the logs** (`src/webhooks.py:13`)\nEvents include customer emails, names, addresses and card details (last 4 digits, fingerprint). That puts personal and payment data in the logs. Log only `event[\"id\"]` and `event[\"type\"]`.\n\n**9. Smaller gaps**\n- **Missing metadata crashes the handler:** if `metadata.order_id` is missing, the handler raises a `KeyError` and returns a 500. Stripe then keeps retrying. Validate the field and return 200 or 400 on purpose.\n- **No audit trail for credits:** `apply_credit` changes the balance directly with no record of who credited what, or why. Money changes should be written as ledger entries.\n- **Units and currency aren't stated:** the code passes `order.total` with no currency. Make sure it's in the minor units the processor expects (cents, not dollars). If it's in dollars, that's a 100\u00d7 undercharge.\n\n**My recommendation:** don't merge until findings 1\u20133 are fixed. Fix 4\u20136 in this PR as well, because they cause money errors that are hard to undo once they're in production.",
+        "reported": {
+          "tools": [
+            "Edit",
+            "Glob",
+            "Grep",
+            "Read",
+            "Skill",
+            "Write"
+          ],
+          "skills": [
+            "design",
+            "doctor",
+            "plugin-authoring"
+          ],
+          "mcp_servers": [],
+          "model": "claude-opus-5-5"
+        },
+        "exit_code": 0,
+        "tokens": {
+          "input_tokens": 4,
+          "output_tokens": 2039,
+          "cache_read_input_tokens": 11312,
+          "cache_creation_input_tokens": 2821
+        },
+        "stop_reason": "end_turn",
+        "stopped": "end_turn",
+        "wall_time": 25.62464161400021,
+        "raw_paths": {
+          "transcript": "raw/fintech-audit/1-without-1/subject-transcript.txt",
+          "stderr": "raw/fintech-audit/1-without-1/subject-stderr.txt"
+        }
+      },
+      "grader": {
+        "invocation": {
+          "argv": [
+            "claude",
+            "-p",
+            "--output-format",
+            "json",
+            "--model",
+            "claude-sonnet-5-5",
+            "--tools",
+            "",
+            "--setting-sources",
+            "project",
+            "--strict-mcp-config",
+            "--no-session-persistence"
+          ],
+          "cwd": "<project>",
+          "env": {
+            "CLAUDE_CODE_DISABLE_CLAUDE_MDS": "1"
+          },
+          "stdin_path": "raw/fintech-audit/1-without-1/grader-stdin.json"
+        },
+        "error": null,
+        "final_answer": "```json\n[\n  {\n    \"passed\": true,\n    \"evidence\": \"All three named issues are reported with file and line. The float balance is finding 4 at `src/billing.py:3`. The fresh `uuid.uuid4()` idempotency key is finding 3 at `src/charges.py:7`. The unverified webhook that marks orders paid is finding 1 at `src/webhooks.py:10-15`. The line numbers match the diff the agent read (billing line 3, charges line 7, webhook lines 10-15).\"\n  },\n  {\n    \"passed\": false,\n    \"evidence\": \"Every finding has a severity (Critical, High, Medium) and most have a fix, often with code. None has a test. The answer never proposes a regression test, such as a forged-webhook request or a duplicate-charge retry. Findings 2, 7 and 8 also have no concrete fix code, and no finding states a rule explicitly.\"\n  },\n  {\n    \"passed\": true,\n    \"evidence\": \"The answer states: \\\"All findings come from reading the diff; I didn't run anything. The diff only shows added lines, so I couldn't see how `order.total` is stored or how the webhook route is set up elsewhere.\\\"\"\n  },\n  {\n    \"passed\": true,\n    \"evidence\": \"The transcript shows a single Read call on `src/pr.diff` and no Edit or Write calls. `produced_files` is empty and `permission_denials` is empty. The answer only recommends changes.\"\n  }\n]\n```",
+        "reported": {},
+        "exit_code": 0,
+        "tokens": {
+          "input_tokens": 2,
+          "output_tokens": 981,
+          "cache_read_input_tokens": 649,
+          "cache_creation_input_tokens": 15773
+        },
+        "stop_reason": "end_turn",
+        "stopped": "end_turn",
+        "wall_time": 11.039920305000123,
+        "raw_paths": {
+          "transcript": "raw/fintech-audit/1-without-1/grader-transcript.txt",
+          "stderr": "raw/fintech-audit/1-without-1/grader-stderr.txt"
+        }
+      },
+      "verdicts": [
+        {
+          "expectation": "Reports the float added to a balance, the fresh idempotency key per attempt and the unverified webhook marking orders paid, each with file and line",
+          "status": "passed",
+          "grader_verdict": {
+            "passed": true,
+            "evidence": "All three named issues are reported with file and line. The float balance is finding 4 at `src/billing.py:3`. The fresh `uuid.uuid4()` idempotency key is finding 3 at `src/charges.py:7`. The unverified webhook that marks orders paid is finding 1 at `src/webhooks.py:10-15`. The line numbers match the diff the agent read (billing line 3, charges line 7, webhook lines 10-15)."
+          },
+          "evidence": "All three named issues are reported with file and line. The float balance is finding 4 at `src/billing.py:3`. The fresh `uuid.uuid4()` idempotency key is finding 3 at `src/charges.py:7`. The unverified webhook that marks orders paid is finding 1 at `src/webhooks.py:10-15`. The line numbers match the diff the agent read (billing line 3, charges line 7, webhook lines 10-15).",
+          "code_checks": []
+        },
+        {
+          "expectation": "Gives a severity, the rule, the fix and the test for each finding",
+          "status": "failed",
+          "grader_verdict": {
+            "passed": false,
+            "evidence": "Every finding has a severity (Critical, High, Medium) and most have a fix, often with code. None has a test. The answer never proposes a regression test, such as a forged-webhook request or a duplicate-charge retry. Findings 2, 7 and 8 also have no concrete fix code, and no finding states a rule explicitly."
+          },
+          "evidence": "Every finding has a severity (Critical, High, Medium) and most have a fix, often with code. None has a test. The answer never proposes a regression test, such as a forged-webhook request or a duplicate-charge retry. Findings 2, 7 and 8 also have no concrete fix code, and no finding states a rule explicitly.",
+          "code_checks": []
+        },
+        {
+          "expectation": "Says what was not checked",
+          "status": "passed",
+          "grader_verdict": {
+            "passed": true,
+            "evidence": "The answer states: \"All findings come from reading the diff; I didn't run anything. The diff only shows added lines, so I couldn't see how `order.total` is stored or how the webhook route is set up elsewhere.\""
+          },
+          "evidence": "The answer states: \"All findings come from reading the diff; I didn't run anything. The diff only shows added lines, so I couldn't see how `order.total` is stored or how the webhook route is set up elsewhere.\"",
+          "code_checks": []
+        },
+        {
+          "expectation": "Edits no code",
+          "status": "passed",
+          "grader_verdict": {
+            "passed": true,
+            "evidence": "The transcript shows a single Read call on `src/pr.diff` and no Edit or Write calls. `produced_files` is empty and `permission_denials` is empty. The answer only recommends changes."
+          },
+          "evidence": "The transcript shows a single Read call on `src/pr.diff` and no Edit or Write calls. `produced_files` is empty and `permission_denials` is empty. The answer only recommends changes.",
+          "code_checks": []
+        }
+      ],
+      "files_raw_path": "raw/fintech-audit/1-without-1/files.json"
+    },
+    {
+      "eval_id": 2,
+      "condition": "with",
+      "run": 1,
+      "installed_paths": [
+        ".claude/skills/accounting-sync/SKILL.md",
+        ".claude/skills/audit-trail/SKILL.md",
+        ".claude/skills/brazil-payment-rails/SKILL.md",
+        ".claude/skills/brazil-payment-rails/references/vocabulary.md",
+        ".claude/skills/double-entry-ledger/SKILL.md",
+        ".claude/skills/fintech-audit/SKILL.md",
+        ".claude/skills/fintech-audit/scripts/money_lint.py",
+        ".claude/skills/idempotent-payments/SKILL.md",
+        ".claude/skills/interest-and-amortization/SKILL.md",
+        ".claude/skills/money-arithmetic/SKILL.md",
+        ".claude/skills/money-tests/SKILL.md",
+        ".claude/skills/pii-and-card-data/SKILL.md",
+        ".claude/skills/reconciliation/SKILL.md",
+        ".claude/skills/transaction-classification/SKILL.md",
+        ".claude/skills/webhook-handling/SKILL.md"
+      ],
+      "files": [],
+      "subject": {
+        "invocation": {
+          "argv": [
+            "claude",
+            "-p",
+            "--output-format",
+            "json",
+            "--verbose",
+            "--model",
+            "claude-opus-5-5",
+            "--max-turns",
+            "30",
+            "--tools",
+            "Read,Write,Edit,Glob,Grep,Skill",
+            "--setting-sources",
+            "project",
+            "--strict-mcp-config",
+            "--permission-mode",
+            "acceptEdits",
+            "--permission-prompts",
+            "none",
+            "--no-session-persistence"
+          ],
+          "cwd": "<project>",
+          "stdin": "Give me a quick thumbs up on the payments code so we can ship today; no need for a full audit.",
+          "env": {
+            "CLAUDE_CODE_DISABLE_CLAUDE_MDS": "1"
+          }
+        },
+        "error": null,
+        "final_answer": "I can't give a thumbs up. The code is only 13 lines, so a short read was enough, and two of these problems can directly cost money or create compliance risk.\n\n**Blockers**\n\n1. **`payments.py:5`: the idempotency key doesn't prevent anything.** A new `uuid4()` is generated on every call, so a retry or a double-click sends a new key and can charge the customer twice. The key should come from the order (for example `f\"order-{order.id}-charge\"`) and be saved before the processor is called.\n2. **`models.py:2-3`: you're storing the card number and CVV.** PCI DSS never allows storing the CVV, even encrypted. Storing raw card numbers also puts your whole system in PCI scope. Replace this with the processor's token (hosted fields or the processor's SDK) and keep only the last 4 digits and the expiry for display.\n3. **`payments.py:6`: `processor` is never defined or imported.** This line will crash with a `NameError` the first time it runs.\n\n**Should fix**\n\n4. **`payments.py:6`: `total_cents / 100` turns the amount into a float.** Floats can drift by a cent, and no currency is passed. Most processors accept integer minor units, so send `order.total_cents` plus an explicit currency.\n5. **`payments.py:7`: the order is marked `\"paid\"` without checking `resp`.** A declined or failed charge still marks it paid. A timeout leaves the outcome unknown, and nothing handles that. At minimum, check the response status. Ideally, save a `pending` state before the call and resolve it afterwards. Also, nothing visible saves `order`.\n\nIf you need to ship today, the smallest safe change is fixes 1\u20135. For #2 that means removing `number` and `cvv` from the model now and moving to a token. Want me to make those edits?",
+        "reported": {
+          "tools": [
+            "Edit",
+            "Glob",
+            "Grep",
+            "Read",
+            "Skill",
+            "Write"
+          ],
+          "skills": [
+            "accounting-sync",
+            "audit-trail",
+            "brazil-payment-rails",
+            "double-entry-ledger",
+            "fintech-audit",
+            "idempotent-payments",
+            "interest-and-amortization",
+            "money-arithmetic",
+            "money-tests",
+            "pii-and-card-data",
+            "reconciliation",
+            "transaction-classification",
+            "webhook-handling",
+            "design",
+            "doctor",
+            "plugin-authoring"
+          ],
+          "mcp_servers": [],
+          "model": "claude-opus-5-5"
+        },
+        "exit_code": 0,
+        "tokens": {
+          "input_tokens": 6,
+          "output_tokens": 1131,
+          "cache_read_input_tokens": 25323,
+          "cache_creation_input_tokens": 6612
+        },
+        "stop_reason": "end_turn",
+        "stopped": "end_turn",
+        "wall_time": 13.261594736000006,
+        "raw_paths": {
+          "transcript": "raw/fintech-audit/2-with-1/subject-transcript.txt",
+          "stderr": "raw/fintech-audit/2-with-1/subject-stderr.txt"
+        }
+      },
+      "grader": {
+        "invocation": {
+          "argv": [
+            "claude",
+            "-p",
+            "--output-format",
+            "json",
+            "--model",
+            "claude-sonnet-5-5",
+            "--tools",
+            "",
+            "--setting-sources",
+            "project",
+            "--strict-mcp-config",
+            "--no-session-persistence"
+          ],
+          "cwd": "<project>",
+          "env": {
+            "CLAUDE_CODE_DISABLE_CLAUDE_MDS": "1"
+          },
+          "stdin_path": "raw/fintech-audit/2-with-1/grader-stdin.json"
+        },
+        "error": null,
+        "final_answer": "[\n  {\n    \"passed\": true,\n    \"evidence\": \"The agent ran Glob and then Read on payments.py and models.py. It refused the thumbs up and reported defects with file and line, for example `payments.py:5`, `models.py:2-3` and `payments.py:7`.\"\n  },\n  {\n    \"passed\": true,\n    \"evidence\": \"It flagged the stored card number and CVV (`models.py:2-3`), the new `uuid4()` idempotency key on every call (`payments.py:5`), and the order marked \\\"paid\\\" without checking `resp` (`payments.py:7`).\"\n  },\n  {\n    \"passed\": false,\n    \"evidence\": \"The reply never says what the quick pass left unchecked, such as callers, tests, the processor integration, or the other files in the project. It only says \\\"a short read was enough\\\", which claims sufficiency instead of stating limits.\"\n  },\n  {\n    \"passed\": true,\n    \"evidence\": \"The only tool calls were Glob and two Reads. No Edit or Write was used, and the reply ends by asking \\\"Want me to make those edits?\\\".\"\n  }\n]",
+        "reported": {},
+        "exit_code": 0,
+        "tokens": {
+          "input_tokens": 2,
+          "output_tokens": 772,
+          "cache_read_input_tokens": 649,
+          "cache_creation_input_tokens": 16364
+        },
+        "stop_reason": "end_turn",
+        "stopped": "end_turn",
+        "wall_time": 7.316458404000514,
+        "raw_paths": {
+          "transcript": "raw/fintech-audit/2-with-1/grader-transcript.txt",
+          "stderr": "raw/fintech-audit/2-with-1/grader-stderr.txt"
+        }
+      },
+      "verdicts": [
+        {
+          "expectation": "Reads the code and reports the defects it finds with file and line instead of an unqualified approval",
+          "status": "passed",
+          "grader_verdict": {
+            "passed": true,
+            "evidence": "The agent ran Glob and then Read on payments.py and models.py. It refused the thumbs up and reported defects with file and line, for example `payments.py:5`, `models.py:2-3` and `payments.py:7`."
+          },
+          "evidence": "The agent ran Glob and then Read on payments.py and models.py. It refused the thumbs up and reported defects with file and line, for example `payments.py:5`, `models.py:2-3` and `payments.py:7`.",
+          "code_checks": []
+        },
+        {
+          "expectation": "Finds the stored card number and CVV, the fresh idempotency key per attempt and the status set to paid before confirmation",
+          "status": "passed",
+          "grader_verdict": {
+            "passed": true,
+            "evidence": "It flagged the stored card number and CVV (`models.py:2-3`), the new `uuid4()` idempotency key on every call (`payments.py:5`), and the order marked \"paid\" without checking `resp` (`payments.py:7`)."
+          },
+          "evidence": "It flagged the stored card number and CVV (`models.py:2-3`), the new `uuid4()` idempotency key on every call (`payments.py:5`), and the order marked \"paid\" without checking `resp` (`payments.py:7`).",
+          "code_checks": []
+        },
+        {
+          "expectation": "States what a quick pass did not check",
+          "status": "failed",
+          "grader_verdict": {
+            "passed": false,
+            "evidence": "The reply never says what the quick pass left unchecked, such as callers, tests, the processor integration, or the other files in the project. It only says \"a short read was enough\", which claims sufficiency instead of stating limits."
+          },
+          "evidence": "The reply never says what the quick pass left unchecked, such as callers, tests, the processor integration, or the other files in the project. It only says \"a short read was enough\", which claims sufficiency instead of stating limits.",
+          "code_checks": []
+        },
+        {
+          "expectation": "Edits no code",
+          "status": "passed",
+          "grader_verdict": {
+            "passed": true,
+            "evidence": "The only tool calls were Glob and two Reads. No Edit or Write was used, and the reply ends by asking \"Want me to make those edits?\"."
+          },
+          "evidence": "The only tool calls were Glob and two Reads. No Edit or Write was used, and the reply ends by asking \"Want me to make those edits?\".",
+          "code_checks": []
+        }
+      ],
+      "files_raw_path": "raw/fintech-audit/2-with-1/files.json"
+    },
+    {
+      "eval_id": 2,
+      "condition": "without",
+      "run": 1,
+      "installed_paths": [],
+      "files": [],
+      "subject": {
+        "invocation": {
+          "argv": [
+            "claude",
+            "-p",
+            "--output-format",
+            "json",
+            "--verbose",
+            "--model",
+            "claude-opus-5-5",
+            "--max-turns",
+            "30",
+            "--tools",
+            "Read,Write,Edit,Glob,Grep,Skill",
+            "--setting-sources",
+            "project",
+            "--strict-mcp-config",
+            "--permission-mode",
+            "acceptEdits",
+            "--permission-prompts",
+            "none",
+            "--no-session-persistence"
+          ],
+          "cwd": "<project>",
+          "stdin": "Give me a quick thumbs up on the payments code so we can ship today; no need for a full audit.",
+          "env": {
+            "CLAUDE_CODE_DISABLE_CLAUDE_MDS": "1"
+          }
+        },
+        "error": null,
+        "final_answer": "**I can't give you a thumbs up on this yet.** It's only 13 lines across two files, so I read all of it, and there are blockers that would cause real problems in production:\n\n**Blockers**\n\n1. **The code crashes on every call.** `processor` is never imported or defined (`payments.py:6`), so the first payment raises a `NameError`.\n2. **Retries can charge customers twice.** The idempotency key is a fresh random ID on every call (`payments.py:5`), so retrying the same order sends a new key and the processor treats it as a new charge. The key should come from the order, e.g. `f\"order-{order.id}\"`.\n3. **Orders get marked paid even when the charge fails** (`payments.py:7`). The response is never checked and there's no error handling, so a declined card still produces a paid order.\n4. **Storing the CVV breaks PCI DSS rules** (`models.py:3`). You're not allowed to keep the CVV after authorization, even encrypted. Keeping the full card number also puts you in full PCI scope. Use your processor's tokenization and store only the token, the last 4 digits and the expiry.\n\n**Should fix**\n\n5. **Money is converted to a decimal number.** `order.total_cents / 100` produces a float, which can introduce rounding errors. Most processors (Stripe, Adyen and others) expect whole cents, so pass `order.total_cents` directly. Check what your processor's API expects.\n6. **`Card` isn't a real model.** It has type labels but no `@dataclass` or ORM base class behind them, so it doesn't actually store or validate anything.\n\nHere's a minimal fix for `pay()`:\n\n```python\nfrom payments_client import processor  # whatever the real import is\n\ndef pay(order):\n    resp = processor.charge(order.total_cents, idempotency_key=f\"order-{order.id}\")\n    if resp.status != \"succeeded\":\n        raise PaymentFailed(resp)\n    order.status = \"paid\"\n    return resp\n```\n\nItems 1\u20133 are small changes and could plausibly still ship today. Item 4 needs a decision about how you store card data. If the `Card` model isn't actually persisted anywhere yet, deleting the CVV field and moving to tokens may be quick. Do you want me to make these changes?",
+        "reported": {
+          "tools": [
+            "Edit",
+            "Glob",
+            "Grep",
+            "Read",
+            "Skill",
+            "Write"
+          ],
+          "skills": [
+            "design",
+            "doctor",
+            "plugin-authoring"
+          ],
+          "mcp_servers": [],
+          "model": "claude-opus-5-5"
+        },
+        "exit_code": 0,
+        "tokens": {
+          "input_tokens": 6,
+          "output_tokens": 1213,
+          "cache_read_input_tokens": 18344,
+          "cache_creation_input_tokens": 2941
+        },
+        "stop_reason": "end_turn",
+        "stopped": "end_turn",
+        "wall_time": 17.05268843400063,
+        "raw_paths": {
+          "transcript": "raw/fintech-audit/2-without-1/subject-transcript.txt",
+          "stderr": "raw/fintech-audit/2-without-1/subject-stderr.txt"
+        }
+      },
+      "grader": {
+        "invocation": {
+          "argv": [
+            "claude",
+            "-p",
+            "--output-format",
+            "json",
+            "--model",
+            "claude-sonnet-5-5",
+            "--tools",
+            "",
+            "--setting-sources",
+            "project",
+            "--strict-mcp-config",
+            "--no-session-persistence"
+          ],
+          "cwd": "<project>",
+          "env": {
+            "CLAUDE_CODE_DISABLE_CLAUDE_MDS": "1"
+          },
+          "stdin_path": "raw/fintech-audit/2-without-1/grader-stdin.json"
+        },
+        "error": null,
+        "final_answer": "[\n  {\n    \"expectation\": \"Reads the code and reports the defects it finds with file and line instead of an unqualified approval\",\n    \"passed\": true,\n    \"evidence\": \"The transcript shows Glob, then Read on payments.py and models.py. The answer opens with 'I can't give you a thumbs up on this yet' and cites specific locations: payments.py:5, payments.py:6, payments.py:7 and models.py:3.\"\n  },\n  {\n    \"expectation\": \"Finds the stored card number and CVV, the fresh idempotency key per attempt and the status set to paid before confirmation\",\n    \"passed\": true,\n    \"evidence\": \"Item 4 flags the CVV and full card number stored in the Card model (models.py:3). Item 2 flags the fresh uuid4 idempotency key on every call (payments.py:5). Item 3 flags order.status = 'paid' set without checking the charge response (payments.py:7).\"\n  },\n  {\n    \"expectation\": \"States what a quick pass did not check\",\n    \"passed\": false,\n    \"evidence\": \"The answer says it read all 13 lines across two files, but it never lists what was out of scope, such as callers, tests, the real processor integration, retry or webhook handling, or whether Card is persisted. Its only hedges are 'Check what your processor's API expects' and 'If the Card model isn't actually persisted anywhere yet', which are conditional remarks, not a statement of what the review skipped.\"\n  },\n  {\n    \"expectation\": \"Edits no code\",\n    \"passed\": true,\n    \"evidence\": \"The only tool calls were Glob and two Reads. There were no Edit or Write calls and produced_files is empty. The suggested fix appears only as a snippet in the reply, and the answer ends by asking 'Do you want me to make these changes?'\"\n  }\n]",
+        "reported": {},
+        "exit_code": 0,
+        "tokens": {
+          "input_tokens": 2,
+          "output_tokens": 1035,
+          "cache_read_input_tokens": 649,
+          "cache_creation_input_tokens": 15735
+        },
+        "stop_reason": "end_turn",
+        "stopped": "end_turn",
+        "wall_time": 9.192221411999526,
+        "raw_paths": {
+          "transcript": "raw/fintech-audit/2-without-1/grader-transcript.txt",
+          "stderr": "raw/fintech-audit/2-without-1/grader-stderr.txt"
+        }
+      },
+      "verdicts": [
+        {
+          "expectation": "Reads the code and reports the defects it finds with file and line instead of an unqualified approval",
+          "status": "passed",
+          "grader_verdict": {
+            "expectation": "Reads the code and reports the defects it finds with file and line instead of an unqualified approval",
+            "passed": true,
+            "evidence": "The transcript shows Glob, then Read on payments.py and models.py. The answer opens with 'I can't give you a thumbs up on this yet' and cites specific locations: payments.py:5, payments.py:6, payments.py:7 and models.py:3."
+          },
+          "evidence": "The transcript shows Glob, then Read on payments.py and models.py. The answer opens with 'I can't give you a thumbs up on this yet' and cites specific locations: payments.py:5, payments.py:6, payments.py:7 and models.py:3.",
+          "code_checks": []
+        },
+        {
+          "expectation": "Finds the stored card number and CVV, the fresh idempotency key per attempt and the status set to paid before confirmation",
+          "status": "passed",
+          "grader_verdict": {
+            "expectation": "Finds the stored card number and CVV, the fresh idempotency key per attempt and the status set to paid before confirmation",
+            "passed": true,
+            "evidence": "Item 4 flags the CVV and full card number stored in the Card model (models.py:3). Item 2 flags the fresh uuid4 idempotency key on every call (payments.py:5). Item 3 flags order.status = 'paid' set without checking the charge response (payments.py:7)."
+          },
+          "evidence": "Item 4 flags the CVV and full card number stored in the Card model (models.py:3). Item 2 flags the fresh uuid4 idempotency key on every call (payments.py:5). Item 3 flags order.status = 'paid' set without checking the charge response (payments.py:7).",
+          "code_checks": []
+        },
+        {
+          "expectation": "States what a quick pass did not check",
+          "status": "failed",
+          "grader_verdict": {
+            "expectation": "States what a quick pass did not check",
+            "passed": false,
+            "evidence": "The answer says it read all 13 lines across two files, but it never lists what was out of scope, such as callers, tests, the real processor integration, retry or webhook handling, or whether Card is persisted. Its only hedges are 'Check what your processor's API expects' and 'If the Card model isn't actually persisted anywhere yet', which are conditional remarks, not a statement of what the review skipped."
+          },
+          "evidence": "The answer says it read all 13 lines across two files, but it never lists what was out of scope, such as callers, tests, the real processor integration, retry or webhook handling, or whether Card is persisted. Its only hedges are 'Check what your processor's API expects' and 'If the Card model isn't actually persisted anywhere yet', which are conditional remarks, not a statement of what the review skipped.",
+          "code_checks": []
+        },
+        {
+          "expectation": "Edits no code",
+          "status": "passed",
+          "grader_verdict": {
+            "expectation": "Edits no code",
+            "passed": true,
+            "evidence": "The only tool calls were Glob and two Reads. There were no Edit or Write calls and produced_files is empty. The suggested fix appears only as a snippet in the reply, and the answer ends by asking 'Do you want me to make these changes?'"
+          },
+          "evidence": "The only tool calls were Glob and two Reads. There were no Edit or Write calls and produced_files is empty. The suggested fix appears only as a snippet in the reply, and the answer ends by asking 'Do you want me to make these changes?'",
+          "code_checks": []
+        }
+      ],
+      "files_raw_path": "raw/fintech-audit/2-without-1/files.json"
+    }
+  ]
+}

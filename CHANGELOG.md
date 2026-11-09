@@ -11,3 +11,4 @@ First release. Skills at `fa81209`.
 - Seven development prompts and two held-out prompts per skill, run paired (with and without the skill) by `scripts/run_evals.py` with a blinded grader.
 - Measured on this commit: `claude-sonnet-5-5` 81% of expectations with the skills, 24% without (held-out 70% / 24%); `claude-opus-5-5` 89% / 35% (held-out 81% / 31%). Method and per-skill numbers under `evals/results/`; raw transcripts are attached to the release.
 - Installs as a Claude Code plugin, a Codex plugin, or with `npx skills add`.
+- After the measured commit, one file under `skills/` changed: `fintech-audit/scripts/money_lint.py` skips symlinks, strips control characters from quoted lines and skips lines over 2000 characters (3b36f10). The eval sandbox has no shell, so the lint was not part of the measured setup; every SKILL.md is as measured.

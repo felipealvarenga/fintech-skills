@@ -63,6 +63,11 @@ npx skills add felipealvarenga/fintech-skills
 
 Manual: copy `skills/<name>` into your project's `.claude/skills/` or `.agents/skills/`.
 
+The skills are Markdown files under `skills/`; read one before you install it, since an installed skill
+runs with your agent's permissions. The only code in the pack is the vectors you choose to run. To update:
+`claude plugin update fintech-skills@felipealvarenga`, `codex plugin marketplace upgrade` then the
+`codex plugin add` line again, or `npx skills update`.
+
 Skills load when a session starts, so start a new session after installing. Then send
 `Audit this repository's money code with fintech-skills.` on a repo you know: the agent should
 load the `fintech-audit` skill first and report file, line, rule, fix and test. If the transcript

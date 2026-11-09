@@ -70,9 +70,25 @@ def fake_session(role, project, prompt):
                        "usage": {"input_tokens": 4, "output_tokens": 3}})
 
 
+# A session gets a small environment: what `claude` needs to find its config and credentials, plus the
+# flags the method sets. Nothing else from the operator's shell reaches the subject or the grader.
+ENV_PASSTHROUGH = ("HOME", "PATH", "USER", "LOGNAME", "SHELL", "TERM", "LANG", "LC_ALL", "LC_CTYPE", "TZ", "TMPDIR",
+                   "XDG_CONFIG_HOME", "XDG_DATA_HOME", "XDG_CACHE_HOME", "XDG_STATE_HOME", "XDG_RUNTIME_DIR",
+                   "CLAUDE_CONFIG_DIR", "CLAUDE_CODE_OAUTH_TOKEN")
+ENV_PREFIXES = ("ANTHROPIC_",)
+SESSION_ENV = {"CLAUDE_CODE_DISABLE_CLAUDE_MDS": "1", "CLAUDE_CODE_DISABLE_BUNDLED_SKILLS": "1"}
+
+
+def session_env(extra, environ=None):
+    environ = os.environ if environ is None else environ
+    env = {k: v for k, v in environ.items() if k in ENV_PASSTHROUGH or k.startswith(ENV_PREFIXES)}
+    env.update(extra)
+    return env
+
+
 def call_session(args, role, project, prompt):
     invocation = {"argv": session_invocation(args, role), "cwd": "<project>", "stdin": prompt,
-                  "env": {"CLAUDE_CODE_DISABLE_CLAUDE_MDS": "1"}}
+                  "env": dict(SESSION_ENV)}
     start = time.monotonic()
     stdout, stderr, error = "", "", None
     exit_code = 0
@@ -82,7 +98,7 @@ def call_session(args, role, project, prompt):
         else:
             process = subprocess.run(invocation["argv"], input=prompt, text=True,
                                      capture_output=True, cwd=project, timeout=args.timeout,
-                                     env={**os.environ, **invocation["env"]})
+                                     env=session_env(invocation["env"]))
             stdout, stderr = process.stdout, process.stderr
             exit_code = process.returncode
     except subprocess.TimeoutExpired as exc:
@@ -154,10 +170,15 @@ def fixture_target(skill, name, files_root=None):
 
 def install_skill(skill, project):
     installed = []
+    root = skill.resolve()
     for source in sorted(skill.rglob("*")):
         relative = source.relative_to(skill)
-        if not source.is_file() or "__pycache__" in relative.parts or relative.parts[0] == "evals":
+        if "__pycache__" in relative.parts or relative.parts[0] == "evals":
             continue  # nothing under evals/: the vectors carry reference implementations
+        if source.is_symlink() or not source.resolve().is_relative_to(root):
+            raise ValueError(f"{source} is a symlink or resolves outside {skill}: a skill installs plain files only")
+        if not source.is_file():
+            continue
         target = project / ".claude/skills" / skill.name / relative
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(source, target)

@@ -91,11 +91,18 @@ def check_heldout(skill_dir: Path) -> None:
         errors.append(f"heldout {skill_dir.name}: fewer than 2 evals")
 
 
+def check_symlinks(root: Path) -> list[str]:
+    """A skill installs as plain files; a symlink under skills/ could carry a file from outside the pack."""
+    return [f"{p.relative_to(root.parent).as_posix()}: symlinks are not allowed under skills/"
+            for p in sorted(root.rglob("*")) if p.is_symlink()]
+
+
 def main() -> int:
     skills = sorted(p for p in (ROOT / "skills").iterdir() if p.is_dir())
     for s in skills:
         check_skill(s)
         check_heldout(s)
+    errors.extend(check_symlinks(ROOT / "skills"))
     plugin = json.loads((ROOT / ".claude-plugin" / "plugin.json").read_text(encoding="utf-8"))
     listed = {Path(p).name for p in plugin["skills"]}
     on_disk = {s.name for s in skills}

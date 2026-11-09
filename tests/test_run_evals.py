@@ -152,11 +152,11 @@ def test_cli_invocations(condition, runner_args, tmp_path):
         "argv": ["claude", "-p", "--output-format", "json", "--verbose", "--model", "claude-sonnet-5-5",
                  "--max-turns", "30", "--tools", "Read,Write,Edit,Glob,Grep,Skill", "--setting-sources", "project",
                  "--strict-mcp-config", "--permission-mode", "acceptEdits", "--permission-prompts", "none", "--no-session-persistence"],
-        "cwd": "<project>", "stdin": "Synthetic", "env": {"CLAUDE_CODE_DISABLE_CLAUDE_MDS": "1"}}
+        "cwd": "<project>", "stdin": "Synthetic", "env": {"CLAUDE_CODE_DISABLE_CLAUDE_MDS": "1", "CLAUDE_CODE_DISABLE_BUNDLED_SKILLS": "1"}}
     assert record["grader"]["invocation"]["argv"] == [
         "claude", "-p", "--output-format", "json", "--model", "claude-sonnet-5-5", "--tools", "",
         "--setting-sources", "project", "--strict-mcp-config", "--no-session-persistence"]
-    assert record["grader"]["invocation"]["env"] == {"CLAUDE_CODE_DISABLE_CLAUDE_MDS": "1"}
+    assert record["grader"]["invocation"]["env"] == runner.SESSION_ENV
 
 
 @pytest.mark.parametrize("role", ["subject", "grader"])
@@ -169,13 +169,16 @@ def test_real_transport(role, runner_args, tmp_path, monkeypatch):
     monkeypatch.setattr(subprocess, "run", transport)
     monkeypatch.setenv("EVAL_INHERITED_TEST", "inherited")
     monkeypatch.setenv("CLAUDE_CODE_DISABLE_CLAUDE_MDS", "0")
+    monkeypatch.setenv("HOME", "/home/operator")
     session = runner.call_session(runner_args, role, tmp_path, "stdin prompt")
     assert len(calls) == 1
     assert calls[0] == (session["invocation"]["argv"], {
         "input": "stdin prompt", "text": True, "capture_output": True, "cwd": tmp_path, "timeout": 900,
-        "env": {**os.environ, "CLAUDE_CODE_DISABLE_CLAUDE_MDS": "1"}})
-    assert calls[0][1]["env"]["EVAL_INHERITED_TEST"] == "inherited"
-    assert calls[0][1]["env"]["CLAUDE_CODE_DISABLE_CLAUDE_MDS"] == "1"
+        "env": runner.session_env(runner.SESSION_ENV)})
+    env = calls[0][1]["env"]
+    assert "EVAL_INHERITED_TEST" not in env  # the operator's shell does not reach the session
+    assert env["HOME"] == "/home/operator"
+    assert env["CLAUDE_CODE_DISABLE_CLAUDE_MDS"] == "1" and env["CLAUDE_CODE_DISABLE_BUNDLED_SKILLS"] == "1"
     assert session["final_answer"] == "done"
 
 
@@ -595,3 +598,31 @@ def test_heldout_mode_reads_the_separate_set_and_names_the_folder(runner_args, t
     data = json.loads((run_dir / "money-arithmetic.json").read_text())
     assert data["prompt_set"] == "heldout" and len(data["records"]) == len(items) * 2
     assert all(r["eval_id"] in {i["id"] for i in items} for r in data["records"])
+
+
+def test_install_skill_rejects_symlinks(tmp_path):
+    skill = tmp_path / "skills" / "demo"
+    skill.mkdir(parents=True)
+    (skill / "SKILL.md").write_text("---\nname: demo\ndescription: demo\n---\n")
+    outside = tmp_path / "secret.txt"
+    outside.write_text("marker")
+    (skill / "leak.txt").symlink_to(outside)
+    with pytest.raises(ValueError, match="symlink"):
+        runner.install_skill(skill, tmp_path / "project")
+    assert not (tmp_path / "project" / ".claude/skills/demo/leak.txt").exists()
+
+
+def test_session_env_passes_only_what_claude_needs():
+    shell = {"HOME": "/h", "PATH": "/bin", "ANTHROPIC_API_KEY": "k", "CLAUDE_CODE_MESSAGING_TOKEN": "t",
+             "AWS_SECRET_ACCESS_KEY": "s", "CLAUDECODE": "1", "GITHUB_TOKEN": "g"}
+    env = runner.session_env(runner.SESSION_ENV, environ=shell)
+    assert env == {"HOME": "/h", "PATH": "/bin", "ANTHROPIC_API_KEY": "k",
+                   "CLAUDE_CODE_DISABLE_CLAUDE_MDS": "1", "CLAUDE_CODE_DISABLE_BUNDLED_SKILLS": "1"}
+
+
+def test_validate_flags_symlinks_under_skills(tmp_path):
+    from scripts import validate
+    skills = tmp_path / "skills"
+    (skills / "demo").mkdir(parents=True)
+    (skills / "demo" / "ref.md").symlink_to(tmp_path / "elsewhere.md")
+    assert validate.check_symlinks(skills) == ["skills/demo/ref.md: symlinks are not allowed under skills/"]

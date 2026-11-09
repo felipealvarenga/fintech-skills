@@ -45,9 +45,11 @@ are not. For `fintech-audit` only, the with condition installs
 all 13 skill folders using the same rule: it measures the entry point with its pack. Every other
 skill installs alone; the without condition installs nothing under `.claude/`.
 Both conditions get Read, Write, Edit, Glob, Grep and Skill, with project-only settings, strict MCP configuration and
-no session persistence. Both subject and grader inherit the environment with
-`CLAUDE_CODE_DISABLE_CLAUDE_MDS=1` to disable `CLAUDE.md` discovery. No Bash, web or Agent tool is
-enabled. The runner adds no credential.
+no session persistence. Both subject and grader run with an allowlisted environment (`HOME`, `PATH`, locale,
+`XDG_*` and `TMPDIR`, `CLAUDE_CONFIG_DIR`, `CLAUDE_CODE_OAUTH_TOKEN`, `ANTHROPIC_*`), plus
+`CLAUDE_CODE_DISABLE_CLAUDE_MDS=1` to disable `CLAUDE.md` discovery and `CLAUDE_CODE_DISABLE_BUNDLED_SKILLS=1`
+to keep Claude Code's bundled skills out of the session. Nothing else from the operator's shell reaches a
+session. No Bash, web or Agent tool is enabled. The runner adds no credential.
 
 The fintech-audit eval 3 expectation "Runs the lint and reports zero leads" and eval 4 expectation
 "Runs the lint despite the request and says why in one sentence" are expected to fail in both

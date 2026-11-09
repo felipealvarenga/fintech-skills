@@ -54,6 +54,15 @@ class Finding:
     rule: str
 
 
+CONTROL_CHARS = re.compile(r"[\x00-\x08\x0b-\x1f\x7f]")
+MAX_LINE = 2000  # longer lines (minified bundles, data blobs) are skipped: the patterns can backtrack on them
+
+
+def excerpt(line: str) -> str:
+    """The quoted line, with terminal control characters removed so a scanned file cannot steer the output."""
+    return CONTROL_CHARS.sub("", line.strip())[:140]
+
+
 def scan_text(text: str, path: str) -> list[Finding]:
     findings: list[Finding] = []
     lines = text.splitlines()
@@ -61,11 +70,11 @@ def scan_text(text: str, path: str) -> list[Finding]:
         if code in ("PARSED_BODY_VERIFY", "DIGITS_ONLY_CNPJ", "PAID_ON_ISSUE", "WALL_CLOCK_MONEY"):
             for m in pattern.finditer(text):
                 line = text.count("\n", 0, m.end() - 1) + 1
-                findings.append(Finding(code, path, line, lines[line - 1].strip()[:140], skill, rule))
+                findings.append(Finding(code, path, line, excerpt(lines[line - 1]), skill, rule))
             continue
         for number, line_text in enumerate(lines, start=1):
-            if pattern.search(line_text):
-                findings.append(Finding(code, path, number, line_text.strip()[:140], skill, rule))
+            if len(line_text) <= MAX_LINE and pattern.search(line_text):
+                findings.append(Finding(code, path, number, excerpt(line_text), skill, rule))
     seen = set()
     unique = []
     for f in findings:
@@ -78,7 +87,7 @@ def scan_text(text: str, path: str) -> list[Finding]:
 
 def scan(root: Path) -> list[Finding]:
     findings: list[Finding] = []
-    files = [root] if root.is_file() else sorted(p for p in root.rglob("*") if p.is_file())
+    files = [root] if root.is_file() else sorted(p for p in root.rglob("*") if p.is_file() and not p.is_symlink())
     for p in files:
         if any(part in SKIP_DIRS for part in p.parts) or p.suffix not in EXTS:
             continue

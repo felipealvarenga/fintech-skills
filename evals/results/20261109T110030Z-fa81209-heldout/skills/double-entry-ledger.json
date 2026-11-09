@@ -1,0 +1,761 @@
+{
+  "run_id": "20261109T110030Z-fa81209-heldout",
+  "date": "20261109T110030Z",
+  "subject_model": "claude-opus-5-5",
+  "grader_model": "claude-sonnet-5-5",
+  "git_sha": "fa81209f644741b66d83bd8c61093385b29e3483",
+  "skills_dirty": false,
+  "prompt_set": "heldout",
+  "skill": "double-entry-ledger",
+  "installed_paths": [
+    ".claude/skills/double-entry-ledger/SKILL.md"
+  ],
+  "records": [
+    {
+      "eval_id": 1,
+      "condition": "with",
+      "run": 1,
+      "installed_paths": [
+        ".claude/skills/double-entry-ledger/SKILL.md"
+      ],
+      "files": [
+        {
+          "path": "marketplace_ledger/__init__.py",
+          "size": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "raw_path": "raw/double-entry-ledger/1-with-1/files/marketplace_ledger/__init__.py"
+        },
+        {
+          "path": "marketplace_ledger/ledger.py",
+          "size": 8527,
+          "sha256": "a9b239f1462b4e178dec4987d998a09c992396cdda8900d618d205591ab8a578",
+          "raw_path": "raw/double-entry-ledger/1-with-1/files/marketplace_ledger/ledger.py"
+        },
+        {
+          "path": "marketplace_ledger/payouts.py",
+          "size": 11829,
+          "sha256": "bc125fd828d7c489121c0ead9ecec70bd128c9d9cc5f8f2409afd51afa032dbd",
+          "raw_path": "raw/double-entry-ledger/1-with-1/files/marketplace_ledger/payouts.py"
+        },
+        {
+          "path": "marketplace_ledger/schema.sql",
+          "size": 4765,
+          "sha256": "d733761f2a32d4ad8654f2e2a70e8584267844f73c0c1d0c225d4ca5e8f34c9b",
+          "raw_path": "raw/double-entry-ledger/1-with-1/files/marketplace_ledger/schema.sql"
+        },
+        {
+          "path": "pyproject.toml",
+          "size": 151,
+          "sha256": "3c2d5f7a614ab60d09320d1cdadf919be20d6ba9b722a1d2a6b37bf83cedf381",
+          "raw_path": "raw/double-entry-ledger/1-with-1/files/pyproject.toml"
+        },
+        {
+          "path": "tests/test_ledger.py",
+          "size": 5193,
+          "sha256": "6e95d918abb203ce3e56e7f2e1154632646339b0e9f64124f783edd31a794bad",
+          "raw_path": "raw/double-entry-ledger/1-with-1/files/tests/test_ledger.py"
+        },
+        {
+          "path": "tests/test_payouts.py",
+          "size": 5783,
+          "sha256": "b25e40b1a3ef9a71b53b9d300965d17ae072a72c304b27b7a6364da18a935eb1",
+          "raw_path": "raw/double-entry-ledger/1-with-1/files/tests/test_payouts.py"
+        }
+      ],
+      "subject": {
+        "invocation": {
+          "argv": [
+            "claude",
+            "-p",
+            "--output-format",
+            "json",
+            "--verbose",
+            "--model",
+            "claude-opus-5-5",
+            "--max-turns",
+            "30",
+            "--tools",
+            "Read,Write,Edit,Glob,Grep,Skill",
+            "--setting-sources",
+            "project",
+            "--strict-mcp-config",
+            "--permission-mode",
+            "acceptEdits",
+            "--permission-prompts",
+            "none",
+            "--no-session-persistence"
+          ],
+          "cwd": "<project>",
+          "stdin": "We run a marketplace. Add seller payouts: when an order completes, the seller is owed the order amount minus our 8 percent commission, and we pay sellers weekly in one batch.",
+          "env": {
+            "CLAUDE_CODE_DISABLE_CLAUDE_MDS": "1"
+          }
+        },
+        "error": null,
+        "final_answer": "I've added seller payouts as a small double-entry ledger. **The tests haven't been run:** I had no shell in this session. Run them with `pytest`.\n\nThe folder had no existing app code, so this is a standalone module (`marketplace_ledger/`, Python plus a Postgres schema). It still needs to be wired into your order system.\n\n**How the money moves**\n\nEvery movement is a balanced entry that can't be edited or deleted. A seller's balance is always calculated from those entries, never stored and updated. Example for a 100.00 order where the card processor charges us 3.20:\n\n| Event | Money moves from \u2192 to |\n|---|---|\n| Buyer pays | 100.00 into \"buyer funds held\"; the processor owes us 96.80 and the 3.20 is booked as a fee |\n| Order completes | 100.00 out of held funds: 92.00 to the seller's payable account, 8.00 to our commission |\n| Weekly batch | 92.00 from the seller's payable account to \"payouts in transit\" |\n| Bank confirms | 92.00 from in transit out of cash |\n| Bank rejects | The batch entry is reversed, so the seller is owed the 92.00 again next week |\n\n**Choices I made that you should check**\n- **Commission rounding:** 8% is calculated in cents and rounded half-up. The seller gets the exact remainder, so the two always add up to the order total.\n- **Batch cutoff:** each batch pays every seller with a positive balance as of the week-ending date, separately per currency. An order completed after the cutoff goes into the next batch.\n- **Rerunning a batch is safe:** the same week, seller and currency can only be paid once, even if the batch records are lost and the job runs again. A batch dated earlier than the last one is refused, because it could pay people twice.\n- **Refunds:** a refund undoes the order's completion entry, taking back both the seller's share and our commission. If the seller was already paid, their balance goes negative and is taken out of their future earnings. Nobody with a negative balance gets paid.\n- **Processor fees:** I assumed we absorb them, so the seller always gets 92% of the gross amount. I also assumed fees aren't returned on a refund.\n- **Database safeguards** (`schema.sql`): the database itself checks that every entry balances in each currency, blocks edits and deletes, keeps references unique, and refuses entries dated in a closed accounting period. The app's database user only gets permission to read and insert.\n\n**Files**\n- `marketplace_ledger/ledger.py`: the only way to write entries, plus balances, reversals and period close.\n- `marketplace_ledger/payouts.py`: the account list, the order steps (pay, complete, refund) and the weekly batch with bank confirm or reject.\n- `marketplace_ledger/schema.sql`: the Postgres tables and checks. It needs Postgres 15 or later.\n- `tests/test_ledger.py`: the ledger rules (balancing, immutability, reversals, closed periods, no double-posting, totals matching).\n- `tests/test_payouts.py`: the 92/8 split and rounding, batching, safe reruns, the cutoff, bank confirm and reject, and refunds before and after a payout.\n\nThe ledger guide I followed mentions a set of shared reference tests in `evals/vectors/`, but that folder doesn't exist, so they weren't run.\n\n**Still to do:** a minimum payout amount or a hold period before sellers get paid, sending the batch to the bank, tax reporting for sellers, and a Postgres-backed version of `Ledger` (the current one keeps data in memory).",
+        "reported": {
+          "tools": [
+            "Edit",
+            "Glob",
+            "Grep",
+            "Read",
+            "Skill",
+            "Write"
+          ],
+          "skills": [
+            "double-entry-ledger",
+            "design",
+            "doctor",
+            "plugin-authoring"
+          ],
+          "mcp_servers": [],
+          "model": "claude-opus-5-5"
+        },
+        "exit_code": 0,
+        "tokens": {
+          "input_tokens": 18,
+          "output_tokens": 23637,
+          "cache_read_input_tokens": 132765,
+          "cache_creation_input_tokens": 28933
+        },
+        "stop_reason": "end_turn",
+        "stopped": "end_turn",
+        "wall_time": 253.68231763699987,
+        "raw_paths": {
+          "transcript": "raw/double-entry-ledger/1-with-1/subject-transcript.txt",
+          "stderr": "raw/double-entry-ledger/1-with-1/subject-stderr.txt"
+        }
+      },
+      "grader": {
+        "invocation": {
+          "argv": [
+            "claude",
+            "-p",
+            "--output-format",
+            "json",
+            "--model",
+            "claude-sonnet-5-5",
+            "--tools",
+            "",
+            "--setting-sources",
+            "project",
+            "--strict-mcp-config",
+            "--no-session-persistence"
+          ],
+          "cwd": "<project>",
+          "env": {
+            "CLAUDE_CODE_DISABLE_CLAUDE_MDS": "1"
+          },
+          "stdin_path": "raw/double-entry-ledger/1-with-1/grader-stdin.json"
+        },
+        "error": null,
+        "final_answer": "[\n  {\n    \"passed\": true,\n    \"evidence\": \"`complete_order` in payouts.py posts a balanced entry: Dr 2030 Buyer funds held for the full amount, Cr 2110 Seller payable[seller] for 92%, Cr 4010 Commission revenue for 8%. `record_payment` posts the cash side as Dr 1020 Receivable from processor (and Dr 5010 processor fees) against Cr 2030. `Ledger.post` enforces balance per currency.\"\n  },\n  {\n    \"passed\": true,\n    \"evidence\": \"`Marketplace.seller_balance` calls `Ledger.balance`, which sums debit and credit postings for the account, optionally filtered by `as_of`. No balance column or mutable counter exists. The schema has no balance column either. The final answer states balances are always calculated from the entries.\"\n  },\n  {\n    \"passed\": true,\n    \"evidence\": \"`run_weekly_payout` posts each line with external_ref `payout-<week_ending>:<seller>:<currency>`. The ledger returns the existing entry for a repeated ref (and the schema has `external_ref UNIQUE`). It also rebuilds lost lines from the ledger instead of re-paying. `test_rerunning_batch_does_not_double_pay` checks the entry count is unchanged on rerun, including after `m.batches.clear()`.\"\n  },\n  {\n    \"passed\": true,\n    \"evidence\": \"tests/test_payouts.py has an `assert_trial_balance` helper that checks debits == credits per currency. It is called after completed orders, after a weekly batch over several sellers and currencies, after a failed payout and rerun, and after a refund. tests/test_ledger.py `test_trial_balance_after_random_entries` does the same over 500 random entries. The tests were written but not run, which the answer states.\"\n  }\n]",
+        "reported": {},
+        "exit_code": 0,
+        "tokens": {
+          "input_tokens": 2,
+          "output_tokens": 982,
+          "cache_read_input_tokens": 649,
+          "cache_creation_input_tokens": 147026
+        },
+        "stop_reason": "end_turn",
+        "stopped": "end_turn",
+        "wall_time": 12.264925102000234,
+        "raw_paths": {
+          "transcript": "raw/double-entry-ledger/1-with-1/grader-transcript.txt",
+          "stderr": "raw/double-entry-ledger/1-with-1/grader-stderr.txt"
+        }
+      },
+      "verdicts": [
+        {
+          "expectation": "Models the completed order as balanced entries: seller payable, commission revenue and the cash or receivable side",
+          "status": "passed",
+          "grader_verdict": {
+            "passed": true,
+            "evidence": "`complete_order` in payouts.py posts a balanced entry: Dr 2030 Buyer funds held for the full amount, Cr 2110 Seller payable[seller] for 92%, Cr 4010 Commission revenue for 8%. `record_payment` posts the cash side as Dr 1020 Receivable from processor (and Dr 5010 processor fees) against Cr 2030. `Ledger.post` enforces balance per currency."
+          },
+          "evidence": "`complete_order` in payouts.py posts a balanced entry: Dr 2030 Buyer funds held for the full amount, Cr 2110 Seller payable[seller] for 92%, Cr 4010 Commission revenue for 8%. `record_payment` posts the cash side as Dr 1020 Receivable from processor (and Dr 5010 processor fees) against Cr 2030. `Ledger.post` enforces balance per currency.",
+          "code_checks": []
+        },
+        {
+          "expectation": "Derives the seller balance from entries rather than storing a mutable balance column",
+          "status": "passed",
+          "grader_verdict": {
+            "passed": true,
+            "evidence": "`Marketplace.seller_balance` calls `Ledger.balance`, which sums debit and credit postings for the account, optionally filtered by `as_of`. No balance column or mutable counter exists. The schema has no balance column either. The final answer states balances are always calculated from the entries."
+          },
+          "evidence": "`Marketplace.seller_balance` calls `Ledger.balance`, which sums debit and credit postings for the account, optionally filtered by `as_of`. No balance column or mutable counter exists. The schema has no balance column either. The final answer states balances are always calculated from the entries.",
+          "code_checks": []
+        },
+        {
+          "expectation": "Makes the weekly payout batch idempotent by a batch or payout reference",
+          "status": "passed",
+          "grader_verdict": {
+            "passed": true,
+            "evidence": "`run_weekly_payout` posts each line with external_ref `payout-<week_ending>:<seller>:<currency>`. The ledger returns the existing entry for a repeated ref (and the schema has `external_ref UNIQUE`). It also rebuilds lost lines from the ledger instead of re-paying. `test_rerunning_batch_does_not_double_pay` checks the entry count is unchanged on rerun, including after `m.batches.clear()`."
+          },
+          "evidence": "`run_weekly_payout` posts each line with external_ref `payout-<week_ending>:<seller>:<currency>`. The ledger returns the existing entry for a repeated ref (and the schema has `external_ref UNIQUE`). It also rebuilds lost lines from the ledger instead of re-paying. `test_rerunning_batch_does_not_double_pay` checks the entry count is unchanged on rerun, including after `m.batches.clear()`.",
+          "code_checks": []
+        },
+        {
+          "expectation": "Writes a test that the trial balance is zero after a sequence of orders and payouts",
+          "status": "passed",
+          "grader_verdict": {
+            "passed": true,
+            "evidence": "tests/test_payouts.py has an `assert_trial_balance` helper that checks debits == credits per currency. It is called after completed orders, after a weekly batch over several sellers and currencies, after a failed payout and rerun, and after a refund. tests/test_ledger.py `test_trial_balance_after_random_entries` does the same over 500 random entries. The tests were written but not run, which the answer states."
+          },
+          "evidence": "tests/test_payouts.py has an `assert_trial_balance` helper that checks debits == credits per currency. It is called after completed orders, after a weekly batch over several sellers and currencies, after a failed payout and rerun, and after a refund. tests/test_ledger.py `test_trial_balance_after_random_entries` does the same over 500 random entries. The tests were written but not run, which the answer states.",
+          "code_checks": []
+        }
+      ],
+      "files_raw_path": "raw/double-entry-ledger/1-with-1/files.json"
+    },
+    {
+      "eval_id": 1,
+      "condition": "without",
+      "run": 1,
+      "installed_paths": [],
+      "files": [
+        {
+          "path": "payouts/__init__.py",
+          "size": 286,
+          "sha256": "711a8111a830f99dc39440ac4b408a864d825210cd2dcaccbbdffdcabe6c8e08",
+          "raw_path": "raw/double-entry-ledger/1-without-1/files/payouts/__init__.py"
+        },
+        {
+          "path": "payouts/schema.sql",
+          "size": 1742,
+          "sha256": "af3b6b613224c969f6d5e18a288cc1c36355bf337c226d26e996b328d3f11279",
+          "raw_path": "raw/double-entry-ledger/1-without-1/files/payouts/schema.sql"
+        },
+        {
+          "path": "payouts/service.py",
+          "size": 11243,
+          "sha256": "e8a20b1aa1be0206a94ac5088669d08b23e62f022bf5efe1c160801d17455c7d",
+          "raw_path": "raw/double-entry-ledger/1-without-1/files/payouts/service.py"
+        },
+        {
+          "path": "tests/test_payouts.py",
+          "size": 6342,
+          "sha256": "9b96b3f4c112e7330c05808c70ac07701b3f898c884cfaf49700b6b21f9bf261",
+          "raw_path": "raw/double-entry-ledger/1-without-1/files/tests/test_payouts.py"
+        }
+      ],
+      "subject": {
+        "invocation": {
+          "argv": [
+            "claude",
+            "-p",
+            "--output-format",
+            "json",
+            "--verbose",
+            "--model",
+            "claude-opus-5-5",
+            "--max-turns",
+            "30",
+            "--tools",
+            "Read,Write,Edit,Glob,Grep,Skill",
+            "--setting-sources",
+            "project",
+            "--strict-mcp-config",
+            "--permission-mode",
+            "acceptEdits",
+            "--permission-prompts",
+            "none",
+            "--no-session-persistence"
+          ],
+          "cwd": "<project>",
+          "stdin": "We run a marketplace. Add seller payouts: when an order completes, the seller is owed the order amount minus our 8 percent commission, and we pay sellers weekly in one batch.",
+          "env": {
+            "CLAUDE_CODE_DISABLE_CLAUDE_MDS": "1"
+          }
+        },
+        "error": null,
+        "final_answer": "I built the seller payout feature as a small standalone Python module, because the folder was empty and there was no existing code to fit it into. **I haven't run the tests:** I don't have a shell in this session. Please run `python -m unittest discover tests` from the project root before relying on it.\n\n**Files**\n- `payouts/schema.sql`: two tables. `seller_ledger` is an add-only record of what each seller is owed. `payouts` holds one row per seller, per currency, per week.\n- `payouts/service.py`: the logic.\n- `tests/test_payouts.py`: tests for the commission split, the weekly batch, refunds and payment failures.\n\n**How it works**\n1. **When an order completes**, `record_order_completed()` records the 8% commission and the seller's share. Amounts are whole cents throughout, never floats. The commission is rounded to the nearest cent, and the seller gets exactly what's left, so the two always add up to the order amount. If the same order-completed event arrives twice, the seller is only credited once.\n2. **Once a week**, `create_weekly_batch()` adds up each seller's unpaid amounts from before Monday 00:00 UTC and creates one payout per seller per currency. Running it again for the same week creates nothing new. Payments in different currencies are never mixed.\n3. **Paying out:** `execute_pending(provider)` sends each payout through your payment provider, using the payout's ID as an idempotency key (a unique ID that stops the same transfer going through twice).\n   - If the provider definitively refuses the transfer (raises `PayoutRejected`), the amount goes back to the seller's unpaid balance and is included next week.\n   - If the provider times out or returns an error, the money may already have been sent. So the payout stays pending and is retried with the same key. If it were added back into the next batch instead, the seller could be paid twice.\n\n**Decisions you should check**\n- **Refunds after completion:** I assumed we give back our commission proportionally, so the seller only loses their 92% share. If we keep the commission on refunds, the change is in `record_refund`.\n- **Refunds bigger than earnings:** if refunds push a seller's balance below zero, they get no payout that week, and the shortfall is taken from later earnings. You may want a minimum payout amount or a way to collect the money back.\n- **Replays with a different amount:** if an order-completed event is replayed with a different amount, it's ignored. Alerting on that may be better.\n- **Weekly cutoff:** the week ends Monday 00:00 UTC. Change it in `week_boundary` if your weeks run differently.\n\n**Still to do for production:** connect a real payment provider. Its `send()` should raise `PayoutRejected` only when the transfer definitely didn't happen. You'll also need to schedule the weekly job, reconcile payouts against provider reports, and move the SQL to your production database. The SQL is written for SQLite, but it's standard and should port to Postgres easily.",
+        "reported": {
+          "tools": [
+            "Edit",
+            "Glob",
+            "Grep",
+            "Read",
+            "Skill",
+            "Write"
+          ],
+          "skills": [
+            "design",
+            "doctor",
+            "plugin-authoring"
+          ],
+          "mcp_servers": [],
+          "model": "claude-opus-5-5"
+        },
+        "exit_code": 0,
+        "tokens": {
+          "input_tokens": 10,
+          "output_tokens": 13051,
+          "cache_read_input_tokens": 47976,
+          "cache_creation_input_tokens": 14510
+        },
+        "stop_reason": "end_turn",
+        "stopped": "end_turn",
+        "wall_time": 106.28341082900079,
+        "raw_paths": {
+          "transcript": "raw/double-entry-ledger/1-without-1/subject-transcript.txt",
+          "stderr": "raw/double-entry-ledger/1-without-1/subject-stderr.txt"
+        }
+      },
+      "grader": {
+        "invocation": {
+          "argv": [
+            "claude",
+            "-p",
+            "--output-format",
+            "json",
+            "--model",
+            "claude-sonnet-5-5",
+            "--tools",
+            "",
+            "--setting-sources",
+            "project",
+            "--strict-mcp-config",
+            "--no-session-persistence"
+          ],
+          "cwd": "<project>",
+          "env": {
+            "CLAUDE_CODE_DISABLE_CLAUDE_MDS": "1"
+          },
+          "stdin_path": "raw/double-entry-ledger/1-without-1/grader-stdin.json"
+        },
+        "error": null,
+        "final_answer": "[\n  {\n    \"passed\": false,\n    \"evidence\": \"The implementation does not model balanced double-entry. `seller_ledger` has one row per event with gross_cents, commission_cents and net_cents plus a CHECK that gross = commission + net. There is no commission revenue account and no cash or receivable side. The seller payable and commission are columns on one row, not separate balanced debit/credit entries.\"\n  },\n  {\n    \"passed\": true,\n    \"evidence\": \"No mutable balance column exists. `unpaid_balance()` computes `SUM(net_cents)` over `seller_ledger` rows where payout_id IS NULL. The ledger is append-only: refunds are new negative reversal rows. The only mutation is the payout_id link, which marks entries as batched but does not store a balance.\"\n  },\n  {\n    \"passed\": true,\n    \"evidence\": \"The `payouts` table has UNIQUE(seller_id, currency, period_end), and `create_weekly_batch` inserts with ON CONFLICT DO NOTHING and skips existing rows. `test_weekly_batch_one_payout_per_seller` asserts a rerun returns []. The provider call also uses the idempotency key `payout-{id}`. The key is per seller, per currency, per week, not a single batch reference, but re-running the batch is idempotent.\"\n  },\n  {\n    \"passed\": false,\n    \"evidence\": \"No test checks that a trial balance is zero. `tests/test_payouts.py` checks commission + net == gross for the split, individual balances, and payout amounts. It has no trial-balance check across a sequence of orders and payouts, and the schema has no balanced entries to sum. The tests were also never run.\"\n  }\n]",
+        "reported": {},
+        "exit_code": 0,
+        "tokens": {
+          "input_tokens": 2,
+          "output_tokens": 557,
+          "cache_read_input_tokens": 649,
+          "cache_creation_input_tokens": 102662
+        },
+        "stop_reason": "end_turn",
+        "stopped": "end_turn",
+        "wall_time": 8.646659357000317,
+        "raw_paths": {
+          "transcript": "raw/double-entry-ledger/1-without-1/grader-transcript.txt",
+          "stderr": "raw/double-entry-ledger/1-without-1/grader-stderr.txt"
+        }
+      },
+      "verdicts": [
+        {
+          "expectation": "Models the completed order as balanced entries: seller payable, commission revenue and the cash or receivable side",
+          "status": "failed",
+          "grader_verdict": {
+            "passed": false,
+            "evidence": "The implementation does not model balanced double-entry. `seller_ledger` has one row per event with gross_cents, commission_cents and net_cents plus a CHECK that gross = commission + net. There is no commission revenue account and no cash or receivable side. The seller payable and commission are columns on one row, not separate balanced debit/credit entries."
+          },
+          "evidence": "The implementation does not model balanced double-entry. `seller_ledger` has one row per event with gross_cents, commission_cents and net_cents plus a CHECK that gross = commission + net. There is no commission revenue account and no cash or receivable side. The seller payable and commission are columns on one row, not separate balanced debit/credit entries.",
+          "code_checks": []
+        },
+        {
+          "expectation": "Derives the seller balance from entries rather than storing a mutable balance column",
+          "status": "passed",
+          "grader_verdict": {
+            "passed": true,
+            "evidence": "No mutable balance column exists. `unpaid_balance()` computes `SUM(net_cents)` over `seller_ledger` rows where payout_id IS NULL. The ledger is append-only: refunds are new negative reversal rows. The only mutation is the payout_id link, which marks entries as batched but does not store a balance."
+          },
+          "evidence": "No mutable balance column exists. `unpaid_balance()` computes `SUM(net_cents)` over `seller_ledger` rows where payout_id IS NULL. The ledger is append-only: refunds are new negative reversal rows. The only mutation is the payout_id link, which marks entries as batched but does not store a balance.",
+          "code_checks": []
+        },
+        {
+          "expectation": "Makes the weekly payout batch idempotent by a batch or payout reference",
+          "status": "passed",
+          "grader_verdict": {
+            "passed": true,
+            "evidence": "The `payouts` table has UNIQUE(seller_id, currency, period_end), and `create_weekly_batch` inserts with ON CONFLICT DO NOTHING and skips existing rows. `test_weekly_batch_one_payout_per_seller` asserts a rerun returns []. The provider call also uses the idempotency key `payout-{id}`. The key is per seller, per currency, per week, not a single batch reference, but re-running the batch is idempotent."
+          },
+          "evidence": "The `payouts` table has UNIQUE(seller_id, currency, period_end), and `create_weekly_batch` inserts with ON CONFLICT DO NOTHING and skips existing rows. `test_weekly_batch_one_payout_per_seller` asserts a rerun returns []. The provider call also uses the idempotency key `payout-{id}`. The key is per seller, per currency, per week, not a single batch reference, but re-running the batch is idempotent.",
+          "code_checks": []
+        },
+        {
+          "expectation": "Writes a test that the trial balance is zero after a sequence of orders and payouts",
+          "status": "failed",
+          "grader_verdict": {
+            "passed": false,
+            "evidence": "No test checks that a trial balance is zero. `tests/test_payouts.py` checks commission + net == gross for the split, individual balances, and payout amounts. It has no trial-balance check across a sequence of orders and payouts, and the schema has no balanced entries to sum. The tests were also never run."
+          },
+          "evidence": "No test checks that a trial balance is zero. `tests/test_payouts.py` checks commission + net == gross for the split, individual balances, and payout amounts. It has no trial-balance check across a sequence of orders and payouts, and the schema has no balanced entries to sum. The tests were also never run.",
+          "code_checks": []
+        }
+      ],
+      "files_raw_path": "raw/double-entry-ledger/1-without-1/files.json"
+    },
+    {
+      "eval_id": 2,
+      "condition": "with",
+      "run": 1,
+      "installed_paths": [
+        ".claude/skills/double-entry-ledger/SKILL.md"
+      ],
+      "files": [
+        {
+          "path": "migrations/001_ledger.sql",
+          "size": 6159,
+          "sha256": "aec97da26fb51fe5dd5932f472078df1b987bb5e4aea9a6661c836f9861878c6",
+          "raw_path": "raw/double-entry-ledger/2-with-1/files/migrations/001_ledger.sql"
+        },
+        {
+          "path": "src/ledger.py",
+          "size": 18527,
+          "sha256": "251b711641ca291170d7cd4ded479a97335b7ab6a994a58bc211ac726d5df772",
+          "raw_path": "raw/double-entry-ledger/2-with-1/files/src/ledger.py"
+        },
+        {
+          "path": "src/points.py",
+          "size": 7768,
+          "sha256": "5817d2d29b0afefc50142fb2a886984f1b80a80baf934f1c07fbf2b086625d69",
+          "raw_path": "raw/double-entry-ledger/2-with-1/files/src/points.py"
+        },
+        {
+          "path": "tests/conftest.py",
+          "size": 104,
+          "sha256": "118bb725ecb5fbb2e6c2742fba9aaaa89d5f395dfc031eeb5cec983c5b919076",
+          "raw_path": "raw/double-entry-ledger/2-with-1/files/tests/conftest.py"
+        },
+        {
+          "path": "tests/test_ledger.py",
+          "size": 7887,
+          "sha256": "d547f46bb1f9cac23159ae7e6ea9a66e22f121f4897aedc9d61bcaaa289286ca",
+          "raw_path": "raw/double-entry-ledger/2-with-1/files/tests/test_ledger.py"
+        },
+        {
+          "path": "tests/test_points.py",
+          "size": 6835,
+          "sha256": "f40d1283b4829c5582e3d86e8b16c6d4693558fcb2e0b8474483cea01d178ddc",
+          "raw_path": "raw/double-entry-ledger/2-with-1/files/tests/test_points.py"
+        }
+      ],
+      "subject": {
+        "invocation": {
+          "argv": [
+            "claude",
+            "-p",
+            "--output-format",
+            "json",
+            "--verbose",
+            "--model",
+            "claude-opus-5-5",
+            "--max-turns",
+            "30",
+            "--tools",
+            "Read,Write,Edit,Glob,Grep,Skill",
+            "--setting-sources",
+            "project",
+            "--strict-mcp-config",
+            "--permission-mode",
+            "acceptEdits",
+            "--permission-prompts",
+            "none",
+            "--no-session-persistence"
+          ],
+          "cwd": "<project>",
+          "stdin": "Loyalty points are redeemable for money in our app. Add expiry: points older than 12 months expire at the end of each month. Start from src/points.py.",
+          "env": {
+            "CLAUDE_CODE_DISABLE_CLAUDE_MDS": "1"
+          }
+        },
+        "error": null,
+        "final_answer": "I've added expiry by moving loyalty points off the `users.points` counter and onto an append-only double-entry ledger. A single number can't say how old each point is, so it can't drive expiry, and since points can be cashed out they're money you owe users. **None of it has been run:** I had no shell in this session, so the tests and the Postgres code are untested.\n\n**How expiry works** (`src/points.py`)\n- **Rule:** at each month-end, points dated before the same date one year earlier expire, unless they've been spent. For example, on 30 Nov 2026, points earned on or before 29 Nov 2025 expire.\n- **Oldest first:** redemptions use up the oldest points first. The amount that expires is the old points earned minus everything taken out of the account so far, never less than zero and never more than the current balance. A late run therefore can't push anyone negative.\n- **Each expiry is a normal ledger entry:** it moves points from the user to a \"breakage\" revenue account, dated the month-end. Running it twice does nothing the second time. Customer support can give points back by reversing the entry; the restored points then get a fresh 12 months.\n- **Monthly job:** `run_monthly_expiry(ledger, previous_month_end(today))` covers every user. Schedule it on the 1st of each month, before that month's books are closed (once a period is closed, entries dated in it are refused). There's no scheduler in the repo, so this still needs setting up.\n\n**What else changed**\n- **`src/ledger.py`:** the ledger itself. Every entry must balance; nothing can be edited or deleted, only reversed; balances are calculated from entries; closing a period is logged. Includes an in-memory backend and a Postgres one.\n- **`earn` and `redeem` signatures changed:** they now take a `ledger` and a required `ref` (order or checkout id), so repeating a call has no effect. `redeem` checks the balance while holding a lock on the user's account, so two simultaneous redemptions can't spend the same points. Any existing callers need updating.\n- **`migrations/001_ledger.sql`:** the database enforces the same rules as the code (no edits or deletes, balanced entries, closed periods), so a stray script can't get around them. Replace `app_user` with your app's database role.\n- **Moving existing balances:** `migrate_legacy_balances` creates one opening entry per user. The old balances have no earn dates, so they're treated as earned on the cutover day and first expire about 12 months later. After cutover, stop writing to `users.points` and keep it read-only until you've compared it against the new balances.\n- **Tests:** `tests/test_ledger.py` covers the ledger rules and `tests/test_points.py` covers expiry. The skill's shared reference tests aren't in this repo, so I couldn't hook them up.\n\n**Decisions for you**\n1. **Exact-anniversary points:** points earned exactly 12 months before a month-end aren't \"older than 12 months\", so they expire a month later. If you'd rather expire everything earned in the same calendar month a year earlier, that's a one-line change in `expiry_cutoff`.\n2. **Converting points to money:** a redemption moves points into `loyalty:redemption_clearing`. The step that turns them into money, which needs an exchange-rate entry on the money side, isn't built because there's no money ledger in this repo.\n3. **Refunded purchases:** removing points for a refunded purchase counts as spending the oldest points first. That only delays some expiry, which favours the customer, and it evens out within a few months.\n4. **Legal and accounting:** these points are worth money, so adding expiry to existing balances probably needs advance notice to users under consumer law. How to book the breakage revenue is a question for your accountant.",
+        "reported": {
+          "tools": [
+            "Edit",
+            "Glob",
+            "Grep",
+            "Read",
+            "Skill",
+            "Write"
+          ],
+          "skills": [
+            "double-entry-ledger",
+            "design",
+            "doctor",
+            "plugin-authoring"
+          ],
+          "mcp_servers": [],
+          "model": "claude-opus-5-5"
+        },
+        "exit_code": 0,
+        "tokens": {
+          "input_tokens": 18,
+          "output_tokens": 41651,
+          "cache_read_input_tokens": 196029,
+          "cache_creation_input_tokens": 46874
+        },
+        "stop_reason": "end_turn",
+        "stopped": "end_turn",
+        "wall_time": 362.80826247799996,
+        "raw_paths": {
+          "transcript": "raw/double-entry-ledger/2-with-1/subject-transcript.txt",
+          "stderr": "raw/double-entry-ledger/2-with-1/subject-stderr.txt"
+        }
+      },
+      "grader": {
+        "invocation": {
+          "argv": [
+            "claude",
+            "-p",
+            "--output-format",
+            "json",
+            "--model",
+            "claude-sonnet-5-5",
+            "--tools",
+            "",
+            "--setting-sources",
+            "project",
+            "--strict-mcp-config",
+            "--no-session-persistence"
+          ],
+          "cwd": "<project>",
+          "env": {
+            "CLAUDE_CODE_DISABLE_CLAUDE_MDS": "1"
+          },
+          "stdin_path": "raw/double-entry-ledger/2-with-1/grader-stdin.json"
+        },
+        "error": null,
+        "final_answer": "```json\n[\n  {\n    \"passed\": true,\n    \"evidence\": \"src/points.py no longer runs UPDATE users SET points. Earn, redeem and expire are each posted as immutable double-entry ledger entries through Ledger.post. Corrections go through Ledger.reverse. migrations/001_ledger.sql adds triggers that block UPDATE, DELETE and TRUNCATE on entries and postings.\"\n  },\n  {\n    \"passed\": false,\n    \"evidence\": \"expire_user computes one aggregate per user: min(credits dated before cutoff - all debits through month_end, current balance). It posts a single entry (debit user, credit breakage) with only a memo like 'points earned before {cutoff} expired'. No expiry posting references a specific earn entry or lot, and the amount cannot be traced to the earn it came from. FIFO is only implied by the arithmetic, not tracked per lot.\"\n  },\n  {\n    \"passed\": false,\n    \"evidence\": \"Balances are derived from postings (Ledger.balance sums debits and credits), which meets the first half. There is no reconciler or rebuild job comparing a cached value with the derived one. The legacy users.points column is left in place, and the final answer only says to keep it read-only and compare it manually. No code or test does that comparison.\"\n  },\n  {\n    \"passed\": true,\n    \"evidence\": \"tests/test_points.py has test_points_older_than_12_months_expire_at_month_end, which expires at 2026-11-30 and 2026-12-31 and checks the amounts and effective_date. It also has test_expiry_cutoff, test_late_expiry_run_never_makes_balance_negative and test_redeem_more_than_balance_raises_and_writes_nothing, which raises InsufficientPoints and checks that nothing is written. The final answer says these tests were not run.\"\n  }\n]\n```",
+        "reported": {},
+        "exit_code": 0,
+        "tokens": {
+          "input_tokens": 2,
+          "output_tokens": 1170,
+          "cache_read_input_tokens": 649,
+          "cache_creation_input_tokens": 232203
+        },
+        "stop_reason": "end_turn",
+        "stopped": "end_turn",
+        "wall_time": 12.987262018000365,
+        "raw_paths": {
+          "transcript": "raw/double-entry-ledger/2-with-1/grader-transcript.txt",
+          "stderr": "raw/double-entry-ledger/2-with-1/grader-stderr.txt"
+        }
+      },
+      "verdicts": [
+        {
+          "expectation": "Replaces the mutable points column with append-only entries (earn, redeem, expire)",
+          "status": "passed",
+          "grader_verdict": {
+            "passed": true,
+            "evidence": "src/points.py no longer runs UPDATE users SET points. Earn, redeem and expire are each posted as immutable double-entry ledger entries through Ledger.post. Corrections go through Ledger.reverse. migrations/001_ledger.sql adds triggers that block UPDATE, DELETE and TRUNCATE on entries and postings."
+          },
+          "evidence": "src/points.py no longer runs UPDATE users SET points. Earn, redeem and expire are each posted as immutable double-entry ledger entries through Ledger.post. Corrections go through Ledger.reverse. migrations/001_ledger.sql adds triggers that block UPDATE, DELETE and TRUNCATE on entries and postings.",
+          "code_checks": []
+        },
+        {
+          "expectation": "Expires per earning lot, oldest first, so the expired amount is traceable to the earn it came from",
+          "status": "failed",
+          "grader_verdict": {
+            "passed": false,
+            "evidence": "expire_user computes one aggregate per user: min(credits dated before cutoff - all debits through month_end, current balance). It posts a single entry (debit user, credit breakage) with only a memo like 'points earned before {cutoff} expired'. No expiry posting references a specific earn entry or lot, and the amount cannot be traced to the earn it came from. FIFO is only implied by the arithmetic, not tracked per lot."
+          },
+          "evidence": "expire_user computes one aggregate per user: min(credits dated before cutoff - all debits through month_end, current balance). It posts a single entry (debit user, credit breakage) with only a memo like 'points earned before {cutoff} expired'. No expiry posting references a specific earn entry or lot, and the amount cannot be traced to the earn it came from. FIFO is only implied by the arithmetic, not tracked per lot.",
+          "code_checks": []
+        },
+        {
+          "expectation": "Derives the balance from entries and reconciles any cached value",
+          "status": "failed",
+          "grader_verdict": {
+            "passed": false,
+            "evidence": "Balances are derived from postings (Ledger.balance sums debits and credits), which meets the first half. There is no reconciler or rebuild job comparing a cached value with the derived one. The legacy users.points column is left in place, and the final answer only says to keep it read-only and compare it manually. No code or test does that comparison."
+          },
+          "evidence": "Balances are derived from postings (Ledger.balance sums debits and credits), which meets the first half. There is no reconciler or rebuild job comparing a cached value with the derived one. The legacy users.points column is left in place, and the final answer only says to keep it read-only and compare it manually. No code or test does that comparison.",
+          "code_checks": []
+        },
+        {
+          "expectation": "Tests an expiry at a month end and that redeeming cannot go below zero",
+          "status": "passed",
+          "grader_verdict": {
+            "passed": true,
+            "evidence": "tests/test_points.py has test_points_older_than_12_months_expire_at_month_end, which expires at 2026-11-30 and 2026-12-31 and checks the amounts and effective_date. It also has test_expiry_cutoff, test_late_expiry_run_never_makes_balance_negative and test_redeem_more_than_balance_raises_and_writes_nothing, which raises InsufficientPoints and checks that nothing is written. The final answer says these tests were not run."
+          },
+          "evidence": "tests/test_points.py has test_points_older_than_12_months_expire_at_month_end, which expires at 2026-11-30 and 2026-12-31 and checks the amounts and effective_date. It also has test_expiry_cutoff, test_late_expiry_run_never_makes_balance_negative and test_redeem_more_than_balance_raises_and_writes_nothing, which raises InsufficientPoints and checks that nothing is written. The final answer says these tests were not run.",
+          "code_checks": [
+            {
+              "kind": "test_file",
+              "passed": true
+            }
+          ]
+        }
+      ],
+      "files_raw_path": "raw/double-entry-ledger/2-with-1/files.json"
+    },
+    {
+      "eval_id": 2,
+      "condition": "without",
+      "run": 1,
+      "installed_paths": [],
+      "files": [
+        {
+          "path": "migrations/001_point_lots.sql",
+          "size": 1229,
+          "sha256": "b471a435689452c3470d6f668e5cbc26265c6db3f559a6aa87be752fa8631b0d",
+          "raw_path": "raw/double-entry-ledger/2-without-1/files/migrations/001_point_lots.sql"
+        },
+        {
+          "path": "src/points.py",
+          "size": 4840,
+          "sha256": "e71c7a00325a3ca4a70dd1648310b67d3e0fd0fb02eb0619ee336a423c29138f",
+          "raw_path": "raw/double-entry-ledger/2-without-1/files/src/points.py"
+        }
+      ],
+      "subject": {
+        "invocation": {
+          "argv": [
+            "claude",
+            "-p",
+            "--output-format",
+            "json",
+            "--verbose",
+            "--model",
+            "claude-opus-5-5",
+            "--max-turns",
+            "30",
+            "--tools",
+            "Read,Write,Edit,Glob,Grep,Skill",
+            "--setting-sources",
+            "project",
+            "--strict-mcp-config",
+            "--permission-mode",
+            "acceptEdits",
+            "--permission-prompts",
+            "none",
+            "--no-session-persistence"
+          ],
+          "cwd": "<project>",
+          "stdin": "Loyalty points are redeemable for money in our app. Add expiry: points older than 12 months expire at the end of each month. Start from src/points.py.",
+          "env": {
+            "CLAUDE_CODE_DISABLE_CLAUDE_MDS": "1"
+          }
+        },
+        "error": null,
+        "final_answer": "I've added point expiry. It needed a schema change: the app only stored one running total per user, so there was no record of when each point was earned. I haven't run any of this. There's no database or test suite here, so it needs testing against a real Postgres before release.\n\n**How it works**\n\n- **New table** (`migrations/001_point_lots.sql`): each earning is saved as its own dated batch in a new `point_lots` table. `users.points` stays as the total and must always equal the sum of what's left in that user's batches.\n- **`earn`**: creates a new batch and adds to the total.\n- **`redeem`**: spends from the oldest batches first, so points closest to expiring are used up first.\n- **`run_monthly_expiry(conn, year, month)`**: the month-end job. Running it for November 2026 expires everything earned before 2025-12-01 00:00 UTC. The cutoff depends only on the month you pass in, not on when the job actually runs, so running it a few minutes late changes nothing. Re-running it is safe because expired batches are already at zero. It saves each user separately, so if it crashes partway you just run it again.\n- **Concurrency**: every change first locks the user's row. A redemption and an expiry for the same user can't overlap and spend the same points twice.\n\n**Two fixes to the old code (this is real money):**\n- `redeem` never checked the balance before, so users could go negative. It now raises `InsufficientPoints`, and the database also rejects negative balances.\n- If the batches and the total ever disagree, `redeem` refuses with an error instead of letting points be spent that aren't backed by a batch.\n\n**Decisions for you:**\n1. **Existing balances**: we don't know when they were earned. I dated them to the migration day, so nobody loses points on launch and the 12-month clock starts then. If you want a different rule, change the `INSERT` in the migration.\n2. **Timezone**: months end at UTC midnight. If you mean users' local time, the cutoff needs to change.\n3. **Telling users**: if your terms or local law require warning users before points expire, there's nothing for that yet. `users_with_expiring_points` can be used to find who to warn.\n\n**Assumptions to check:**\n- Postgres with a psycopg-style connection: `%s` placeholders, `fetchone`/`fetchall`, and `conn.cursor()` usable in a `with` block.\n- The calling code commits the transaction after `earn` and `redeem`.\n- Nothing else in the codebase writes to `users.points` directly. Anything that does would put it out of sync with the batches.\n- You'll need to schedule `run_monthly_expiry` yourself, for example with cron, right after each month ends.",
+        "reported": {
+          "tools": [
+            "Edit",
+            "Glob",
+            "Grep",
+            "Read",
+            "Skill",
+            "Write"
+          ],
+          "skills": [
+            "design",
+            "doctor",
+            "plugin-authoring"
+          ],
+          "mcp_servers": [],
+          "model": "claude-opus-5-5"
+        },
+        "exit_code": 0,
+        "tokens": {
+          "input_tokens": 8,
+          "output_tokens": 5248,
+          "cache_read_input_tokens": 29990,
+          "cache_creation_input_tokens": 7326
+        },
+        "stop_reason": "end_turn",
+        "stopped": "end_turn",
+        "wall_time": 69.71353448700029,
+        "raw_paths": {
+          "transcript": "raw/double-entry-ledger/2-without-1/subject-transcript.txt",
+          "stderr": "raw/double-entry-ledger/2-without-1/subject-stderr.txt"
+        }
+      },
+      "grader": {
+        "invocation": {
+          "argv": [
+            "claude",
+            "-p",
+            "--output-format",
+            "json",
+            "--model",
+            "claude-sonnet-5-5",
+            "--tools",
+            "",
+            "--setting-sources",
+            "project",
+            "--strict-mcp-config",
+            "--no-session-persistence"
+          ],
+          "cwd": "<project>",
+          "env": {
+            "CLAUDE_CODE_DISABLE_CLAUDE_MDS": "1"
+          },
+          "stdin_path": "raw/double-entry-ledger/2-without-1/grader-stdin.json"
+        },
+        "error": null,
+        "final_answer": "[\n  {\n    \"passed\": false,\n    \"evidence\": \"The design is not append-only. `users.points` is still a mutable column, updated in `earn`, `redeem` and `expire_user_points`. The new `point_lots` table is also mutated in place (`remaining = remaining - %s`, `remaining = 0`). There are no separate earn, redeem or expire entries, so redemptions leave no record of their own.\"\n  },\n  {\n    \"passed\": true,\n    \"evidence\": \"Expiry works per earning lot. `expire_user_points` selects lots with `earned_at < cutoff` and `remaining > 0`, zeroes each one, and records `expired_amount` and `expired_at` on that lot, so the expired amount traces back to its earn. Redeem consumes lots oldest first (`ORDER BY earned_at, id`). The expiry query has no ORDER BY, but it expires every eligible lot, so order does not change the result.\"\n  },\n  {\n    \"passed\": false,\n    \"evidence\": \"The balance is read from the cached `users.points` (`_lock_user_balance`) and is never derived from the lots. No reconciliation routine exists. The only consistency check is a side effect in `redeem`: it raises RuntimeError if `to_spend != 0` after consuming lots. That catches the cache exceeding the lots, but it does not recompute or repair the cached value.\"\n  },\n  {\n    \"passed\": false,\n    \"evidence\": \"No tests were written. The produced files are only `migrations/001_point_lots.sql` and `src/points.py`. The final answer states 'I haven't run any of this. There's no database or test suite here.' Neither a month-end expiry test nor a no-negative-redeem test exists. `redeem` does raise InsufficientPoints, but that behavior is untested.\"\n  }\n]",
+        "reported": {},
+        "exit_code": 0,
+        "tokens": {
+          "input_tokens": 2,
+          "output_tokens": 1029,
+          "cache_read_input_tokens": 649,
+          "cache_creation_input_tokens": 41967
+        },
+        "stop_reason": "end_turn",
+        "stopped": "end_turn",
+        "wall_time": 10.41296065700044,
+        "raw_paths": {
+          "transcript": "raw/double-entry-ledger/2-without-1/grader-transcript.txt",
+          "stderr": "raw/double-entry-ledger/2-without-1/grader-stderr.txt"
+        }
+      },
+      "verdicts": [
+        {
+          "expectation": "Replaces the mutable points column with append-only entries (earn, redeem, expire)",
+          "status": "failed",
+          "grader_verdict": {
+            "passed": false,
+            "evidence": "The design is not append-only. `users.points` is still a mutable column, updated in `earn`, `redeem` and `expire_user_points`. The new `point_lots` table is also mutated in place (`remaining = remaining - %s`, `remaining = 0`). There are no separate earn, redeem or expire entries, so redemptions leave no record of their own."
+          },
+          "evidence": "The design is not append-only. `users.points` is still a mutable column, updated in `earn`, `redeem` and `expire_user_points`. The new `point_lots` table is also mutated in place (`remaining = remaining - %s`, `remaining = 0`). There are no separate earn, redeem or expire entries, so redemptions leave no record of their own.",
+          "code_checks": []
+        },
+        {
+          "expectation": "Expires per earning lot, oldest first, so the expired amount is traceable to the earn it came from",
+          "status": "passed",
+          "grader_verdict": {
+            "passed": true,
+            "evidence": "Expiry works per earning lot. `expire_user_points` selects lots with `earned_at < cutoff` and `remaining > 0`, zeroes each one, and records `expired_amount` and `expired_at` on that lot, so the expired amount traces back to its earn. Redeem consumes lots oldest first (`ORDER BY earned_at, id`). The expiry query has no ORDER BY, but it expires every eligible lot, so order does not change the result."
+          },
+          "evidence": "Expiry works per earning lot. `expire_user_points` selects lots with `earned_at < cutoff` and `remaining > 0`, zeroes each one, and records `expired_amount` and `expired_at` on that lot, so the expired amount traces back to its earn. Redeem consumes lots oldest first (`ORDER BY earned_at, id`). The expiry query has no ORDER BY, but it expires every eligible lot, so order does not change the result.",
+          "code_checks": []
+        },
+        {
+          "expectation": "Derives the balance from entries and reconciles any cached value",
+          "status": "failed",
+          "grader_verdict": {
+            "passed": false,
+            "evidence": "The balance is read from the cached `users.points` (`_lock_user_balance`) and is never derived from the lots. No reconciliation routine exists. The only consistency check is a side effect in `redeem`: it raises RuntimeError if `to_spend != 0` after consuming lots. That catches the cache exceeding the lots, but it does not recompute or repair the cached value."
+          },
+          "evidence": "The balance is read from the cached `users.points` (`_lock_user_balance`) and is never derived from the lots. No reconciliation routine exists. The only consistency check is a side effect in `redeem`: it raises RuntimeError if `to_spend != 0` after consuming lots. That catches the cache exceeding the lots, but it does not recompute or repair the cached value.",
+          "code_checks": []
+        },
+        {
+          "expectation": "Tests an expiry at a month end and that redeeming cannot go below zero",
+          "status": "failed",
+          "grader_verdict": {
+            "passed": false,
+            "evidence": "No tests were written. The produced files are only `migrations/001_point_lots.sql` and `src/points.py`. The final answer states 'I haven't run any of this. There's no database or test suite here.' Neither a month-end expiry test nor a no-negative-redeem test exists. `redeem` does raise InsufficientPoints, but that behavior is untested."
+          },
+          "evidence": "No tests were written. The produced files are only `migrations/001_point_lots.sql` and `src/points.py`. The final answer states 'I haven't run any of this. There's no database or test suite here.' Neither a month-end expiry test nor a no-negative-redeem test exists. `redeem` does raise InsufficientPoints, but that behavior is untested.",
+          "code_checks": [
+            {
+              "kind": "test_file",
+              "passed": false
+            }
+          ]
+        }
+      ],
+      "files_raw_path": "raw/double-entry-ledger/2-without-1/files.json"
+    }
+  ]
+}

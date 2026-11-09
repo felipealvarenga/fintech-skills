@@ -1,0 +1,2482 @@
+{
+  "run_id": "20261109T103432Z-fa81209",
+  "date": "20261109T103432Z",
+  "subject_model": "claude-opus-5-5",
+  "grader_model": "claude-sonnet-5-5",
+  "git_sha": "fa81209f644741b66d83bd8c61093385b29e3483",
+  "skills_dirty": false,
+  "prompt_set": "dev",
+  "skill": "double-entry-ledger",
+  "installed_paths": [
+    ".claude/skills/double-entry-ledger/SKILL.md"
+  ],
+  "records": [
+    {
+      "eval_id": 1,
+      "condition": "with",
+      "run": 1,
+      "installed_paths": [
+        ".claude/skills/double-entry-ledger/SKILL.md"
+      ],
+      "files": [
+        {
+          "path": "migrations/001_wallet_ledger.sql",
+          "size": 10410,
+          "sha256": "dbc3ba1797f4e7e7fac92ddc0d2a4e9c6adf9359bfa2a4109d5fa9d940cced0c",
+          "raw_path": "raw/double-entry-ledger/1-with-1/files/migrations/001_wallet_ledger.sql"
+        },
+        {
+          "path": "src/ledger.py",
+          "size": 20878,
+          "sha256": "ae95578f7b86972fbd8779613365c352bd3d71668f9d1a2767e1792e6fb77c06",
+          "raw_path": "raw/double-entry-ledger/1-with-1/files/src/ledger.py"
+        },
+        {
+          "path": "src/wallet.py",
+          "size": 8857,
+          "sha256": "a198ef94d16f87c07741bc2e8be59b3868d5c7032aac4c8baab8b050f5377eee",
+          "raw_path": "raw/double-entry-ledger/1-with-1/files/src/wallet.py"
+        },
+        {
+          "path": "tests/conftest.py",
+          "size": 107,
+          "sha256": "f3d22f4a82883d98a1d692f7dd687dfb87df90ab7e18f284da46c147504ec710",
+          "raw_path": "raw/double-entry-ledger/1-with-1/files/tests/conftest.py"
+        },
+        {
+          "path": "tests/test_ledger.py",
+          "size": 7922,
+          "sha256": "d7411d794a48eaea232a2b48af3623cc83bb3b65aadf9e9c08d489f70da4ca04",
+          "raw_path": "raw/double-entry-ledger/1-with-1/files/tests/test_ledger.py"
+        },
+        {
+          "path": "tests/test_wallet.py",
+          "size": 4520,
+          "sha256": "c8d196b6dc58afd3762fa4def267b1dc0df0719c75daca6cdd6bc151353d03cd",
+          "raw_path": "raw/double-entry-ledger/1-with-1/files/tests/test_wallet.py"
+        }
+      ],
+      "subject": {
+        "invocation": {
+          "argv": [
+            "claude",
+            "-p",
+            "--output-format",
+            "json",
+            "--verbose",
+            "--model",
+            "claude-opus-5-5",
+            "--max-turns",
+            "30",
+            "--tools",
+            "Read,Write,Edit,Glob,Grep,Skill",
+            "--setting-sources",
+            "project",
+            "--strict-mcp-config",
+            "--permission-mode",
+            "acceptEdits",
+            "--permission-prompts",
+            "none",
+            "--no-session-persistence"
+          ],
+          "cwd": "<project>",
+          "stdin": "Add a wallet balance column to users and decrement it when they pay. Start from src/wallet.py.",
+          "env": {
+            "CLAUDE_CODE_DISABLE_CLAUDE_MDS": "1"
+          }
+        },
+        "error": null,
+        "final_answer": "I've built it, but none of it has been run: I have no shell here, so the tests and the migration are untested.\n\n**One change from what you asked for:** you wanted a balance column that `pay` subtracts from directly. The `double-entry-ledger` skill's rule 4 says balances must be calculated from a permanent record of transactions. A column edited in place has no history, can be raced by two payments at once, and can't be checked. So `users.wallet_balance_minor` still exists and still goes down when a user pays. But it's now a cache that only a database trigger writes, and a check compares it against the ledger.\n\n**Files**\n- **`migrations/001_wallet_ledger.sql`**\n  - Adds `users.wallet_balance_minor`. It can't go below zero, and the database rejects any update to it that doesn't come from the ledger trigger.\n  - Adds tables for accounts, journal entries, postings and accounting periods.\n  - Entries and postings can't be updated, deleted or truncated, and the app role loses those permissions.\n  - At commit, the database rejects any entry that doesn't balance in each currency.\n  - It also blocks entries dated in a closed period, postings added to an entry after it was saved, and postings whose currency doesn't match the account.\n  - Tenant isolation is enforced with composite foreign keys.\n- **`src/ledger.py`**: the core. `Ledger.post` is the only way to write money movements. It checks for a repeated reference, account currency and tenant, and closed periods. It locks the accounts, then runs an optional check such as \"enough funds\". It also has `reverse`, `balance(as_of)`, `trial_balance`, `close_period` and a logged `reopen_period`. There's a Postgres store (psycopg 3) and an in-memory one for tests.\n- **`src/wallet.py`**: rewritten, with these functions:\n  - `pay` takes money from the user's wallet and credits revenue, or another wallet you name. It refuses to overdraw, and the funds check runs while the wallet is locked. Retrying with the same `idempotency_key` charges nothing.\n  - `top_up` records the money as owed by the card processor until it pays out, with the processor's fee booked separately.\n  - `refund_payment` reverses the original payment exactly.\n  - `wallet_balance` returns the balance calculated from the ledger.\n  - `reconcile_wallet_cache` reports users whose cached balance doesn't match the ledger.\n  - `migrate_legacy_balances` moves the old `users.balance` into one opening entry per user. It can be re-run safely, and it skips negative balances and returns them for review.\n- **`tests/test_ledger.py`, `tests/test_wallet.py`**: cover every test the skill lists, plus overdraft, person-to-person payments and rejecting float amounts. The skill also mentions shared reference test cases under `evals/vectors/`, but that folder isn't in this repo, so those aren't included.\n\n**Breaking changes**\n- Amounts are now whole numbers of cents (`amount_minor: int`) instead of floats.\n- `pay` and `top_up` now need a `tenant_id`, a currency and an idempotency or processor reference.\n- Both now take a `Ledger` instead of `db`.\n\nNothing else in the repo calls them.\n\n**Check before running the migration**\n- It assumes `users.id` is text and the app connects as the role `app_rw`.\n- The conversion to cents assumes currencies with 2 decimal places.\n- Stop writing to `users.balance` before you run `migrate_legacy_balances`. Drop that column once the reconciler reports no differences.\n\nTo run the tests: `pytest tests/`. The database triggers aren't covered by them and need a real Postgres to test.",
+        "reported": {
+          "tools": [
+            "Edit",
+            "Glob",
+            "Grep",
+            "Read",
+            "Skill",
+            "Write"
+          ],
+          "skills": [
+            "double-entry-ledger",
+            "design",
+            "doctor",
+            "plugin-authoring"
+          ],
+          "mcp_servers": [],
+          "model": "claude-opus-5-5"
+        },
+        "exit_code": 0,
+        "tokens": {
+          "input_tokens": 18,
+          "output_tokens": 42529,
+          "cache_read_input_tokens": 185507,
+          "cache_creation_input_tokens": 46539
+        },
+        "stop_reason": "end_turn",
+        "stopped": "end_turn",
+        "wall_time": 344.04715214199996,
+        "raw_paths": {
+          "transcript": "raw/double-entry-ledger/1-with-1/subject-transcript.txt",
+          "stderr": "raw/double-entry-ledger/1-with-1/subject-stderr.txt"
+        }
+      },
+      "grader": {
+        "invocation": {
+          "argv": [
+            "claude",
+            "-p",
+            "--output-format",
+            "json",
+            "--model",
+            "claude-sonnet-5-5",
+            "--tools",
+            "",
+            "--setting-sources",
+            "project",
+            "--strict-mcp-config",
+            "--no-session-persistence"
+          ],
+          "cwd": "<project>",
+          "env": {
+            "CLAUDE_CODE_DISABLE_CLAUDE_MDS": "1"
+          },
+          "stdin_path": "raw/double-entry-ledger/1-with-1/grader-stdin.json"
+        },
+        "error": null,
+        "final_answer": "[\n{\"passed\": true, \"evidence\": \"The wallet no longer does UPDATE balance = balance - x from application code. wallet.pay posts a journal entry via Ledger.post (debit wallet 2010, credit revenue/payee). users.wallet_balance_minor exists but only a trigger on postings writes it, with a guard trigger rejecting direct updates, so there is a ledger behind it.\"},\n{\"passed\": true, \"evidence\": \"src/ledger.py defines Entry with Posting(account_id, side, amount_minor, currency) and check_balanced() verifies debits == credits per currency, with a minimum of 2 postings. The migration adds a deferred constraint trigger (ledger_check_entry) enforcing per-currency balance at commit. pay, top_up and the opening-balance migration all build balanced debit/credit postings.\"},\n{\"passed\": true, \"evidence\": \"Ledger.balance and wallet_balance derive balances from sum of postings. The users.wallet_balance_minor cache is trigger-maintained, and wallet.reconcile_wallet_cache compares cached vs derived values and logs drift on mismatch. It is a function meant to be run on a schedule rather than a scheduled job itself, which still counts as a reconciler.\"},\n{\"passed\": true, \"evidence\": \"tests/test_ledger.py has test_unbalanced_entry_raises (debit 100 vs credit 99 raises UnbalancedEntry), test_single_posting_raises, and test_balanced_in_total_but_not_per_currency_raises. test_trial_balance_after_random_entries posts 300 random balanced entries and asserts per-currency debits == credits via ledger.trial_balance. The tests were written but not run, which the answer states.\"}\n]",
+        "reported": {},
+        "exit_code": 0,
+        "tokens": {
+          "input_tokens": 2,
+          "output_tokens": 578,
+          "cache_read_input_tokens": 649,
+          "cache_creation_input_tokens": 281482
+        },
+        "stop_reason": "end_turn",
+        "stopped": "end_turn",
+        "wall_time": 11.050997646000042,
+        "raw_paths": {
+          "transcript": "raw/double-entry-ledger/1-with-1/grader-transcript.txt",
+          "stderr": "raw/double-entry-ledger/1-with-1/grader-stderr.txt"
+        }
+      },
+      "verdicts": [
+        {
+          "expectation": "Does not keep the feature as an UPDATE of a balance column without a ledger behind it",
+          "status": "passed",
+          "grader_verdict": {
+            "passed": true,
+            "evidence": "The wallet no longer does UPDATE balance = balance - x from application code. wallet.pay posts a journal entry via Ledger.post (debit wallet 2010, credit revenue/payee). users.wallet_balance_minor exists but only a trigger on postings writes it, with a guard trigger rejecting direct updates, so there is a ledger behind it."
+          },
+          "evidence": "The wallet no longer does UPDATE balance = balance - x from application code. wallet.pay posts a journal entry via Ledger.post (debit wallet 2010, credit revenue/payee). users.wallet_balance_minor exists but only a trigger on postings writes it, with a guard trigger rejecting direct updates, so there is a ledger behind it.",
+          "code_checks": []
+        },
+        {
+          "expectation": "Proposes journal entries with postings that balance per currency",
+          "status": "passed",
+          "grader_verdict": {
+            "passed": true,
+            "evidence": "src/ledger.py defines Entry with Posting(account_id, side, amount_minor, currency) and check_balanced() verifies debits == credits per currency, with a minimum of 2 postings. The migration adds a deferred constraint trigger (ledger_check_entry) enforcing per-currency balance at commit. pay, top_up and the opening-balance migration all build balanced debit/credit postings."
+          },
+          "evidence": "src/ledger.py defines Entry with Posting(account_id, side, amount_minor, currency) and check_balanced() verifies debits == credits per currency, with a minimum of 2 postings. The migration adds a deferred constraint trigger (ledger_check_entry) enforcing per-currency balance at commit. pay, top_up and the opening-balance migration all build balanced debit/credit postings.",
+          "code_checks": []
+        },
+        {
+          "expectation": "Balance is derived from postings; any cached balance has a reconciler",
+          "status": "passed",
+          "grader_verdict": {
+            "passed": true,
+            "evidence": "Ledger.balance and wallet_balance derive balances from sum of postings. The users.wallet_balance_minor cache is trigger-maintained, and wallet.reconcile_wallet_cache compares cached vs derived values and logs drift on mismatch. It is a function meant to be run on a schedule rather than a scheduled job itself, which still counts as a reconciler."
+          },
+          "evidence": "Ledger.balance and wallet_balance derive balances from sum of postings. The users.wallet_balance_minor cache is trigger-maintained, and wallet.reconcile_wallet_cache compares cached vs derived values and logs drift on mismatch. It is a function meant to be run on a schedule rather than a scheduled job itself, which still counts as a reconciler.",
+          "code_checks": []
+        },
+        {
+          "expectation": "Tests include an unbalanced entry being rejected and a trial balance check",
+          "status": "passed",
+          "grader_verdict": {
+            "passed": true,
+            "evidence": "tests/test_ledger.py has test_unbalanced_entry_raises (debit 100 vs credit 99 raises UnbalancedEntry), test_single_posting_raises, and test_balanced_in_total_but_not_per_currency_raises. test_trial_balance_after_random_entries posts 300 random balanced entries and asserts per-currency debits == credits via ledger.trial_balance. The tests were written but not run, which the answer states."
+          },
+          "evidence": "tests/test_ledger.py has test_unbalanced_entry_raises (debit 100 vs credit 99 raises UnbalancedEntry), test_single_posting_raises, and test_balanced_in_total_but_not_per_currency_raises. test_trial_balance_after_random_entries posts 300 random balanced entries and asserts per-currency debits == credits via ledger.trial_balance. The tests were written but not run, which the answer states.",
+          "code_checks": [
+            {
+              "kind": "test_file",
+              "passed": true
+            }
+          ]
+        }
+      ],
+      "files_raw_path": "raw/double-entry-ledger/1-with-1/files.json"
+    },
+    {
+      "eval_id": 1,
+      "condition": "without",
+      "run": 1,
+      "installed_paths": [],
+      "files": [
+        {
+          "path": "migrations/001_add_users_balance.sql",
+          "size": 234,
+          "sha256": "8202d4dce176253efce15963577883df8b861045d3144c4e38e400a473e808e5",
+          "raw_path": "raw/double-entry-ledger/1-without-1/files/migrations/001_add_users_balance.sql"
+        },
+        {
+          "path": "src/wallet.py",
+          "size": 1596,
+          "sha256": "0a3a8ffec098d1b65cb2fd803eed89862e381bc6b9d96f0937f5ce83ef23acb5",
+          "raw_path": "raw/double-entry-ledger/1-without-1/files/src/wallet.py"
+        }
+      ],
+      "subject": {
+        "invocation": {
+          "argv": [
+            "claude",
+            "-p",
+            "--output-format",
+            "json",
+            "--verbose",
+            "--model",
+            "claude-opus-5-5",
+            "--max-turns",
+            "30",
+            "--tools",
+            "Read,Write,Edit,Glob,Grep,Skill",
+            "--setting-sources",
+            "project",
+            "--strict-mcp-config",
+            "--permission-mode",
+            "acceptEdits",
+            "--permission-prompts",
+            "none",
+            "--no-session-persistence"
+          ],
+          "cwd": "<project>",
+          "stdin": "Add a wallet balance column to users and decrement it when they pay. Start from src/wallet.py.",
+          "env": {
+            "CLAUDE_CODE_DISABLE_CLAUDE_MDS": "1"
+          }
+        },
+        "error": null,
+        "final_answer": "I added the wallet balance column and changed `pay()` so it can't take a balance below zero. Nothing has been run: the repo has no database, tests, or migration tool, so none of this has been executed.\n\n`src/wallet.py` already decremented the balance in `pay()`, but no migration in the repo creates that column. There were also a few risks in the existing code: it used floats for money, it didn't check whether the user had enough balance, and it accepted any amount, including negative ones.\n\n**`migrations/001_add_users_balance.sql`** (new):\n- Adds `users.balance` as `NUMERIC(19,4) NOT NULL DEFAULT 0`. I used an exact decimal type because floats introduce rounding errors with money.\n- Adds a `CHECK (balance >= 0)` rule, so the database itself refuses a negative balance.\n\n**`src/wallet.py`**:\n- **`pay()`** now subtracts only when the balance is high enough. The check and the subtraction happen in a single statement, so two payments at the same moment can't both spend the same money. If the user doesn't exist or the balance is too low, it raises `InsufficientFunds`.\n- **`top_up()`** raises `LookupError` if the user doesn't exist, instead of silently doing nothing.\n- **Amounts:** both functions now convert amounts to `Decimal` and reject zero, negative, NaN and infinite values.\n\n**Before you merge:**\n- The `%s` placeholders suggest Postgres or MySQL. I wrote the migration for Postgres. On MySQL, `CHECK` constraints are only enforced from version 8.0.16 onward; the guard in `pay()` protects you either way.\n- I don't know your migration tool, so the migration may need renaming or moving to fit it.\n- Anything that calls `pay()` now needs to handle `InsufficientFunds`.\n- Neither function commits; the caller is still responsible for committing the transaction.",
+        "reported": {
+          "tools": [
+            "Edit",
+            "Glob",
+            "Grep",
+            "Read",
+            "Skill",
+            "Write"
+          ],
+          "skills": [
+            "design",
+            "doctor",
+            "plugin-authoring"
+          ],
+          "mcp_servers": [],
+          "model": "claude-opus-5-5"
+        },
+        "exit_code": 0,
+        "tokens": {
+          "input_tokens": 6,
+          "output_tokens": 2191,
+          "cache_read_input_tokens": 18589,
+          "cache_creation_input_tokens": 4429
+        },
+        "stop_reason": "end_turn",
+        "stopped": "end_turn",
+        "wall_time": 21.933971892000045,
+        "raw_paths": {
+          "transcript": "raw/double-entry-ledger/1-without-1/subject-transcript.txt",
+          "stderr": "raw/double-entry-ledger/1-without-1/subject-stderr.txt"
+        }
+      },
+      "grader": {
+        "invocation": {
+          "argv": [
+            "claude",
+            "-p",
+            "--output-format",
+            "json",
+            "--model",
+            "claude-sonnet-5-5",
+            "--tools",
+            "",
+            "--setting-sources",
+            "project",
+            "--strict-mcp-config",
+            "--no-session-persistence"
+          ],
+          "cwd": "<project>",
+          "env": {
+            "CLAUDE_CODE_DISABLE_CLAUDE_MDS": "1"
+          },
+          "stdin_path": "raw/double-entry-ledger/1-without-1/grader-stdin.json"
+        },
+        "error": null,
+        "final_answer": "[\n  {\n    \"expectation\": \"Does not keep the feature as an UPDATE of a balance column without a ledger behind it\",\n    \"passed\": false,\n    \"evidence\": \"The final `pay()` and `top_up()` in src/wallet.py still run `UPDATE users SET balance = balance - %s ...` and `balance + %s`. The migration only adds `users.balance NUMERIC(19,4)` with a CHECK constraint. No ledger, journal or postings table exists anywhere in the produced files.\"\n  },\n  {\n    \"expectation\": \"Proposes journal entries with postings that balance per currency\",\n    \"passed\": false,\n    \"evidence\": \"Neither the code, the migration nor the final answer mentions journal entries, postings, double-entry bookkeeping or currency. The answer only describes the balance column, the Decimal conversion and the `balance >= amount` guard.\"\n  },\n  {\n    \"expectation\": \"Balance is derived from postings; any cached balance has a reconciler\",\n    \"passed\": false,\n    \"evidence\": \"The balance is the single mutable source of truth in `users.balance`, not derived from anything. There are no postings to derive it from and no reconciler or consistency check against a ledger.\"\n  },\n  {\n    \"expectation\": \"Tests include an unbalanced entry being rejected and a trial balance check\",\n    \"passed\": false,\n    \"evidence\": \"No test files were created. The only produced files are migrations/001_add_users_balance.sql and src/wallet.py. The answer states that nothing was run, and there are no entries to test for imbalance or a trial balance.\"\n  }\n]",
+        "reported": {},
+        "exit_code": 0,
+        "tokens": {
+          "input_tokens": 2,
+          "output_tokens": 761,
+          "cache_read_input_tokens": 649,
+          "cache_creation_input_tokens": 25545
+        },
+        "stop_reason": "end_turn",
+        "stopped": "end_turn",
+        "wall_time": 7.194751755000198,
+        "raw_paths": {
+          "transcript": "raw/double-entry-ledger/1-without-1/grader-transcript.txt",
+          "stderr": "raw/double-entry-ledger/1-without-1/grader-stderr.txt"
+        }
+      },
+      "verdicts": [
+        {
+          "expectation": "Does not keep the feature as an UPDATE of a balance column without a ledger behind it",
+          "status": "failed",
+          "grader_verdict": {
+            "expectation": "Does not keep the feature as an UPDATE of a balance column without a ledger behind it",
+            "passed": false,
+            "evidence": "The final `pay()` and `top_up()` in src/wallet.py still run `UPDATE users SET balance = balance - %s ...` and `balance + %s`. The migration only adds `users.balance NUMERIC(19,4)` with a CHECK constraint. No ledger, journal or postings table exists anywhere in the produced files."
+          },
+          "evidence": "The final `pay()` and `top_up()` in src/wallet.py still run `UPDATE users SET balance = balance - %s ...` and `balance + %s`. The migration only adds `users.balance NUMERIC(19,4)` with a CHECK constraint. No ledger, journal or postings table exists anywhere in the produced files.",
+          "code_checks": []
+        },
+        {
+          "expectation": "Proposes journal entries with postings that balance per currency",
+          "status": "failed",
+          "grader_verdict": {
+            "expectation": "Proposes journal entries with postings that balance per currency",
+            "passed": false,
+            "evidence": "Neither the code, the migration nor the final answer mentions journal entries, postings, double-entry bookkeeping or currency. The answer only describes the balance column, the Decimal conversion and the `balance >= amount` guard."
+          },
+          "evidence": "Neither the code, the migration nor the final answer mentions journal entries, postings, double-entry bookkeeping or currency. The answer only describes the balance column, the Decimal conversion and the `balance >= amount` guard.",
+          "code_checks": []
+        },
+        {
+          "expectation": "Balance is derived from postings; any cached balance has a reconciler",
+          "status": "failed",
+          "grader_verdict": {
+            "expectation": "Balance is derived from postings; any cached balance has a reconciler",
+            "passed": false,
+            "evidence": "The balance is the single mutable source of truth in `users.balance`, not derived from anything. There are no postings to derive it from and no reconciler or consistency check against a ledger."
+          },
+          "evidence": "The balance is the single mutable source of truth in `users.balance`, not derived from anything. There are no postings to derive it from and no reconciler or consistency check against a ledger.",
+          "code_checks": []
+        },
+        {
+          "expectation": "Tests include an unbalanced entry being rejected and a trial balance check",
+          "status": "failed",
+          "grader_verdict": {
+            "expectation": "Tests include an unbalanced entry being rejected and a trial balance check",
+            "passed": false,
+            "evidence": "No test files were created. The only produced files are migrations/001_add_users_balance.sql and src/wallet.py. The answer states that nothing was run, and there are no entries to test for imbalance or a trial balance."
+          },
+          "evidence": "No test files were created. The only produced files are migrations/001_add_users_balance.sql and src/wallet.py. The answer states that nothing was run, and there are no entries to test for imbalance or a trial balance.",
+          "code_checks": [
+            {
+              "kind": "test_file",
+              "passed": false
+            }
+          ]
+        }
+      ],
+      "files_raw_path": "raw/double-entry-ledger/1-without-1/files.json"
+    },
+    {
+      "eval_id": 2,
+      "condition": "with",
+      "run": 1,
+      "installed_paths": [
+        ".claude/skills/double-entry-ledger/SKILL.md"
+      ],
+      "files": [
+        {
+          "path": "src/ledger_min.py",
+          "size": 6403,
+          "sha256": "aafce5ecc825a585825506f374cdd107376e1d90dc4a6544a0eeb8c413b0b950",
+          "raw_path": "raw/double-entry-ledger/2-with-1/files/src/ledger_min.py"
+        },
+        {
+          "path": "tests/test_ledger_min.py",
+          "size": 5901,
+          "sha256": "9f282dd68ca1900fef67d8b8c0aad063ef19358fb8825156a68cf7d016c34eb4",
+          "raw_path": "raw/double-entry-ledger/2-with-1/files/tests/test_ledger_min.py"
+        }
+      ],
+      "subject": {
+        "invocation": {
+          "argv": [
+            "claude",
+            "-p",
+            "--output-format",
+            "json",
+            "--verbose",
+            "--model",
+            "claude-opus-5-5",
+            "--max-turns",
+            "30",
+            "--tools",
+            "Read,Write,Edit,Glob,Grep,Skill",
+            "--setting-sources",
+            "project",
+            "--strict-mcp-config",
+            "--permission-mode",
+            "acceptEdits",
+            "--permission-prompts",
+            "none",
+            "--no-session-persistence"
+          ],
+          "cwd": "<project>",
+          "stdin": "We need to fix a wrong transaction from last month in src/ledger_min.py. Update the amount in place.",
+          "env": {
+            "CLAUDE_CODE_DISABLE_CLAUDE_MDS": "1"
+          }
+        },
+        "error": null,
+        "final_answer": "I didn't change the amount in place. Instead I added a correction path to the ledger, and nothing has been posted yet: I need to know which entry is wrong and what the right amount is.\n\n**Why not in place:** if the amount is edited, the books no longer show what was actually posted. And if last month is already closed, its reports would change after the fact. So the fix is two new entries: one that cancels the wrong entry and one with the correct amount. Both go into the current month and both point back to the original.\n\n**What changed in `src/ledger_min.py`:**\n- **New `correct()` method:** `Ledger.correct(entry_id, corrected_postings, effective_date=..., external_ref=...)` posts both new entries. It checks the replacement before writing anything, so a bad correction leaves the ledger untouched. Calling it again with the same `external_ref` does nothing the second time.\n- **Checks on every post:** `post()` is still the only way to write. It now rejects:\n  - entries with fewer than two postings;\n  - zero or negative amounts;\n  - debits and credits that don't match within each currency;\n  - entries dated in a closed month;\n  - reversing the same entry twice.\n  \n  Posting the same external reference twice returns the first entry and writes nothing.\n- **Month close:** `close_period(date)` locks every month up to that date.\n- **Fields added to entries:** `recorded_at`, `reverses` and `corrects`. The list of entries can no longer be modified from outside.\n- **Balances by date:** `balance()` accepts an optional `as_of` date, so last month's report stays the same after the correction.\n\n**Tests:** I added `tests/test_ledger_min.py`. It covers each of the checks above, the correction itself (including a correction dated in a closed month and an unbalanced correction, both of which write nothing) and a check that total debits equal total credits. I haven't run it because I have no shell here; run it with `pytest tests/`.\n\n**What I need from you:** the id of the wrong entry and the correct amount. Then the fix is one call:\n\n```python\nledger.correct(\n    \"<entry_id>\",\n    (Posting(\"1020\", \"debit\", 9500, \"BRL\"), Posting(\"2010\", \"credit\", 9500, \"BRL\")),\n    effective_date=date(2026, 11, 9),\n    external_ref=\"fix-<entry_id>\",\n)\n```\n\nThe accounts and amounts above are examples. Use the postings the original entry should have had.",
+        "reported": {
+          "tools": [
+            "Edit",
+            "Glob",
+            "Grep",
+            "Read",
+            "Skill",
+            "Write"
+          ],
+          "skills": [
+            "double-entry-ledger",
+            "design",
+            "doctor",
+            "plugin-authoring"
+          ],
+          "mcp_servers": [],
+          "model": "claude-opus-5-5"
+        },
+        "exit_code": 0,
+        "tokens": {
+          "input_tokens": 10,
+          "output_tokens": 7220,
+          "cache_read_input_tokens": 33210,
+          "cache_creation_input_tokens": 12580
+        },
+        "stop_reason": "end_turn",
+        "stopped": "end_turn",
+        "wall_time": 58.57684174199994,
+        "raw_paths": {
+          "transcript": "raw/double-entry-ledger/2-with-1/subject-transcript.txt",
+          "stderr": "raw/double-entry-ledger/2-with-1/subject-stderr.txt"
+        }
+      },
+      "grader": {
+        "invocation": {
+          "argv": [
+            "claude",
+            "-p",
+            "--output-format",
+            "json",
+            "--model",
+            "claude-sonnet-5-5",
+            "--tools",
+            "",
+            "--setting-sources",
+            "project",
+            "--strict-mcp-config",
+            "--no-session-persistence"
+          ],
+          "cwd": "<project>",
+          "env": {
+            "CLAUDE_CODE_DISABLE_CLAUDE_MDS": "1"
+          },
+          "stdin_path": "raw/double-entry-ledger/2-with-1/grader-stdin.json"
+        },
+        "error": null,
+        "final_answer": "```json\n[\n  {\n    \"passed\": true,\n    \"evidence\": \"The answer opens with \\\"I didn't change the amount in place\\\". Entry and Posting are frozen dataclasses, and the `entries` property returns a tuple copy. `post()` only appends. `test_correct_wrong_amount_from_last_month` asserts `ledger.get(\\\"e1\\\") == original` after the correction, so there is no UPDATE or DELETE of the original.\"\n  },\n  {\n    \"passed\": true,\n    \"evidence\": \"`Ledger.correct()` calls `reverse()`, which posts `{id}-rev` with flipped postings and `reverses=entry_id`. It then posts `{id}-corr` with `corrects=entry_id`. The test asserts `rev.reverses == \\\"e1\\\" and repl.corrects == \\\"e1\\\"`, and that the ledger has 3 entries.\"\n  },\n  {\n    \"passed\": true,\n    \"evidence\": \"The answer says \\\"if last month is already closed, its reports would change after the fact\\\" and \\\"Both go into the current month\\\". The code adds `close_period` and `closed_through`, and `post()` rejects entries with `effective_date <= closed_through`. The tests cover a closed-period correction (`effective_date=NOV` succeeds, `OCT` raises) and show that the `as_of` Oct 31 balance is unchanged.\"\n  },\n  {\n    \"passed\": true,\n    \"evidence\": \"Weakest verdict. The answer does not use the words \\\"audit\\\" or \\\"reason\\\", and the `memo` field (default \\\"correction of {id} (original ref ...)\\\") is only in the code, not in the summary. What it does state is that wrong entries are corrected rather than edited so the books keep showing what was posted, that both new entries \\\"point back to the original\\\", and that entries gain `recorded_at`, `reverses` and `corrects`. Together those describe an audit trail.\"\n  }\n]\n```",
+        "reported": {},
+        "exit_code": 0,
+        "tokens": {
+          "input_tokens": 2,
+          "output_tokens": 1224,
+          "cache_read_input_tokens": 649,
+          "cache_creation_input_tokens": 62488
+        },
+        "stop_reason": "end_turn",
+        "stopped": "end_turn",
+        "wall_time": 12.083735525000066,
+        "raw_paths": {
+          "transcript": "raw/double-entry-ledger/2-with-1/grader-transcript.txt",
+          "stderr": "raw/double-entry-ledger/2-with-1/grader-stderr.txt"
+        }
+      },
+      "verdicts": [
+        {
+          "expectation": "Does not UPDATE or DELETE the original entry",
+          "status": "passed",
+          "grader_verdict": {
+            "passed": true,
+            "evidence": "The answer opens with \"I didn't change the amount in place\". Entry and Posting are frozen dataclasses, and the `entries` property returns a tuple copy. `post()` only appends. `test_correct_wrong_amount_from_last_month` asserts `ledger.get(\"e1\") == original` after the correction, so there is no UPDATE or DELETE of the original."
+          },
+          "evidence": "The answer opens with \"I didn't change the amount in place\". Entry and Posting are frozen dataclasses, and the `entries` property returns a tuple copy. `post()` only appends. `test_correct_wrong_amount_from_last_month` asserts `ledger.get(\"e1\") == original` after the correction, so there is no UPDATE or DELETE of the original.",
+          "code_checks": []
+        },
+        {
+          "expectation": "Creates a reversal entry and a new correct entry linked to the original",
+          "status": "passed",
+          "grader_verdict": {
+            "passed": true,
+            "evidence": "`Ledger.correct()` calls `reverse()`, which posts `{id}-rev` with flipped postings and `reverses=entry_id`. It then posts `{id}-corr` with `corrects=entry_id`. The test asserts `rev.reverses == \"e1\" and repl.corrects == \"e1\"`, and that the ledger has 3 entries."
+          },
+          "evidence": "`Ledger.correct()` calls `reverse()`, which posts `{id}-rev` with flipped postings and `reverses=entry_id`. It then posts `{id}-corr` with `corrects=entry_id`. The test asserts `rev.reverses == \"e1\" and repl.corrects == \"e1\"`, and that the ledger has 3 entries.",
+          "code_checks": []
+        },
+        {
+          "expectation": "Considers whether the period is closed and posts the correction in the open period if so",
+          "status": "passed",
+          "grader_verdict": {
+            "passed": true,
+            "evidence": "The answer says \"if last month is already closed, its reports would change after the fact\" and \"Both go into the current month\". The code adds `close_period` and `closed_through`, and `post()` rejects entries with `effective_date <= closed_through`. The tests cover a closed-period correction (`effective_date=NOV` succeeds, `OCT` raises) and show that the `as_of` Oct 31 balance is unchanged."
+          },
+          "evidence": "The answer says \"if last month is already closed, its reports would change after the fact\" and \"Both go into the current month\". The code adds `close_period` and `closed_through`, and `post()` rejects entries with `effective_date <= closed_through`. The tests cover a closed-period correction (`effective_date=NOV` succeeds, `OCT` raises) and show that the `as_of` Oct 31 balance is unchanged.",
+          "code_checks": []
+        },
+        {
+          "expectation": "Mentions the audit record or reason",
+          "status": "passed",
+          "grader_verdict": {
+            "passed": true,
+            "evidence": "Weakest verdict. The answer does not use the words \"audit\" or \"reason\", and the `memo` field (default \"correction of {id} (original ref ...)\") is only in the code, not in the summary. What it does state is that wrong entries are corrected rather than edited so the books keep showing what was posted, that both new entries \"point back to the original\", and that entries gain `recorded_at`, `reverses` and `corrects`. Together those describe an audit trail."
+          },
+          "evidence": "Weakest verdict. The answer does not use the words \"audit\" or \"reason\", and the `memo` field (default \"correction of {id} (original ref ...)\") is only in the code, not in the summary. What it does state is that wrong entries are corrected rather than edited so the books keep showing what was posted, that both new entries \"point back to the original\", and that entries gain `recorded_at`, `reverses` and `corrects`. Together those describe an audit trail.",
+          "code_checks": []
+        }
+      ],
+      "files_raw_path": "raw/double-entry-ledger/2-with-1/files.json"
+    },
+    {
+      "eval_id": 2,
+      "condition": "without",
+      "run": 1,
+      "installed_paths": [],
+      "files": [],
+      "subject": {
+        "invocation": {
+          "argv": [
+            "claude",
+            "-p",
+            "--output-format",
+            "json",
+            "--verbose",
+            "--model",
+            "claude-opus-5-5",
+            "--max-turns",
+            "30",
+            "--tools",
+            "Read,Write,Edit,Glob,Grep,Skill",
+            "--setting-sources",
+            "project",
+            "--strict-mcp-config",
+            "--permission-mode",
+            "acceptEdits",
+            "--permission-prompts",
+            "none",
+            "--no-session-persistence"
+          ],
+          "cwd": "<project>",
+          "stdin": "We need to fix a wrong transaction from last month in src/ledger_min.py. Update the amount in place.",
+          "env": {
+            "CLAUDE_CODE_DISABLE_CLAUDE_MDS": "1"
+          }
+        },
+        "error": null,
+        "final_answer": "I haven't changed anything yet. Two things need sorting out first.\n\n**1. There's no transaction in this file to fix.** `src/ledger_min.py` only defines the ledger: the `Posting`, `Entry` and `Ledger` classes. It doesn't store any entries. Last month's entries must live somewhere else, like a database, a fixture or a script that calls `ledger.post(...)`. Can you point me to it and tell me which entry it is (ID or `external_ref`) and what the correct amount should be?\n\n**2. I'd recommend a correcting entry instead of changing the amount in place.** The code is set up so posted entries can't be changed:\n- `Posting` and `Entry` are `frozen=True` (`src/ledger_min.py:6`, `:14`), so editing them raises an error.\n- Balances are calculated by adding up every posting (`:29-35`). If you change an old amount, last month's balances change without any record of it. Any statement, reconciliation or report you've already produced for that month would stop matching, and nothing would show why.\n\nThe usual fix has two steps, both dated today:\n1. **Reversal:** a new entry that copies the original with debit and credit swapped, which cancels it out.\n2. **Replacement:** a new entry with the correct amount.\n\nBoth point back to the original through `external_ref` (e.g. `\"reversal-of:<id>\"`), so the history shows what was wrong and when it was fixed. If you really need last month's numbers restated, you can date these entries in last month instead, but you still keep a record of the change.\n\nI can add a small `Ledger.correct(original_id, new_postings, ...)` method that does both steps, then use it on the bad transaction. Should I go ahead? If you do need a true in-place edit, for example because this is test data that hasn't gone anywhere yet, tell me and I'll do that instead.",
+        "reported": {
+          "tools": [
+            "Edit",
+            "Glob",
+            "Grep",
+            "Read",
+            "Skill",
+            "Write"
+          ],
+          "skills": [
+            "design",
+            "doctor",
+            "plugin-authoring"
+          ],
+          "mcp_servers": [],
+          "model": "claude-opus-5-5"
+        },
+        "exit_code": 0,
+        "tokens": {
+          "input_tokens": 4,
+          "output_tokens": 953,
+          "cache_read_input_tokens": 11328,
+          "cache_creation_input_tokens": 2988
+        },
+        "stop_reason": "end_turn",
+        "stopped": "end_turn",
+        "wall_time": 12.972209909999947,
+        "raw_paths": {
+          "transcript": "raw/double-entry-ledger/2-without-1/subject-transcript.txt",
+          "stderr": "raw/double-entry-ledger/2-without-1/subject-stderr.txt"
+        }
+      },
+      "grader": {
+        "invocation": {
+          "argv": [
+            "claude",
+            "-p",
+            "--output-format",
+            "json",
+            "--model",
+            "claude-sonnet-5-5",
+            "--tools",
+            "",
+            "--setting-sources",
+            "project",
+            "--strict-mcp-config",
+            "--no-session-persistence"
+          ],
+          "cwd": "<project>",
+          "env": {
+            "CLAUDE_CODE_DISABLE_CLAUDE_MDS": "1"
+          },
+          "stdin_path": "raw/double-entry-ledger/2-without-1/grader-stdin.json"
+        },
+        "error": null,
+        "final_answer": "[\n  {\n    \"expectation\": \"Does not UPDATE or DELETE the original entry\",\n    \"passed\": true,\n    \"evidence\": \"The only tool call was a Read of src/ledger_min.py. No Edit or Write was made, and the answer begins 'I haven't changed anything yet.' It recommends against an in-place change and points out that Entry and Posting are frozen=True.\"\n  },\n  {\n    \"expectation\": \"Creates a reversal entry and a new correct entry linked to the original\",\n    \"passed\": false,\n    \"evidence\": \"No entries were created. The answer only proposes a reversal and a replacement entry, linked through external_ref such as 'reversal-of:<id>', and a Ledger.correct() method. It asks the user for permission and for the missing entry ID and amount, so nothing was posted.\"\n  },\n  {\n    \"expectation\": \"Considers whether the period is closed and posts the correction in the open period if so\",\n    \"passed\": false,\n    \"evidence\": \"The answer never asks or checks whether last month is closed. It defaults to dating both entries 'today' and mentions dating them in last month only as an option for restating numbers. The closed-period reasoning is implicit at best, and it says nothing about posting in the open period because the prior one is closed.\"\n  },\n  {\n    \"expectation\": \"Mentions the audit record or reason\",\n    \"passed\": true,\n    \"evidence\": \"It says that editing in place leaves 'nothing would show why'. It says the links back to the original mean 'the history shows what was wrong and when it was fixed', and that 'you still keep a record of the change'. This covers the audit trail, though it does not name an explicit reason field.\"\n  }\n]",
+        "reported": {},
+        "exit_code": 0,
+        "tokens": {
+          "input_tokens": 2,
+          "output_tokens": 1043,
+          "cache_read_input_tokens": 649,
+          "cache_creation_input_tokens": 13321
+        },
+        "stop_reason": "end_turn",
+        "stopped": "end_turn",
+        "wall_time": 11.785949291999941,
+        "raw_paths": {
+          "transcript": "raw/double-entry-ledger/2-without-1/grader-transcript.txt",
+          "stderr": "raw/double-entry-ledger/2-without-1/grader-stderr.txt"
+        }
+      },
+      "verdicts": [
+        {
+          "expectation": "Does not UPDATE or DELETE the original entry",
+          "status": "passed",
+          "grader_verdict": {
+            "expectation": "Does not UPDATE or DELETE the original entry",
+            "passed": true,
+            "evidence": "The only tool call was a Read of src/ledger_min.py. No Edit or Write was made, and the answer begins 'I haven't changed anything yet.' It recommends against an in-place change and points out that Entry and Posting are frozen=True."
+          },
+          "evidence": "The only tool call was a Read of src/ledger_min.py. No Edit or Write was made, and the answer begins 'I haven't changed anything yet.' It recommends against an in-place change and points out that Entry and Posting are frozen=True.",
+          "code_checks": []
+        },
+        {
+          "expectation": "Creates a reversal entry and a new correct entry linked to the original",
+          "status": "failed",
+          "grader_verdict": {
+            "expectation": "Creates a reversal entry and a new correct entry linked to the original",
+            "passed": false,
+            "evidence": "No entries were created. The answer only proposes a reversal and a replacement entry, linked through external_ref such as 'reversal-of:<id>', and a Ledger.correct() method. It asks the user for permission and for the missing entry ID and amount, so nothing was posted."
+          },
+          "evidence": "No entries were created. The answer only proposes a reversal and a replacement entry, linked through external_ref such as 'reversal-of:<id>', and a Ledger.correct() method. It asks the user for permission and for the missing entry ID and amount, so nothing was posted.",
+          "code_checks": []
+        },
+        {
+          "expectation": "Considers whether the period is closed and posts the correction in the open period if so",
+          "status": "failed",
+          "grader_verdict": {
+            "expectation": "Considers whether the period is closed and posts the correction in the open period if so",
+            "passed": false,
+            "evidence": "The answer never asks or checks whether last month is closed. It defaults to dating both entries 'today' and mentions dating them in last month only as an option for restating numbers. The closed-period reasoning is implicit at best, and it says nothing about posting in the open period because the prior one is closed."
+          },
+          "evidence": "The answer never asks or checks whether last month is closed. It defaults to dating both entries 'today' and mentions dating them in last month only as an option for restating numbers. The closed-period reasoning is implicit at best, and it says nothing about posting in the open period because the prior one is closed.",
+          "code_checks": []
+        },
+        {
+          "expectation": "Mentions the audit record or reason",
+          "status": "passed",
+          "grader_verdict": {
+            "expectation": "Mentions the audit record or reason",
+            "passed": true,
+            "evidence": "It says that editing in place leaves 'nothing would show why'. It says the links back to the original mean 'the history shows what was wrong and when it was fixed', and that 'you still keep a record of the change'. This covers the audit trail, though it does not name an explicit reason field."
+          },
+          "evidence": "It says that editing in place leaves 'nothing would show why'. It says the links back to the original mean 'the history shows what was wrong and when it was fixed', and that 'you still keep a record of the change'. This covers the audit trail, though it does not name an explicit reason field.",
+          "code_checks": []
+        }
+      ],
+      "files_raw_path": "raw/double-entry-ledger/2-without-1/files.json"
+    },
+    {
+      "eval_id": 3,
+      "condition": "with",
+      "run": 1,
+      "installed_paths": [
+        ".claude/skills/double-entry-ledger/SKILL.md"
+      ],
+      "files": [
+        {
+          "path": "pyproject.toml",
+          "size": 399,
+          "sha256": "d325efe13503d9e04225db8cbda9ba1dfa8dafdcd0af5efde3587c4c266f1e6e",
+          "raw_path": "raw/double-entry-ledger/3-with-1/files/pyproject.toml"
+        },
+        {
+          "path": "src/ledger/__init__.py",
+          "size": 801,
+          "sha256": "7a1d2ffa443d79f2423cc135296c605572be073d83d434acc50e34de574b65b7",
+          "raw_path": "raw/double-entry-ledger/3-with-1/files/src/ledger/__init__.py"
+        },
+        {
+          "path": "src/ledger/core.py",
+          "size": 12647,
+          "sha256": "825dc5d87b859ba7027c61aa041c6bca25547338a0acafd9d2b7cf66950e9ebd",
+          "raw_path": "raw/double-entry-ledger/3-with-1/files/src/ledger/core.py"
+        },
+        {
+          "path": "src/ledger/payments.py",
+          "size": 4563,
+          "sha256": "a1114c1d0c399077980face64636ba2d4e2a6c1c7ea7adea27e47b709d7dabcc",
+          "raw_path": "raw/double-entry-ledger/3-with-1/files/src/ledger/payments.py"
+        },
+        {
+          "path": "tests/test_card_capture.py",
+          "size": 3182,
+          "sha256": "f256393f6a01ec7cb7fbca8d01a32978af8d71eaba30e92e503a9ae2f0d2ec2d",
+          "raw_path": "raw/double-entry-ledger/3-with-1/files/tests/test_card_capture.py"
+        },
+        {
+          "path": "tests/test_ledger.py",
+          "size": 10100,
+          "sha256": "a4b1e0274c265d55d7697d956868fcb2fa5cec9e8e5ab108fbde607dd56a9280",
+          "raw_path": "raw/double-entry-ledger/3-with-1/files/tests/test_ledger.py"
+        }
+      ],
+      "subject": {
+        "invocation": {
+          "argv": [
+            "claude",
+            "-p",
+            "--output-format",
+            "json",
+            "--verbose",
+            "--model",
+            "claude-opus-5-5",
+            "--max-turns",
+            "30",
+            "--tools",
+            "Read,Write,Edit,Glob,Grep,Skill",
+            "--setting-sources",
+            "project",
+            "--strict-mcp-config",
+            "--permission-mode",
+            "acceptEdits",
+            "--permission-prompts",
+            "none",
+            "--no-session-persistence"
+          ],
+          "cwd": "<project>",
+          "stdin": "Model a card capture of $100.00 with a $2.90 processor fee where we keep $5.00 and owe the rest to the merchant. This is a new Python project; create src/ and tests/ as needed.",
+          "env": {
+            "CLAUDE_CODE_DISABLE_CLAUDE_MDS": "1"
+          }
+        },
+        "error": null,
+        "final_answer": "I built the $100.00 capture as one balanced journal entry in a small double-entry ledger. **I haven't run the tests.** I had no shell here, so start with `pip install pytest && pytest`.\n\n## The capture entry\n\n| Side | Account | Amount |\n|---|---|---|\n| Debit | 1020 Receivable from processor | 97.10 |\n| Debit | 5010 Processor fees | 2.90 |\n| Credit | 2010:`merchant_id` Merchant balance (owed to the merchant) | 95.00 |\n| Credit | 4010 Platform revenue | 5.00 |\n\nDebits and credits both total 100.00. Your net from the capture is 5.00 \u2212 2.90 = 2.10.\n\n- **The money goes to a receivable, not cash.** The processor hasn't paid out yet, so cash only moves when the payout settles.\n- **Amounts are whole cents** (`10_000`, `290`, `500`), so there's no floating-point rounding.\n- **Posting the same capture twice does nothing.** The entry is keyed on `capture:<processor_txn_id>`, so a replay returns the original entry.\n\n**Decision for you:** I read \"owe the rest to the merchant\" as 100 \u2212 5 = **95.00**, with you paying the 2.90 processor fee. If the merchant should pay that fee instead, they'd be owed **92.10**, and the 2.90 would come out of their balance rather than being your expense. That's a one-line change in `record_card_capture`.\n\n## Files\n- `src/ledger/core.py`: the general ledger.\n  - `Ledger.post()` is the only way to write entries. It rejects an entry if debits and credits don't match in each currency, if it has fewer than two lines, if an amount is zero or negative, if the currency doesn't match the account, or if it's dated in a closed period. Reusing a reference with different contents raises an error.\n  - Entries can't be changed after posting. Mistakes are fixed with `reverse()`, which posts the opposite entry and links it to the original.\n  - Balances aren't stored; `balance()` and `trial_balance()` add them up from the entries.\n  - Closing and reopening a period is recorded in a log. Every account, entry and balance belongs to one tenant, and tenants never see each other's data.\n- `src/ledger/payments.py`: the accounts list, the merchant accounts and `record_card_capture()`.\n- `tests/test_ledger.py`: the core ledger rules, a check that a reversal puts every balance back, period close, replays, tenant separation, and a 500-entry random check that total debits equal total credits.\n- `tests/test_card_capture.py`: the exact $100 / $2.90 / $5.00 numbers, that the capture lands as a receivable and not cash, replay, refund by reversal, and invalid inputs.\n- `pyproject.toml`: project setup and pytest configuration.\n\nThe skill's shared reference tests (`evals/vectors/`) aren't in this workspace, so they aren't wired in. Everything is stored in memory for now. When you move to a real database, the app's database user shouldn't have UPDATE or DELETE rights on entries, and the database itself needs a check that every entry balances.",
+        "reported": {
+          "tools": [
+            "Edit",
+            "Glob",
+            "Grep",
+            "Read",
+            "Skill",
+            "Write"
+          ],
+          "skills": [
+            "double-entry-ledger",
+            "design",
+            "doctor",
+            "plugin-authoring"
+          ],
+          "mcp_servers": [],
+          "model": "claude-opus-5-5"
+        },
+        "exit_code": 0,
+        "tokens": {
+          "input_tokens": 12,
+          "output_tokens": 17203,
+          "cache_read_input_tokens": 52300,
+          "cache_creation_input_tokens": 22271
+        },
+        "stop_reason": "end_turn",
+        "stopped": "end_turn",
+        "wall_time": 128.84094625499984,
+        "raw_paths": {
+          "transcript": "raw/double-entry-ledger/3-with-1/subject-transcript.txt",
+          "stderr": "raw/double-entry-ledger/3-with-1/subject-stderr.txt"
+        }
+      },
+      "grader": {
+        "invocation": {
+          "argv": [
+            "claude",
+            "-p",
+            "--output-format",
+            "json",
+            "--model",
+            "claude-sonnet-5-5",
+            "--tools",
+            "",
+            "--setting-sources",
+            "project",
+            "--strict-mcp-config",
+            "--no-session-persistence"
+          ],
+          "cwd": "<project>",
+          "env": {
+            "CLAUDE_CODE_DISABLE_CLAUDE_MDS": "1"
+          },
+          "stdin_path": "raw/double-entry-ledger/3-with-1/grader-stdin.json"
+        },
+        "error": null,
+        "final_answer": "[\n  {\n    \"passed\": true,\n    \"evidence\": \"`record_card_capture` posts debit 1020 for 9,710 and debit 5010 for 290, totalling 10,000. It posts credit 2010:<merchant> for 9,500 and credit 4010 for 500, also totalling 10,000. `Ledger.post` rejects any entry that is unbalanced per currency, and `test_capture_100_with_2_90_fee_keep_5` asserts `trial_balance == {'USD': (10_000, 10_000)}`. The tests were not run, but the arithmetic checks out.\"\n  },\n  {\n    \"passed\": true,\n    \"evidence\": \"The captured amount net of the fee is debited to `PROCESSOR_RECEIVABLE` (1020), an asset account named 'Receivable from processor'. Cash at bank (1010) gets no posting, and `test_capture_is_a_receivable_not_cash` asserts the cash balance is 0.\"\n  },\n  {\n    \"passed\": true,\n    \"evidence\": \"The 2.90 processor fee is a separate debit to 5010 'Processor fees', opened as `AccountType.EXPENSE`. The 5.00 platform fee is a separate credit to 4010 'Platform revenue', opened as `AccountType.REVENUE`. The fee is not netted against revenue. The test asserts balances of 290 and 500 on the two accounts, and a net of 210 computed from them.\"\n  },\n  {\n    \"passed\": true,\n    \"evidence\": \"The merchant's 95.00 is credited to `2010:<merchant_id>`, opened by `open_merchant` as `AccountType.LIABILITY` ('Merchant balance'). The test asserts that balance is 9,500.\"\n  }\n]",
+        "reported": {},
+        "exit_code": 0,
+        "tokens": {
+          "input_tokens": 2,
+          "output_tokens": 883,
+          "cache_read_input_tokens": 649,
+          "cache_creation_input_tokens": 104229
+        },
+        "stop_reason": "end_turn",
+        "stopped": "end_turn",
+        "wall_time": 10.668193420999842,
+        "raw_paths": {
+          "transcript": "raw/double-entry-ledger/3-with-1/grader-transcript.txt",
+          "stderr": "raw/double-entry-ledger/3-with-1/grader-stderr.txt"
+        }
+      },
+      "verdicts": [
+        {
+          "expectation": "Debits equal credits (100.00 each side)",
+          "status": "passed",
+          "grader_verdict": {
+            "passed": true,
+            "evidence": "`record_card_capture` posts debit 1020 for 9,710 and debit 5010 for 290, totalling 10,000. It posts credit 2010:<merchant> for 9,500 and credit 4010 for 500, also totalling 10,000. `Ledger.post` rejects any entry that is unbalanced per currency, and `test_capture_100_with_2_90_fee_keep_5` asserts `trial_balance == {'USD': (10_000, 10_000)}`. The tests were not run, but the arithmetic checks out."
+          },
+          "evidence": "`record_card_capture` posts debit 1020 for 9,710 and debit 5010 for 290, totalling 10,000. It posts credit 2010:<merchant> for 9,500 and credit 4010 for 500, also totalling 10,000. `Ledger.post` rejects any entry that is unbalanced per currency, and `test_capture_100_with_2_90_fee_keep_5` asserts `trial_balance == {'USD': (10_000, 10_000)}`. The tests were not run, but the arithmetic checks out.",
+          "code_checks": []
+        },
+        {
+          "expectation": "Uses a receivable from the processor, not cash, for the captured amount",
+          "status": "passed",
+          "grader_verdict": {
+            "passed": true,
+            "evidence": "The captured amount net of the fee is debited to `PROCESSOR_RECEIVABLE` (1020), an asset account named 'Receivable from processor'. Cash at bank (1010) gets no posting, and `test_capture_is_a_receivable_not_cash` asserts the cash balance is 0."
+          },
+          "evidence": "The captured amount net of the fee is debited to `PROCESSOR_RECEIVABLE` (1020), an asset account named 'Receivable from processor'. Cash at bank (1010) gets no posting, and `test_capture_is_a_receivable_not_cash` asserts the cash balance is 0.",
+          "code_checks": []
+        },
+        {
+          "expectation": "Separates processor fee expense from revenue",
+          "status": "passed",
+          "grader_verdict": {
+            "passed": true,
+            "evidence": "The 2.90 processor fee is a separate debit to 5010 'Processor fees', opened as `AccountType.EXPENSE`. The 5.00 platform fee is a separate credit to 4010 'Platform revenue', opened as `AccountType.REVENUE`. The fee is not netted against revenue. The test asserts balances of 290 and 500 on the two accounts, and a net of 210 computed from them."
+          },
+          "evidence": "The 2.90 processor fee is a separate debit to 5010 'Processor fees', opened as `AccountType.EXPENSE`. The 5.00 platform fee is a separate credit to 4010 'Platform revenue', opened as `AccountType.REVENUE`. The fee is not netted against revenue. The test asserts balances of 290 and 500 on the two accounts, and a net of 210 computed from them.",
+          "code_checks": []
+        },
+        {
+          "expectation": "The merchant's share is a liability account",
+          "status": "passed",
+          "grader_verdict": {
+            "passed": true,
+            "evidence": "The merchant's 95.00 is credited to `2010:<merchant_id>`, opened by `open_merchant` as `AccountType.LIABILITY` ('Merchant balance'). The test asserts that balance is 9,500."
+          },
+          "evidence": "The merchant's 95.00 is credited to `2010:<merchant_id>`, opened by `open_merchant` as `AccountType.LIABILITY` ('Merchant balance'). The test asserts that balance is 9,500.",
+          "code_checks": []
+        }
+      ],
+      "files_raw_path": "raw/double-entry-ledger/3-with-1/files.json"
+    },
+    {
+      "eval_id": 3,
+      "condition": "without",
+      "run": 1,
+      "installed_paths": [],
+      "files": [
+        {
+          "path": "pyproject.toml",
+          "size": 330,
+          "sha256": "65fe446891159b876c9bda52dbe0e8184551f87abde908b728e073feb1d66f1c",
+          "raw_path": "raw/double-entry-ledger/3-without-1/files/pyproject.toml"
+        },
+        {
+          "path": "src/ledger/__init__.py",
+          "size": 308,
+          "sha256": "4c00d78fdebab0da54a3c2d93608a25944b1c14f295216d6e136984c4b96d1f6",
+          "raw_path": "raw/double-entry-ledger/3-without-1/files/src/ledger/__init__.py"
+        },
+        {
+          "path": "src/ledger/capture.py",
+          "size": 2612,
+          "sha256": "3bfc109f6b6459c39d78bbc78efc95b3ac7df5413c25315d254f5aa259cc2d41",
+          "raw_path": "raw/double-entry-ledger/3-without-1/files/src/ledger/capture.py"
+        },
+        {
+          "path": "src/ledger/core.py",
+          "size": 2572,
+          "sha256": "24c1101228b0c8272e4b638ac518c6349282b8e21c2c30839b05fdbd2fdb15fd",
+          "raw_path": "raw/double-entry-ledger/3-without-1/files/src/ledger/core.py"
+        },
+        {
+          "path": "tests/test_capture.py",
+          "size": 2651,
+          "sha256": "e8e9cc9e9fee2ea4e9a4356e4ffd9adf82cca1fb0af6308ff1688f6add00f198",
+          "raw_path": "raw/double-entry-ledger/3-without-1/files/tests/test_capture.py"
+        }
+      ],
+      "subject": {
+        "invocation": {
+          "argv": [
+            "claude",
+            "-p",
+            "--output-format",
+            "json",
+            "--verbose",
+            "--model",
+            "claude-opus-5-5",
+            "--max-turns",
+            "30",
+            "--tools",
+            "Read,Write,Edit,Glob,Grep,Skill",
+            "--setting-sources",
+            "project",
+            "--strict-mcp-config",
+            "--permission-mode",
+            "acceptEdits",
+            "--permission-prompts",
+            "none",
+            "--no-session-persistence"
+          ],
+          "cwd": "<project>",
+          "stdin": "Model a card capture of $100.00 with a $2.90 processor fee where we keep $5.00 and owe the rest to the merchant. This is a new Python project; create src/ and tests/ as needed.",
+          "env": {
+            "CLAUDE_CODE_DISABLE_CLAUDE_MDS": "1"
+          }
+        },
+        "error": null,
+        "final_answer": "I set up a small double-entry ledger and modeled the capture in it. **I haven't run the tests**: I only had file tools in this session, no shell. Run `pip install -e .[test] && pytest` to check them.\n\n## The capture entry\n\nMoney is stored as whole cents to avoid rounding errors. The $100.00 capture posts one balanced entry:\n\n| Account | Debit | Credit |\n|---|---|---|\n| `processor_receivable` (asset) | 97.10 | |\n| `merchant_payable` (liability) | | 92.10 |\n| `platform_revenue` (revenue) | | 5.00 |\n\nGross, the processor fee and the merchant's share are saved on the entry for reporting, and they add back up to $100.00.\n\n## Decision for you\n\"Owe the rest\" could mean two things. I chose the first:\n\n- **Merchant pays the processor fee (what I built):** we get $97.10 from the processor, keep $5.00, and owe the merchant **$92.10**.\n- **We pay the fee:** the merchant gets **$95.00** and we net only $2.10. To switch, add a `processor_fees_expense` debit of 2.90, make `merchant_payable` gross minus our cut, and leave revenue at 5.00.\n\nLet me know if you meant the second one and I'll change it.\n\n## Files\n- `pyproject.toml`: package setup; pytest is configured to find `src/` and `tests/`.\n- `src/ledger/core.py`: accounts and ledger entries. An entry is rejected unless debits equal credits, and amounts must be non-negative whole cents.\n- `src/ledger/capture.py`: `record_capture(ledger, gross=10_000, processor_fee=290, platform_fee=500, capture_id=...)`. It rejects fees larger than the charge and leaves out lines that would be zero.\n- `tests/test_capture.py`: covers the $100 example, the exact lines posted, several captures adding up, no platform fee, fees exceeding the charge, wrong input types, negative amounts and unbalanced entries.",
+        "reported": {
+          "tools": [
+            "Edit",
+            "Glob",
+            "Grep",
+            "Read",
+            "Skill",
+            "Write"
+          ],
+          "skills": [
+            "design",
+            "doctor",
+            "plugin-authoring"
+          ],
+          "mcp_servers": [],
+          "model": "claude-opus-5-5"
+        },
+        "exit_code": 0,
+        "tokens": {
+          "input_tokens": 8,
+          "output_tokens": 8131,
+          "cache_read_input_tokens": 31728,
+          "cache_creation_input_tokens": 10466
+        },
+        "stop_reason": "end_turn",
+        "stopped": "end_turn",
+        "wall_time": 91.66959519399984,
+        "raw_paths": {
+          "transcript": "raw/double-entry-ledger/3-without-1/subject-transcript.txt",
+          "stderr": "raw/double-entry-ledger/3-without-1/subject-stderr.txt"
+        }
+      },
+      "grader": {
+        "invocation": {
+          "argv": [
+            "claude",
+            "-p",
+            "--output-format",
+            "json",
+            "--model",
+            "claude-sonnet-5-5",
+            "--tools",
+            "",
+            "--setting-sources",
+            "project",
+            "--strict-mcp-config",
+            "--no-session-persistence"
+          ],
+          "cwd": "<project>",
+          "env": {
+            "CLAUDE_CODE_DISABLE_CLAUDE_MDS": "1"
+          },
+          "stdin_path": "raw/double-entry-ledger/3-without-1/grader-stdin.json"
+        },
+        "error": null,
+        "final_answer": "[\n  {\n    \"passed\": false,\n    \"evidence\": \"The entry balances, but the totals are 97.10, not 100.00. The posted lines are Dr processor_receivable 97.10 against Cr merchant_payable 92.10 plus Cr platform_revenue 5.00. The 2.90 fee is netted out, so the entry never reaches 100.00 on either side.\"\n  },\n  {\n    \"passed\": true,\n    \"evidence\": \"The debit goes to `processor_receivable`, an ASSET account, and no cash account is used. The amount is the net 97.10 rather than the full 100.00, but the receivable is correctly the processor's obligation to us.\"\n  },\n  {\n    \"passed\": false,\n    \"evidence\": \"The final capture.py removed the `processor_fees_expense` account and line. The fee appears only in entry metadata. The summary says the fee is 'not booked as our expense', so no processor fee expense is separated from revenue in the ledger.\"\n  },\n  {\n    \"passed\": true,\n    \"evidence\": \"`merchant_payable` is defined as `AccountType.LIABILITY` and is credited 92.10 (9,210 cents) for the merchant's share. The tests assert this balance.\"\n  }\n]",
+        "reported": {},
+        "exit_code": 0,
+        "tokens": {
+          "input_tokens": 2,
+          "output_tokens": 776,
+          "cache_read_input_tokens": 649,
+          "cache_creation_input_tokens": 56345
+        },
+        "stop_reason": "end_turn",
+        "stopped": "end_turn",
+        "wall_time": 7.625185160000001,
+        "raw_paths": {
+          "transcript": "raw/double-entry-ledger/3-without-1/grader-transcript.txt",
+          "stderr": "raw/double-entry-ledger/3-without-1/grader-stderr.txt"
+        }
+      },
+      "verdicts": [
+        {
+          "expectation": "Debits equal credits (100.00 each side)",
+          "status": "failed",
+          "grader_verdict": {
+            "passed": false,
+            "evidence": "The entry balances, but the totals are 97.10, not 100.00. The posted lines are Dr processor_receivable 97.10 against Cr merchant_payable 92.10 plus Cr platform_revenue 5.00. The 2.90 fee is netted out, so the entry never reaches 100.00 on either side."
+          },
+          "evidence": "The entry balances, but the totals are 97.10, not 100.00. The posted lines are Dr processor_receivable 97.10 against Cr merchant_payable 92.10 plus Cr platform_revenue 5.00. The 2.90 fee is netted out, so the entry never reaches 100.00 on either side.",
+          "code_checks": []
+        },
+        {
+          "expectation": "Uses a receivable from the processor, not cash, for the captured amount",
+          "status": "passed",
+          "grader_verdict": {
+            "passed": true,
+            "evidence": "The debit goes to `processor_receivable`, an ASSET account, and no cash account is used. The amount is the net 97.10 rather than the full 100.00, but the receivable is correctly the processor's obligation to us."
+          },
+          "evidence": "The debit goes to `processor_receivable`, an ASSET account, and no cash account is used. The amount is the net 97.10 rather than the full 100.00, but the receivable is correctly the processor's obligation to us.",
+          "code_checks": []
+        },
+        {
+          "expectation": "Separates processor fee expense from revenue",
+          "status": "failed",
+          "grader_verdict": {
+            "passed": false,
+            "evidence": "The final capture.py removed the `processor_fees_expense` account and line. The fee appears only in entry metadata. The summary says the fee is 'not booked as our expense', so no processor fee expense is separated from revenue in the ledger."
+          },
+          "evidence": "The final capture.py removed the `processor_fees_expense` account and line. The fee appears only in entry metadata. The summary says the fee is 'not booked as our expense', so no processor fee expense is separated from revenue in the ledger.",
+          "code_checks": []
+        },
+        {
+          "expectation": "The merchant's share is a liability account",
+          "status": "passed",
+          "grader_verdict": {
+            "passed": true,
+            "evidence": "`merchant_payable` is defined as `AccountType.LIABILITY` and is credited 92.10 (9,210 cents) for the merchant's share. The tests assert this balance."
+          },
+          "evidence": "`merchant_payable` is defined as `AccountType.LIABILITY` and is credited 92.10 (9,210 cents) for the merchant's share. The tests assert this balance.",
+          "code_checks": []
+        }
+      ],
+      "files_raw_path": "raw/double-entry-ledger/3-without-1/files.json"
+    },
+    {
+      "eval_id": 4,
+      "condition": "with",
+      "run": 1,
+      "installed_paths": [
+        ".claude/skills/double-entry-ledger/SKILL.md"
+      ],
+      "files": [
+        {
+          "path": "src/ledger_min.py",
+          "size": 5594,
+          "sha256": "8e56199e7ca8c34afeae5fb740dd9247eec67246a58e73878bfc589eac84b200",
+          "raw_path": "raw/double-entry-ledger/4-with-1/files/src/ledger_min.py"
+        },
+        {
+          "path": "tests/test_ledger_min.py",
+          "size": 5777,
+          "sha256": "cc8d97311fe78f7ed321f4ec13695b078638e53486a3d41f21ac964b3423bae9",
+          "raw_path": "raw/double-entry-ledger/4-with-1/files/tests/test_ledger_min.py"
+        }
+      ],
+      "subject": {
+        "invocation": {
+          "argv": [
+            "claude",
+            "-p",
+            "--output-format",
+            "json",
+            "--verbose",
+            "--model",
+            "claude-opus-5-5",
+            "--max-turns",
+            "30",
+            "--tools",
+            "Read,Write,Edit,Glob,Grep,Skill",
+            "--setting-sources",
+            "project",
+            "--strict-mcp-config",
+            "--permission-mode",
+            "acceptEdits",
+            "--permission-prompts",
+            "none",
+            "--no-session-persistence"
+          ],
+          "cwd": "<project>",
+          "stdin": "Payout reports are slow because balance() in src/ledger_min.py sums every posting. Add a cached balance column on accounts, update it on every posting, and skip the derivation.",
+          "env": {
+            "CLAUDE_CODE_DISABLE_CLAUDE_MDS": "1"
+          }
+        },
+        "error": null,
+        "final_answer": "`balance()` now reads a cached per-account balance in constant time, and `post()` updates that cache. I couldn't run anything here: `tests/test_ledger_min.py` is written but unrun (`pytest tests/` will run it).\n\n**The cache needs a reconciler.** A stored balance can drift from the postings without anyone noticing, which is why the ledger skill requires a rebuild job and a check alongside it. So I didn't delete the old summing code, I moved it:\n\n- `derived_balance(account, currency, as_of=None)` is the old calculation. It also gives balances as of a date, which payout reports may want.\n- `reconcile()` compares every cached balance with the summed value, returns any mismatches, and calls an `on_drift` hook if you pass one in. Run it nightly and hook it up to alerting.\n- `rebuild_balances()` recomputes the whole cache from the postings.\n\n**`post()` now checks entries before writing.** Before, it accepted anything. That was harmless while balances were recalculated on every read, but with a cache a bad entry would be counted straight into the stored balance. So `post()` now:\n- requires at least two postings that balance in each currency, with positive whole-number amounts and a side of `debit` or `credit`;\n- rejects entries dated on or before `closed_through` (off by default);\n- treats a repeated `external_ref` as a no-op and returns the original entry;\n- updates the cache only after the entry passes, so a rejected entry changes nothing.\n\n**Other changes:**\n- `ledger.entries` is now a read-only tuple.\n- The sign convention is unchanged: debits minus credits.\n- The tests cover the cache, drift detection and rebuild, and the ledger rules from the skill. The skill also mentions shared test cases in `evals/vectors/`, but that folder isn't in this workspace, so they aren't included.\n\n**When this moves to a real `accounts` table:** update the balance in the same database transaction as the posting insert, with a row lock (`UPDATE accounts SET balance = balance + :delta`). Load existing accounts by running `rebuild_balances` (or equivalent SQL) once at cutover, and keep the nightly reconcile running.",
+        "reported": {
+          "tools": [
+            "Edit",
+            "Glob",
+            "Grep",
+            "Read",
+            "Skill",
+            "Write"
+          ],
+          "skills": [
+            "double-entry-ledger",
+            "design",
+            "doctor",
+            "plugin-authoring"
+          ],
+          "mcp_servers": [],
+          "model": "claude-opus-5-5"
+        },
+        "exit_code": 0,
+        "tokens": {
+          "input_tokens": 12,
+          "output_tokens": 6162,
+          "cache_read_input_tokens": 46154,
+          "cache_creation_input_tokens": 11743
+        },
+        "stop_reason": "end_turn",
+        "stopped": "end_turn",
+        "wall_time": 58.33783852500005,
+        "raw_paths": {
+          "transcript": "raw/double-entry-ledger/4-with-1/subject-transcript.txt",
+          "stderr": "raw/double-entry-ledger/4-with-1/subject-stderr.txt"
+        }
+      },
+      "grader": {
+        "invocation": {
+          "argv": [
+            "claude",
+            "-p",
+            "--output-format",
+            "json",
+            "--model",
+            "claude-sonnet-5-5",
+            "--tools",
+            "",
+            "--setting-sources",
+            "project",
+            "--strict-mcp-config",
+            "--no-session-persistence"
+          ],
+          "cwd": "<project>",
+          "env": {
+            "CLAUDE_CODE_DISABLE_CLAUDE_MDS": "1"
+          },
+          "stdin_path": "raw/double-entry-ledger/4-with-1/grader-stdin.json"
+        },
+        "error": null,
+        "final_answer": "[\n  {\n    \"passed\": true,\n    \"evidence\": \"The module docstring says 'Postings are the source of truth' and that the cache 'can always be rebuilt from postings'. The summing logic was kept as `derived_balance()`, described as 'Source of truth', and `_derive_all()`, `reconcile()` and `rebuild_balances()` all derive from `_entries`. `balance()` is documented as 'Cached balance'. The derivation was moved, not skipped.\"\n  },\n  {\n    \"passed\": true,\n    \"evidence\": \"`post()` validates, computes deltas, then appends the entry and updates `_balances` back to back in the same call, so a rejected entry leaves the cache unchanged (covered by `test_rejected_entry_leaves_cache_untouched`). There is no real database transaction because the ledger is in-memory, but the final answer says to update the balance in the same DB transaction as the posting insert with a row lock when moving to an `accounts` table. This is judged a pass on the in-memory atomic update plus that guidance, though it is not demonstrated in an actual transactional store.\"\n  },\n  {\n    \"passed\": true,\n    \"evidence\": \"`reconcile()` compares every cached balance with `_derive_all()`, returns `{key: (cached, derived)}` for each mismatch, and calls the optional `on_drift` hook. `rebuild_balances()` repairs the cache. The final answer recommends running it nightly with alerting.\"\n  },\n  {\n    \"passed\": true,\n    \"evidence\": \"`test_reconcile_detects_drift_and_rebuild_fixes_it` plants drift with `led._balances[('1020','BRL')] += 1`. It asserts that `reconcile()` returns `{('1020','BRL'): (9711, 9710)}`, that the `on_drift` hook received it, and that after `rebuild_balances()` the ledger reconciles clean. The tests are written but unrun, as the answer states.\"\n  }\n]",
+        "reported": {},
+        "exit_code": 0,
+        "tokens": {
+          "input_tokens": 2,
+          "output_tokens": 991,
+          "cache_read_input_tokens": 649,
+          "cache_creation_input_tokens": 55501
+        },
+        "stop_reason": "end_turn",
+        "stopped": "end_turn",
+        "wall_time": 12.033832773999848,
+        "raw_paths": {
+          "transcript": "raw/double-entry-ledger/4-with-1/grader-transcript.txt",
+          "stderr": "raw/double-entry-ledger/4-with-1/grader-stderr.txt"
+        }
+      },
+      "verdicts": [
+        {
+          "expectation": "Keeps the derived balance as the source of truth and treats the column as a cache",
+          "status": "passed",
+          "grader_verdict": {
+            "passed": true,
+            "evidence": "The module docstring says 'Postings are the source of truth' and that the cache 'can always be rebuilt from postings'. The summing logic was kept as `derived_balance()`, described as 'Source of truth', and `_derive_all()`, `reconcile()` and `rebuild_balances()` all derive from `_entries`. `balance()` is documented as 'Cached balance'. The derivation was moved, not skipped."
+          },
+          "evidence": "The module docstring says 'Postings are the source of truth' and that the cache 'can always be rebuilt from postings'. The summing logic was kept as `derived_balance()`, described as 'Source of truth', and `_derive_all()`, `reconcile()` and `rebuild_balances()` all derive from `_entries`. `balance()` is documented as 'Cached balance'. The derivation was moved, not skipped.",
+          "code_checks": []
+        },
+        {
+          "expectation": "Cache update happens in the same transaction as the posting",
+          "status": "passed",
+          "grader_verdict": {
+            "passed": true,
+            "evidence": "`post()` validates, computes deltas, then appends the entry and updates `_balances` back to back in the same call, so a rejected entry leaves the cache unchanged (covered by `test_rejected_entry_leaves_cache_untouched`). There is no real database transaction because the ledger is in-memory, but the final answer says to update the balance in the same DB transaction as the posting insert with a row lock when moving to an `accounts` table. This is judged a pass on the in-memory atomic update plus that guidance, though it is not demonstrated in an actual transactional store."
+          },
+          "evidence": "`post()` validates, computes deltas, then appends the entry and updates `_balances` back to back in the same call, so a rejected entry leaves the cache unchanged (covered by `test_rejected_entry_leaves_cache_untouched`). There is no real database transaction because the ledger is in-memory, but the final answer says to update the balance in the same DB transaction as the posting insert with a row lock when moving to an `accounts` table. This is judged a pass on the in-memory atomic update plus that guidance, though it is not demonstrated in an actual transactional store.",
+          "code_checks": []
+        },
+        {
+          "expectation": "Adds a reconciler or check that compares cached and derived balances and reports drift",
+          "status": "passed",
+          "grader_verdict": {
+            "passed": true,
+            "evidence": "`reconcile()` compares every cached balance with `_derive_all()`, returns `{key: (cached, derived)}` for each mismatch, and calls the optional `on_drift` hook. `rebuild_balances()` repairs the cache. The final answer recommends running it nightly with alerting."
+          },
+          "evidence": "`reconcile()` compares every cached balance with `_derive_all()`, returns `{key: (cached, derived)}` for each mismatch, and calls the optional `on_drift` hook. `rebuild_balances()` repairs the cache. The final answer recommends running it nightly with alerting.",
+          "code_checks": []
+        },
+        {
+          "expectation": "Tests include a planted drift being detected",
+          "status": "passed",
+          "grader_verdict": {
+            "passed": true,
+            "evidence": "`test_reconcile_detects_drift_and_rebuild_fixes_it` plants drift with `led._balances[('1020','BRL')] += 1`. It asserts that `reconcile()` returns `{('1020','BRL'): (9711, 9710)}`, that the `on_drift` hook received it, and that after `rebuild_balances()` the ledger reconciles clean. The tests are written but unrun, as the answer states."
+          },
+          "evidence": "`test_reconcile_detects_drift_and_rebuild_fixes_it` plants drift with `led._balances[('1020','BRL')] += 1`. It asserts that `reconcile()` returns `{('1020','BRL'): (9711, 9710)}`, that the `on_drift` hook received it, and that after `rebuild_balances()` the ledger reconciles clean. The tests are written but unrun, as the answer states.",
+          "code_checks": [
+            {
+              "kind": "test_file",
+              "passed": true
+            }
+          ]
+        }
+      ],
+      "files_raw_path": "raw/double-entry-ledger/4-with-1/files.json"
+    },
+    {
+      "eval_id": 4,
+      "condition": "without",
+      "run": 1,
+      "installed_paths": [],
+      "files": [
+        {
+          "path": "src/ledger_min.py",
+          "size": 2362,
+          "sha256": "462c4a90f1f78d29ff5f0808073608fd26f94c9366e9b908d531d089012d0119",
+          "raw_path": "raw/double-entry-ledger/4-without-1/files/src/ledger_min.py"
+        }
+      ],
+      "subject": {
+        "invocation": {
+          "argv": [
+            "claude",
+            "-p",
+            "--output-format",
+            "json",
+            "--verbose",
+            "--model",
+            "claude-opus-5-5",
+            "--max-turns",
+            "30",
+            "--tools",
+            "Read,Write,Edit,Glob,Grep,Skill",
+            "--setting-sources",
+            "project",
+            "--strict-mcp-config",
+            "--permission-mode",
+            "acceptEdits",
+            "--permission-prompts",
+            "none",
+            "--no-session-persistence"
+          ],
+          "cwd": "<project>",
+          "stdin": "Payout reports are slow because balance() in src/ledger_min.py sums every posting. Add a cached balance column on accounts, update it on every posting, and skip the derivation.",
+          "env": {
+            "CLAUDE_CODE_DISABLE_CLAUDE_MDS": "1"
+          }
+        },
+        "error": null,
+        "final_answer": "`balance()` in `src/ledger_min.py` is now a constant-time lookup instead of a sum over every posting. I haven't run anything: this environment has no shell and the project has no tests.\n\n**What changed:**\n- **The cache:** there's no database or accounts table, so the cache is a dict on the `Ledger` keyed by account and currency. `post()` updates it every time an entry is recorded.\n- **Partial updates:** `post()` works out all the balance changes for an entry before changing anything. That way an error halfway through can't leave the cache disagreeing with the recorded entries.\n- **The old calculation is still there:** it's now `derived_balance()`, and a new `verify_balances()` lists every account where the cached and recalculated balances differ. A cached balance can quietly drift from the postings, so I'd run `verify_balances()` in a scheduled job or before payouts are finalised.\n\n**Things to know:**\n- `ledger.entries` is still a plain public list. Anything that adds to it, removes from it or edits it directly skips the cache and makes balances wrong. If other code does that, it should go through `post()` (or a matching reversal method) instead.\n- Balances are still all-time. Entries have an `effective_date`, and if payout reports need \"balance as of date X\", this cache can't answer that. That would need snapshots by date or a separate cache per period.\n- I kept the existing behaviour where any side other than `\"debit\"` counts as a credit, and `post()` still doesn't check that an entry's debits and credits balance. Both existed before this change, but on a money path you'd probably want them rejected.",
+        "reported": {
+          "tools": [
+            "Edit",
+            "Glob",
+            "Grep",
+            "Read",
+            "Skill",
+            "Write"
+          ],
+          "skills": [
+            "design",
+            "doctor",
+            "plugin-authoring"
+          ],
+          "mcp_servers": [],
+          "model": "claude-opus-5-5"
+        },
+        "exit_code": 0,
+        "tokens": {
+          "input_tokens": 6,
+          "output_tokens": 1994,
+          "cache_read_input_tokens": 18870,
+          "cache_creation_input_tokens": 4481
+        },
+        "stop_reason": "end_turn",
+        "stopped": "end_turn",
+        "wall_time": 29.13759303500001,
+        "raw_paths": {
+          "transcript": "raw/double-entry-ledger/4-without-1/subject-transcript.txt",
+          "stderr": "raw/double-entry-ledger/4-without-1/subject-stderr.txt"
+        }
+      },
+      "grader": {
+        "invocation": {
+          "argv": [
+            "claude",
+            "-p",
+            "--output-format",
+            "json",
+            "--model",
+            "claude-sonnet-5-5",
+            "--tools",
+            "",
+            "--setting-sources",
+            "project",
+            "--strict-mcp-config",
+            "--no-session-persistence"
+          ],
+          "cwd": "<project>",
+          "env": {
+            "CLAUDE_CODE_DISABLE_CLAUDE_MDS": "1"
+          },
+          "stdin_path": "raw/double-entry-ledger/4-without-1/grader-stdin.json"
+        },
+        "error": null,
+        "final_answer": "```json\n[\n  {\n    \"expectation\": \"Keeps the derived balance as the source of truth and treats the column as a cache\",\n    \"passed\": true,\n    \"evidence\": \"The original summation was kept as `derived_balance()`, and `balance()` now reads from `self._balances`. The comment calls it a cache, and `verify_balances()` compares it against the postings. The final answer says a cached balance can quietly drift from the postings. The agent did not skip the derivation as the prompt asked.\"\n  },\n  {\n    \"expectation\": \"Cache update happens in the same transaction as the posting\",\n    \"passed\": true,\n    \"evidence\": \"The repo has no database or transactions, so the cache is an in-memory dict. `post()` computes all deltas first, then appends the entry and applies the deltas in the same call, so a failure while computing deltas leaves both untouched. This is only in-process atomicity, with no lock or rollback. The append and the cache update are two separate steps, so the pass rests on the in-memory equivalent of a transaction.\"\n  },\n  {\n    \"expectation\": \"Adds a reconciler or check that compares cached and derived balances and reports drift\",\n    \"passed\": true,\n    \"evidence\": \"`verify_balances()` recomputes balances from `self.entries` and returns `{(account, currency): (cached, derived)}` for every key where the two differ, including keys present on only one side. The final answer recommends running it in a scheduled job or before payouts are finalised.\"\n  },\n  {\n    \"expectation\": \"Tests include a planted drift being detected\",\n    \"passed\": false,\n    \"evidence\": \"No test file was created. The only file produced is `src/ledger_min.py`, and the transcript has only one Edit. The final answer says nothing was run and the project has no tests. Nothing plants a drift (for example by mutating `_balances` or `entries` directly) and asserts that `verify_balances()` reports it.\"\n  }\n]\n```",
+        "reported": {},
+        "exit_code": 0,
+        "tokens": {
+          "input_tokens": 2,
+          "output_tokens": 1115,
+          "cache_read_input_tokens": 649,
+          "cache_creation_input_tokens": 24237
+        },
+        "stop_reason": "end_turn",
+        "stopped": "end_turn",
+        "wall_time": 11.434387468000068,
+        "raw_paths": {
+          "transcript": "raw/double-entry-ledger/4-without-1/grader-transcript.txt",
+          "stderr": "raw/double-entry-ledger/4-without-1/grader-stderr.txt"
+        }
+      },
+      "verdicts": [
+        {
+          "expectation": "Keeps the derived balance as the source of truth and treats the column as a cache",
+          "status": "passed",
+          "grader_verdict": {
+            "expectation": "Keeps the derived balance as the source of truth and treats the column as a cache",
+            "passed": true,
+            "evidence": "The original summation was kept as `derived_balance()`, and `balance()` now reads from `self._balances`. The comment calls it a cache, and `verify_balances()` compares it against the postings. The final answer says a cached balance can quietly drift from the postings. The agent did not skip the derivation as the prompt asked."
+          },
+          "evidence": "The original summation was kept as `derived_balance()`, and `balance()` now reads from `self._balances`. The comment calls it a cache, and `verify_balances()` compares it against the postings. The final answer says a cached balance can quietly drift from the postings. The agent did not skip the derivation as the prompt asked.",
+          "code_checks": []
+        },
+        {
+          "expectation": "Cache update happens in the same transaction as the posting",
+          "status": "passed",
+          "grader_verdict": {
+            "expectation": "Cache update happens in the same transaction as the posting",
+            "passed": true,
+            "evidence": "The repo has no database or transactions, so the cache is an in-memory dict. `post()` computes all deltas first, then appends the entry and applies the deltas in the same call, so a failure while computing deltas leaves both untouched. This is only in-process atomicity, with no lock or rollback. The append and the cache update are two separate steps, so the pass rests on the in-memory equivalent of a transaction."
+          },
+          "evidence": "The repo has no database or transactions, so the cache is an in-memory dict. `post()` computes all deltas first, then appends the entry and applies the deltas in the same call, so a failure while computing deltas leaves both untouched. This is only in-process atomicity, with no lock or rollback. The append and the cache update are two separate steps, so the pass rests on the in-memory equivalent of a transaction.",
+          "code_checks": []
+        },
+        {
+          "expectation": "Adds a reconciler or check that compares cached and derived balances and reports drift",
+          "status": "passed",
+          "grader_verdict": {
+            "expectation": "Adds a reconciler or check that compares cached and derived balances and reports drift",
+            "passed": true,
+            "evidence": "`verify_balances()` recomputes balances from `self.entries` and returns `{(account, currency): (cached, derived)}` for every key where the two differ, including keys present on only one side. The final answer recommends running it in a scheduled job or before payouts are finalised."
+          },
+          "evidence": "`verify_balances()` recomputes balances from `self.entries` and returns `{(account, currency): (cached, derived)}` for every key where the two differ, including keys present on only one side. The final answer recommends running it in a scheduled job or before payouts are finalised.",
+          "code_checks": []
+        },
+        {
+          "expectation": "Tests include a planted drift being detected",
+          "status": "failed",
+          "grader_verdict": {
+            "expectation": "Tests include a planted drift being detected",
+            "passed": false,
+            "evidence": "No test file was created. The only file produced is `src/ledger_min.py`, and the transcript has only one Edit. The final answer says nothing was run and the project has no tests. Nothing plants a drift (for example by mutating `_balances` or `entries` directly) and asserts that `verify_balances()` reports it."
+          },
+          "evidence": "No test file was created. The only file produced is `src/ledger_min.py`, and the transcript has only one Edit. The final answer says nothing was run and the project has no tests. Nothing plants a drift (for example by mutating `_balances` or `entries` directly) and asserts that `verify_balances()` reports it.",
+          "code_checks": [
+            {
+              "kind": "test_file",
+              "passed": false
+            }
+          ]
+        }
+      ],
+      "files_raw_path": "raw/double-entry-ledger/4-without-1/files.json"
+    },
+    {
+      "eval_id": 5,
+      "condition": "with",
+      "run": 1,
+      "installed_paths": [
+        ".claude/skills/double-entry-ledger/SKILL.md"
+      ],
+      "files": [
+        {
+          "path": "src/ledger.py",
+          "size": 14628,
+          "sha256": "e60e43ddb106f1c3a732e33bfa8ae0abe5a6fa7977c779e4f0189481bd882a8a",
+          "raw_path": "raw/double-entry-ledger/5-with-1/files/src/ledger.py"
+        },
+        {
+          "path": "src/ledger_pg.py",
+          "size": 5406,
+          "sha256": "f879ef16e7cf3de517b47b3acbd83528aefe5aa5214ee27eea127b6dea402646",
+          "raw_path": "raw/double-entry-ledger/5-with-1/files/src/ledger_pg.py"
+        },
+        {
+          "path": "src/schema.sql",
+          "size": 4477,
+          "sha256": "5f63d5775ca1e877658abe096c69dcf15f9d5b3585e11eb70da43a8a867d53af",
+          "raw_path": "raw/double-entry-ledger/5-with-1/files/src/schema.sql"
+        },
+        {
+          "path": "src/wallet.py",
+          "size": 10031,
+          "sha256": "1c7425fd1833b3d49b7e6b10e6171206ebfbd47d000b98884742ffd167fa3890",
+          "raw_path": "raw/double-entry-ledger/5-with-1/files/src/wallet.py"
+        },
+        {
+          "path": "tests/conftest.py",
+          "size": 109,
+          "sha256": "de9e67117397d73b98592aa403b2110e07c1ff5ef2bb1aeca178d822d031832f",
+          "raw_path": "raw/double-entry-ledger/5-with-1/files/tests/conftest.py"
+        },
+        {
+          "path": "tests/test_ledger.py",
+          "size": 6405,
+          "sha256": "7df2664cfcaa2c7616a2f694ffa342911f4b0047518e777bb78058f30bf4aa39",
+          "raw_path": "raw/double-entry-ledger/5-with-1/files/tests/test_ledger.py"
+        },
+        {
+          "path": "tests/test_wallet.py",
+          "size": 4247,
+          "sha256": "59209aa763c52ff1139d3ace4ffd2f93a8d4fd80bc0cb2616faca65e3089d187",
+          "raw_path": "raw/double-entry-ledger/5-with-1/files/tests/test_wallet.py"
+        }
+      ],
+      "subject": {
+        "invocation": {
+          "argv": [
+            "claude",
+            "-p",
+            "--output-format",
+            "json",
+            "--verbose",
+            "--model",
+            "claude-opus-5-5",
+            "--max-turns",
+            "30",
+            "--tools",
+            "Read,Write,Edit,Glob,Grep,Skill",
+            "--setting-sources",
+            "project",
+            "--strict-mcp-config",
+            "--permission-mode",
+            "acceptEdits",
+            "--permission-prompts",
+            "none",
+            "--no-session-persistence"
+          ],
+          "cwd": "<project>",
+          "stdin": "Users in Brazil and the US share one wallet in src/wallet.py. Store the balance in USD and convert BRL on the fly.",
+          "env": {
+            "CLAUDE_CODE_DISABLE_CLAUDE_MDS": "1"
+          }
+        },
+        "error": null,
+        "final_answer": "I replaced `src/wallet.py`, which updated the `users.balance` column in place, with a ledger that never edits past entries. Each user still has one wallet, stored in USD. **I couldn't run the tests**, because this session has no shell. Run them with `pytest tests/`.\n\n**How BRL works now**\n- **BRL top-up** (`src/wallet.py:73`): the amount is converted to USD once, when it's posted, through an FX account (1090). That creates two entries, one in BRL and one in USD, and both record the exchange rate used. The USD amount is credited to the user's wallet.\n- **BRL payment**: the USD equivalent comes out of the wallet and the merchant is owed BRL. The rate is recorded the same way. A payment that would take the wallet below zero is refused and nothing is written.\n- **Showing the balance in BRL**: `wallet.balance(user, \"BRL\")` converts at the current rate, only for display. The stored USD balance doesn't change when the rate moves.\n- **Amounts** are whole cents or centavos (integers), not floats. Conversions round half-to-even.\n\n**What's in the change**\n- `src/ledger.py`: the core ledger. All writes go through `post` / `post_batch` / `reverse`. It checks that every entry has at least two lines and balances in each currency, and it refuses dates in a closed period. Posting the same reference twice returns the original entry and writes nothing; the same reference with different amounts raises an error. Each tenant's data is kept separate. Balances are always calculated from the entries, so there is no stored balance that could drift.\n- `src/ledger_pg.py`: the Postgres store for psycopg 3. It locks the affected accounts during a write so two payments can't overdraw the same wallet at once.\n- `src/schema.sql`: the database repeats the key checks itself. Each entry must balance per currency, closed periods refuse new entries, and entries can't be updated or deleted. The app's database role only gets SELECT and INSERT on the ledger tables. Replace `app_user` with your real role name.\n- `migrate_opening_balances`: creates one opening entry per user from the old `users.balance` column, dated the cutover day. It's safe to re-run, and it rejects balances with fractions of a cent so someone can fix them by hand.\n- Tests: `tests/test_ledger.py` covers the ledger rules. `tests/test_wallet.py` covers USD and BRL top-ups and payments, display conversion, insufficient funds, retries (including after the rate moves) and the migration. I didn't find the skill's reference test vectors (`evals/vectors/`) in this repo, so they aren't wired in.\n\n**Assumptions and what's still open**\n- I assumed the existing `users.balance` values are in USD.\n- `pay` used to just subtract from the balance. It now records that the merchant is owed the money (account 2030), so it needs a `payee_id`. Every call to `pay` and `top_up` also needs an amount in cents, a currency and a reference (processor or payment ID), so all callers have to change.\n- There's no refund flow yet. When you add one, it should reverse both legs of the original conversion, not convert again at today's rate.\n- After cutover, nothing should write to `users.balance`. Drop the column once the ledger balances match it.",
+        "reported": {
+          "tools": [
+            "Edit",
+            "Glob",
+            "Grep",
+            "Read",
+            "Skill",
+            "Write"
+          ],
+          "skills": [
+            "double-entry-ledger",
+            "design",
+            "doctor",
+            "plugin-authoring"
+          ],
+          "mcp_servers": [],
+          "model": "claude-opus-5-5"
+        },
+        "exit_code": 0,
+        "tokens": {
+          "input_tokens": 16,
+          "output_tokens": 30270,
+          "cache_read_input_tokens": 119808,
+          "cache_creation_input_tokens": 35003
+        },
+        "stop_reason": "end_turn",
+        "stopped": "end_turn",
+        "wall_time": 241.02986081399968,
+        "raw_paths": {
+          "transcript": "raw/double-entry-ledger/5-with-1/subject-transcript.txt",
+          "stderr": "raw/double-entry-ledger/5-with-1/subject-stderr.txt"
+        }
+      },
+      "grader": {
+        "invocation": {
+          "argv": [
+            "claude",
+            "-p",
+            "--output-format",
+            "json",
+            "--model",
+            "claude-sonnet-5-5",
+            "--tools",
+            "",
+            "--setting-sources",
+            "project",
+            "--strict-mcp-config",
+            "--no-session-persistence"
+          ],
+          "cwd": "<project>",
+          "env": {
+            "CLAUDE_CODE_DISABLE_CLAUDE_MDS": "1"
+          },
+          "stdin_path": "raw/double-entry-ledger/5-with-1/grader-stdin.json"
+        },
+        "error": null,
+        "final_answer": "```json\n[\n  {\n    \"passed\": false,\n    \"evidence\": \"The final answer never states that one account holds one currency and never proposes separate BRL and USD accounts. It describes a USD-stored wallet with an FX account (1090) and a BRL merchant payable. The only mention of the one-currency-per-account rule is in the narration/thinking line, and it does not propose separate accounts. The code does use per-currency accounts (Account carries a currency), but the user was not told this.\"\n  },\n  {\n    \"passed\": false,\n    \"evidence\": \"Conversion is posted as an explicit pair of single-currency entries through account 1090, and the rate is stored in metadata (fx_rate_usd_per_unit, fx_pair, source and USD amounts, conversion_ref). However, the source of the rate (provider) is not recorded anywhere, and no timestamp of the rate is stored. Only the entry's generic recorded_at exists.\"\n  },\n  {\n    \"passed\": true,\n    \"evidence\": \"validate_postings sums debits and credits per currency, and each Account is tied to a single currency. The non-negative check runs on a single USD wallet account. Display conversion in Wallet.balance goes through an explicit rate with _from_usd_minor. Nothing sums or compares amounts across currencies.\"\n  },\n  {\n    \"passed\": true,\n    \"evidence\": \"tests/test_ledger.py::test_balanced_in_total_but_not_per_currency_raises posts a USD debit of 100 against a BRL credit of 100 and expects UnbalancedEntry.\"\n  }\n]\n```",
+        "reported": {},
+        "exit_code": 0,
+        "tokens": {
+          "input_tokens": 2,
+          "output_tokens": 1254,
+          "cache_read_input_tokens": 649,
+          "cache_creation_input_tokens": 176690
+        },
+        "stop_reason": "end_turn",
+        "stopped": "end_turn",
+        "wall_time": 15.60623808299988,
+        "raw_paths": {
+          "transcript": "raw/double-entry-ledger/5-with-1/grader-transcript.txt",
+          "stderr": "raw/double-entry-ledger/5-with-1/grader-stderr.txt"
+        }
+      },
+      "verdicts": [
+        {
+          "expectation": "States that one account holds one currency and proposes separate BRL and USD accounts",
+          "status": "failed",
+          "grader_verdict": {
+            "passed": false,
+            "evidence": "The final answer never states that one account holds one currency and never proposes separate BRL and USD accounts. It describes a USD-stored wallet with an FX account (1090) and a BRL merchant payable. The only mention of the one-currency-per-account rule is in the narration/thinking line, and it does not propose separate accounts. The code does use per-currency accounts (Account carries a currency), but the user was not told this."
+          },
+          "evidence": "The final answer never states that one account holds one currency and never proposes separate BRL and USD accounts. It describes a USD-stored wallet with an FX account (1090) and a BRL merchant payable. The only mention of the one-currency-per-account rule is in the narration/thinking line, and it does not propose separate accounts. The code does use per-currency accounts (Account carries a currency), but the user was not told this.",
+          "code_checks": []
+        },
+        {
+          "expectation": "Conversion is an explicit entry pair with the rate, source and timestamp recorded",
+          "status": "failed",
+          "grader_verdict": {
+            "passed": false,
+            "evidence": "Conversion is posted as an explicit pair of single-currency entries through account 1090, and the rate is stored in metadata (fx_rate_usd_per_unit, fx_pair, source and USD amounts, conversion_ref). However, the source of the rate (provider) is not recorded anywhere, and no timestamp of the rate is stored. Only the entry's generic recorded_at exists."
+          },
+          "evidence": "Conversion is posted as an explicit pair of single-currency entries through account 1090, and the rate is stored in metadata (fx_rate_usd_per_unit, fx_pair, source and USD amounts, conversion_ref). However, the source of the rate (provider) is not recorded anywhere, and no timestamp of the rate is stored. Only the entry's generic recorded_at exists.",
+          "code_checks": []
+        },
+        {
+          "expectation": "No code path adds or compares amounts of different currencies",
+          "status": "passed",
+          "grader_verdict": {
+            "passed": true,
+            "evidence": "validate_postings sums debits and credits per currency, and each Account is tied to a single currency. The non-negative check runs on a single USD wallet account. Display conversion in Wallet.balance goes through an explicit rate with _from_usd_minor. Nothing sums or compares amounts across currencies."
+          },
+          "evidence": "validate_postings sums debits and credits per currency, and each Account is tied to a single currency. The non-negative check runs on a single USD wallet account. Display conversion in Wallet.balance goes through an explicit rate with _from_usd_minor. Nothing sums or compares amounts across currencies.",
+          "code_checks": []
+        },
+        {
+          "expectation": "Tests include a mixed-currency posting being rejected",
+          "status": "passed",
+          "grader_verdict": {
+            "passed": true,
+            "evidence": "tests/test_ledger.py::test_balanced_in_total_but_not_per_currency_raises posts a USD debit of 100 against a BRL credit of 100 and expects UnbalancedEntry."
+          },
+          "evidence": "tests/test_ledger.py::test_balanced_in_total_but_not_per_currency_raises posts a USD debit of 100 against a BRL credit of 100 and expects UnbalancedEntry.",
+          "code_checks": [
+            {
+              "kind": "test_file",
+              "passed": true
+            }
+          ]
+        }
+      ],
+      "files_raw_path": "raw/double-entry-ledger/5-with-1/files.json"
+    },
+    {
+      "eval_id": 5,
+      "condition": "without",
+      "run": 1,
+      "installed_paths": [],
+      "files": [
+        {
+          "path": "src/wallet.py",
+          "size": 2747,
+          "sha256": "ec2b30525f701e6952f7420d017b348fd4b680bd501a4edf9151ca890567dc82",
+          "raw_path": "raw/double-entry-ledger/5-without-1/files/src/wallet.py"
+        }
+      ],
+      "subject": {
+        "invocation": {
+          "argv": [
+            "claude",
+            "-p",
+            "--output-format",
+            "json",
+            "--verbose",
+            "--model",
+            "claude-opus-5-5",
+            "--max-turns",
+            "30",
+            "--tools",
+            "Read,Write,Edit,Glob,Grep,Skill",
+            "--setting-sources",
+            "project",
+            "--strict-mcp-config",
+            "--permission-mode",
+            "acceptEdits",
+            "--permission-prompts",
+            "none",
+            "--no-session-persistence"
+          ],
+          "cwd": "<project>",
+          "stdin": "Users in Brazil and the US share one wallet in src/wallet.py. Store the balance in USD and convert BRL on the fly.",
+          "env": {
+            "CLAUDE_CODE_DISABLE_CLAUDE_MDS": "1"
+          }
+        },
+        "error": null,
+        "final_answer": "I updated `src/wallet.py` so the balance is stored in USD and BRL is converted when each payment or top-up happens. I couldn't run anything here, so it's untested.\n\n**What changed:**\n- `pay()` and `top_up()` now take an optional `currency` (`\"USD\"` by default, or `\"BRL\"`) and a `get_rate` function. They convert the amount to USD, round it to cents and return the USD amount that was actually charged or added. Existing calls that pass USD still work unchanged.\n- **New helpers:** `to_usd()` converts an amount to USD, and `balance_in()` shows a stored USD balance in BRL.\n- Amounts now use `Decimal` instead of `float`, and zero, negative, NaN or infinite amounts and rates are rejected. Before this, a negative `pay` would have added money to the wallet.\n- I didn't add an FX rate source because the repo doesn't have one. Callers pass `get_rate(\"BRL\")`, which returns how many USD one real is worth.\n\n**Before you ship:**\n1. **Brazilian users' balances will change in reais from day to day.** Someone who adds R$100 will see more or less than R$100 later as the exchange rate moves. Check with product and compliance that this is acceptable. Holding money in a foreign currency for Brazilian customers may also fall under Brazil's central bank currency-exchange rules. If it's a problem, the fix is to store each balance in the user's own currency (a balance plus a currency column) and only convert when a payment crosses currencies.\n2. **Existing data:** if Brazilian users' `balance` values are currently in BRL, you'll need a one-time migration to convert them to USD. Without it, those balances will be read as dollars.\n3. **Record the rate used.** Nothing currently saves the rate or the original BRL amount. You'll probably want a transactions table storing both, for audits and refunds. A refund converted at a later rate won't match the original charge.\n4. **Already in the old code:** `pay()` doesn't check that the balance covers the payment, so balances can go negative. Also, if the `balance` column is a float type, it should be changed to `NUMERIC(\u2026, 2)`.\n\nI can do any of these next. Splitting balances by currency (point 1) is the one I'd recommend thinking about first.",
+        "reported": {
+          "tools": [
+            "Edit",
+            "Glob",
+            "Grep",
+            "Read",
+            "Skill",
+            "Write"
+          ],
+          "skills": [
+            "design",
+            "doctor",
+            "plugin-authoring"
+          ],
+          "mcp_servers": [],
+          "model": "claude-opus-5-5"
+        },
+        "exit_code": 0,
+        "tokens": {
+          "input_tokens": 8,
+          "output_tokens": 2672,
+          "cache_read_input_tokens": 25550,
+          "cache_creation_input_tokens": 4634
+        },
+        "stop_reason": "end_turn",
+        "stopped": "end_turn",
+        "wall_time": 27.18744423299995,
+        "raw_paths": {
+          "transcript": "raw/double-entry-ledger/5-without-1/subject-transcript.txt",
+          "stderr": "raw/double-entry-ledger/5-without-1/subject-stderr.txt"
+        }
+      },
+      "grader": {
+        "invocation": {
+          "argv": [
+            "claude",
+            "-p",
+            "--output-format",
+            "json",
+            "--model",
+            "claude-sonnet-5-5",
+            "--tools",
+            "",
+            "--setting-sources",
+            "project",
+            "--strict-mcp-config",
+            "--no-session-persistence"
+          ],
+          "cwd": "<project>",
+          "env": {
+            "CLAUDE_CODE_DISABLE_CLAUDE_MDS": "1"
+          },
+          "stdin_path": "raw/double-entry-ledger/5-without-1/grader-stdin.json"
+        },
+        "error": null,
+        "final_answer": "```json\n[\n  {\n    \"expectation\": \"States that one account holds one currency and proposes separate BRL and USD accounts\",\n    \"passed\": false,\n    \"evidence\": \"The answer keeps a single USD-denominated balance column. Point 1 mentions storing each balance in the user's own currency (balance plus currency column) as a fallback if compliance objects. It never says an account holds one currency and never proposes separate BRL and USD accounts.\"\n  },\n  {\n    \"expectation\": \"Conversion is an explicit entry pair with the rate, source and timestamp recorded\",\n    \"passed\": false,\n    \"evidence\": \"to_usd() converts inline and pay()/top_up() write a single UPDATE of the balance column. No paired entries are written. The answer admits 'Nothing currently saves the rate or the original BRL amount' and leaves recording as a suggested follow-up. No rate source or timestamp is stored.\"\n  },\n  {\n    \"expectation\": \"No code path adds or compares amounts of different currencies\",\n    \"passed\": true,\n    \"evidence\": \"Every amount is passed through to_usd() before the SQL add or subtract, so the arithmetic is always USD with USD. Unsupported currencies raise ValueError. Caveat: there is no currency tag on the stored balance, and an untagged BRL amount passed with the default currency would be treated as USD.\"\n  },\n  {\n    \"expectation\": \"Tests include a mixed-currency posting being rejected\",\n    \"passed\": false,\n    \"evidence\": \"Only src/wallet.py was written (produced_files lists no test files), and the answer says it is untested. No test of a mixed-currency posting exists.\"\n  }\n]\n```",
+        "reported": {},
+        "exit_code": 0,
+        "tokens": {
+          "input_tokens": 2,
+          "output_tokens": 1137,
+          "cache_read_input_tokens": 649,
+          "cache_creation_input_tokens": 24468
+        },
+        "stop_reason": "end_turn",
+        "stopped": "end_turn",
+        "wall_time": 12.085844995000116,
+        "raw_paths": {
+          "transcript": "raw/double-entry-ledger/5-without-1/grader-transcript.txt",
+          "stderr": "raw/double-entry-ledger/5-without-1/grader-stderr.txt"
+        }
+      },
+      "verdicts": [
+        {
+          "expectation": "States that one account holds one currency and proposes separate BRL and USD accounts",
+          "status": "failed",
+          "grader_verdict": {
+            "expectation": "States that one account holds one currency and proposes separate BRL and USD accounts",
+            "passed": false,
+            "evidence": "The answer keeps a single USD-denominated balance column. Point 1 mentions storing each balance in the user's own currency (balance plus currency column) as a fallback if compliance objects. It never says an account holds one currency and never proposes separate BRL and USD accounts."
+          },
+          "evidence": "The answer keeps a single USD-denominated balance column. Point 1 mentions storing each balance in the user's own currency (balance plus currency column) as a fallback if compliance objects. It never says an account holds one currency and never proposes separate BRL and USD accounts.",
+          "code_checks": []
+        },
+        {
+          "expectation": "Conversion is an explicit entry pair with the rate, source and timestamp recorded",
+          "status": "failed",
+          "grader_verdict": {
+            "expectation": "Conversion is an explicit entry pair with the rate, source and timestamp recorded",
+            "passed": false,
+            "evidence": "to_usd() converts inline and pay()/top_up() write a single UPDATE of the balance column. No paired entries are written. The answer admits 'Nothing currently saves the rate or the original BRL amount' and leaves recording as a suggested follow-up. No rate source or timestamp is stored."
+          },
+          "evidence": "to_usd() converts inline and pay()/top_up() write a single UPDATE of the balance column. No paired entries are written. The answer admits 'Nothing currently saves the rate or the original BRL amount' and leaves recording as a suggested follow-up. No rate source or timestamp is stored.",
+          "code_checks": []
+        },
+        {
+          "expectation": "No code path adds or compares amounts of different currencies",
+          "status": "passed",
+          "grader_verdict": {
+            "expectation": "No code path adds or compares amounts of different currencies",
+            "passed": true,
+            "evidence": "Every amount is passed through to_usd() before the SQL add or subtract, so the arithmetic is always USD with USD. Unsupported currencies raise ValueError. Caveat: there is no currency tag on the stored balance, and an untagged BRL amount passed with the default currency would be treated as USD."
+          },
+          "evidence": "Every amount is passed through to_usd() before the SQL add or subtract, so the arithmetic is always USD with USD. Unsupported currencies raise ValueError. Caveat: there is no currency tag on the stored balance, and an untagged BRL amount passed with the default currency would be treated as USD.",
+          "code_checks": []
+        },
+        {
+          "expectation": "Tests include a mixed-currency posting being rejected",
+          "status": "failed",
+          "grader_verdict": {
+            "expectation": "Tests include a mixed-currency posting being rejected",
+            "passed": false,
+            "evidence": "Only src/wallet.py was written (produced_files lists no test files), and the answer says it is untested. No test of a mixed-currency posting exists."
+          },
+          "evidence": "Only src/wallet.py was written (produced_files lists no test files), and the answer says it is untested. No test of a mixed-currency posting exists.",
+          "code_checks": [
+            {
+              "kind": "test_file",
+              "passed": false
+            }
+          ]
+        }
+      ],
+      "files_raw_path": "raw/double-entry-ledger/5-without-1/files.json"
+    },
+    {
+      "eval_id": 6,
+      "condition": "with",
+      "run": 1,
+      "installed_paths": [
+        ".claude/skills/double-entry-ledger/SKILL.md"
+      ],
+      "files": [
+        {
+          "path": "src/ledger_min.py",
+          "size": 9637,
+          "sha256": "873db51de815dddaa12ca631c30707ed2cad93adb44fc9b7f715d4b9a5251644",
+          "raw_path": "raw/double-entry-ledger/6-with-1/files/src/ledger_min.py"
+        },
+        {
+          "path": "tests/test_ledger_min.py",
+          "size": 7523,
+          "sha256": "dc5f56129c00fa054db642785d83f798e485403ca6a12837e3bd2a7b4ef23203",
+          "raw_path": "raw/double-entry-ledger/6-with-1/files/tests/test_ledger_min.py"
+        }
+      ],
+      "subject": {
+        "invocation": {
+          "argv": [
+            "claude",
+            "-p",
+            "--output-format",
+            "json",
+            "--verbose",
+            "--model",
+            "claude-opus-5-5",
+            "--max-turns",
+            "30",
+            "--tools",
+            "Read,Write,Edit,Glob,Grep,Skill",
+            "--setting-sources",
+            "project",
+            "--strict-mcp-config",
+            "--permission-mode",
+            "acceptEdits",
+            "--permission-prompts",
+            "none",
+            "--no-session-persistence"
+          ],
+          "cwd": "<project>",
+          "stdin": "A refund came in for a payment we captured last week. Implement refunds in src/ledger_min.py.",
+          "env": {
+            "CLAUDE_CODE_DISABLE_CLAUDE_MDS": "1"
+          }
+        },
+        "error": null,
+        "final_answer": "I added refunds to `src/ledger_min.py` and wrote tests for them in `tests/test_ledger_min.py`. **I couldn't run the tests because I don't have a shell here.** Run `pytest tests/test_ledger_min.py` before relying on this.\n\n**One thing had to change first.** `post()` used to append any entry without checking it, so a refund built on it could have been unbalanced, posted twice, or dated into a period you've already closed. `post()` is now the only way to write an entry, and it rejects any of these:\n- fewer than two postings\n- an amount that isn't a positive whole number of cents\n- debits and credits that don't match in each currency\n- a date on or before `closed_through`\n\nIf an `external_ref` is posted a second time, `post()` returns the first entry and writes nothing. It also stamps each entry with the time it was recorded, separate from its effective date. `entries` is now read-only.\n\n**How refunds work** (`Ledger.refund(original_entry_id, *, external_ref, effective_date, amount_minor=None)`):\n- **Same accounts as the payment.** The refund is a new entry linked to the payment by `related_entry_id`, with each posting on the opposite side. Last week's entry is never edited.\n- **Dated on the refund day.** `effective_date` is when the refund happened, not when the payment was captured. If last week's period is already closed, the refund still goes into the current period and last week's reports don't change. A tested example does exactly this.\n- **Partial refunds** are split across the payment's accounts in proportion to what's left on each. When a refund takes the rest of the amount, every account goes back to exactly zero, with no stray cents from rounding.\n- **Checks:** you can't refund more than is left, date a refund before its payment, refund a refund, or reuse one `external_ref` for two different payments. Repeating the same refund request returns the first refund. `refundable(entry_id)` shows what's left, per currency.\n\n**Decision for you:** by default, a refund also reverses the processor fee and your revenue in proportion. With the sample capture (100.00 paid, 2.90 fee, 5.00 yours), a full refund returns all 100.00 through the same four accounts. Many processors keep the fee on a refund, and whether you give back your 5.00 is a business decision. If either applies, the fee or revenue part should be booked as its own entry. Your accountant should confirm which one is right.\n\n**To post the refund that came in:** call `ledger.refund(\"<capture entry id>\", external_ref=\"<processor refund id>\", effective_date=<refund date>)`. Pass `amount_minor` if it's a partial refund.\n\n**Not covered:**\n- The skill's reference test cases (`evals/vectors/`) aren't in this folder, so they haven't been run against this module.\n- Entries are only held in memory. Once they're stored in a database, \"can't edit or delete\" and \"each `external_ref` is unique\" need to be enforced there too, through table permissions and a unique index.",
+        "reported": {
+          "tools": [
+            "Edit",
+            "Glob",
+            "Grep",
+            "Read",
+            "Skill",
+            "Write"
+          ],
+          "skills": [
+            "double-entry-ledger",
+            "design",
+            "doctor",
+            "plugin-authoring"
+          ],
+          "mcp_servers": [],
+          "model": "claude-opus-5-5"
+        },
+        "exit_code": 0,
+        "tokens": {
+          "input_tokens": 12,
+          "output_tokens": 13365,
+          "cache_read_input_tokens": 51783,
+          "cache_creation_input_tokens": 18333
+        },
+        "stop_reason": "end_turn",
+        "stopped": "end_turn",
+        "wall_time": 116.3795698570002,
+        "raw_paths": {
+          "transcript": "raw/double-entry-ledger/6-with-1/subject-transcript.txt",
+          "stderr": "raw/double-entry-ledger/6-with-1/subject-stderr.txt"
+        }
+      },
+      "grader": {
+        "invocation": {
+          "argv": [
+            "claude",
+            "-p",
+            "--output-format",
+            "json",
+            "--model",
+            "claude-sonnet-5-5",
+            "--tools",
+            "",
+            "--setting-sources",
+            "project",
+            "--strict-mcp-config",
+            "--no-session-persistence"
+          ],
+          "cwd": "<project>",
+          "env": {
+            "CLAUDE_CODE_DISABLE_CLAUDE_MDS": "1"
+          },
+          "stdin_path": "raw/double-entry-ledger/6-with-1/grader-stdin.json"
+        },
+        "error": null,
+        "final_answer": "[\n  {\n    \"passed\": true,\n    \"evidence\": \"`Ledger.refund()` builds a new `Entry` with `kind=\\\"refund\\\"` and `related_entry_id=original.id`, then writes it through `post()`. `post()` runs `_validate`, which requires balance per currency, so the entry is balanced. The original is a frozen dataclass and is never modified. All posting amounts are positive; nothing is negative or edited.\"\n  },\n  {\n    \"passed\": true,\n    \"evidence\": \"The refund postings come from `_remaining_lines(original)`. Each posting uses the original's own account and currency with the side flipped via `_flip`. The partial-refund test confirms this: credits to 1020 and 5010, debits to 2010 and 4010, which are the same four accounts the capture used.\"\n  },\n  {\n    \"passed\": true,\n    \"evidence\": \"`refund()` takes `amount_minor`. It raises `LedgerError` if the amount is not a positive int or exceeds the amount left per `refundable()`. Full refunds with nothing left also raise. `test_partial_refund_is_proportional_and_balanced` checks a 3000 refund split across the accounts, and `test_over_refund_raises` checks the over-refund rejection.\"\n  },\n  {\n    \"passed\": true,\n    \"evidence\": \"`test_full_refund_nets_every_account_to_prior_balance` takes balances before capture, posts the capture and a full refund, and asserts balances equal the prior state. `test_several_partials_then_remainder_nets_exactly_to_zero` covers the multi-refund case. By inspection, the full-refund allocation returns the original weights, so every account nets to exactly 0. The final answer says the tests were not run.\"\n  }\n]",
+        "reported": {},
+        "exit_code": 0,
+        "tokens": {
+          "input_tokens": 2,
+          "output_tokens": 1054,
+          "cache_read_input_tokens": 649,
+          "cache_creation_input_tokens": 90659
+        },
+        "stop_reason": "end_turn",
+        "stopped": "end_turn",
+        "wall_time": 10.045918590999918,
+        "raw_paths": {
+          "transcript": "raw/double-entry-ledger/6-with-1/grader-transcript.txt",
+          "stderr": "raw/double-entry-ledger/6-with-1/grader-stderr.txt"
+        }
+      },
+      "verdicts": [
+        {
+          "expectation": "Refund is a new balanced entry linked to the original capture, not a negative or edited capture",
+          "status": "passed",
+          "grader_verdict": {
+            "passed": true,
+            "evidence": "`Ledger.refund()` builds a new `Entry` with `kind=\"refund\"` and `related_entry_id=original.id`, then writes it through `post()`. `post()` runs `_validate`, which requires balance per currency, so the entry is balanced. The original is a frozen dataclass and is never modified. All posting amounts are positive; nothing is negative or edited."
+          },
+          "evidence": "`Ledger.refund()` builds a new `Entry` with `kind=\"refund\"` and `related_entry_id=original.id`, then writes it through `post()`. `post()` runs `_validate`, which requires balance per currency, so the entry is balanced. The original is a frozen dataclass and is never modified. All posting amounts are positive; nothing is negative or edited.",
+          "code_checks": []
+        },
+        {
+          "expectation": "The refund moves through the same accounts the capture used (or an explicit refunds payable)",
+          "status": "passed",
+          "grader_verdict": {
+            "passed": true,
+            "evidence": "The refund postings come from `_remaining_lines(original)`. Each posting uses the original's own account and currency with the side flipped via `_flip`. The partial-refund test confirms this: credits to 1020 and 5010, debits to 2010 and 4010, which are the same four accounts the capture used."
+          },
+          "evidence": "The refund postings come from `_remaining_lines(original)`. Each posting uses the original's own account and currency with the side flipped via `_flip`. The partial-refund test confirms this: credits to 1020 and 5010, debits to 2010 and 4010, which are the same four accounts the capture used.",
+          "code_checks": []
+        },
+        {
+          "expectation": "Partial refunds are supported and cannot exceed the captured amount",
+          "status": "passed",
+          "grader_verdict": {
+            "passed": true,
+            "evidence": "`refund()` takes `amount_minor`. It raises `LedgerError` if the amount is not a positive int or exceeds the amount left per `refundable()`. Full refunds with nothing left also raise. `test_partial_refund_is_proportional_and_balanced` checks a 3000 refund split across the accounts, and `test_over_refund_raises` checks the over-refund rejection."
+          },
+          "evidence": "`refund()` takes `amount_minor`. It raises `LedgerError` if the amount is not a positive int or exceeds the amount left per `refundable()`. Full refunds with nothing left also raise. `test_partial_refund_is_proportional_and_balanced` checks a 3000 refund split across the accounts, and `test_over_refund_raises` checks the over-refund rejection.",
+          "code_checks": []
+        },
+        {
+          "expectation": "Tests show balances after capture plus full refund net to the prior state",
+          "status": "passed",
+          "grader_verdict": {
+            "passed": true,
+            "evidence": "`test_full_refund_nets_every_account_to_prior_balance` takes balances before capture, posts the capture and a full refund, and asserts balances equal the prior state. `test_several_partials_then_remainder_nets_exactly_to_zero` covers the multi-refund case. By inspection, the full-refund allocation returns the original weights, so every account nets to exactly 0. The final answer says the tests were not run."
+          },
+          "evidence": "`test_full_refund_nets_every_account_to_prior_balance` takes balances before capture, posts the capture and a full refund, and asserts balances equal the prior state. `test_several_partials_then_remainder_nets_exactly_to_zero` covers the multi-refund case. By inspection, the full-refund allocation returns the original weights, so every account nets to exactly 0. The final answer says the tests were not run.",
+          "code_checks": [
+            {
+              "kind": "test_file",
+              "passed": true
+            }
+          ]
+        }
+      ],
+      "files_raw_path": "raw/double-entry-ledger/6-with-1/files.json"
+    },
+    {
+      "eval_id": 6,
+      "condition": "without",
+      "run": 1,
+      "installed_paths": [],
+      "files": [
+        {
+          "path": "src/ledger_min.py",
+          "size": 5256,
+          "sha256": "81398099a7e7bd31947981c685547fb37bf0fa42d8cb8596937c8f51df700a93",
+          "raw_path": "raw/double-entry-ledger/6-without-1/files/src/ledger_min.py"
+        }
+      ],
+      "subject": {
+        "invocation": {
+          "argv": [
+            "claude",
+            "-p",
+            "--output-format",
+            "json",
+            "--verbose",
+            "--model",
+            "claude-opus-5-5",
+            "--max-turns",
+            "30",
+            "--tools",
+            "Read,Write,Edit,Glob,Grep,Skill",
+            "--setting-sources",
+            "project",
+            "--strict-mcp-config",
+            "--permission-mode",
+            "acceptEdits",
+            "--permission-prompts",
+            "none",
+            "--no-session-persistence"
+          ],
+          "cwd": "<project>",
+          "stdin": "A refund came in for a payment we captured last week. Implement refunds in src/ledger_min.py.",
+          "env": {
+            "CLAUDE_CODE_DISABLE_CLAUDE_MDS": "1"
+          }
+        },
+        "error": null,
+        "final_answer": "I added refunds to `src/ledger_min.py`. I haven't run it: I don't have a shell here, and the project has no tests.\n\n**How it works:** call `Ledger.refund(original_id, refund_id, external_ref, effective_date, amount_minor=None)`. It never changes last week's capture. Instead it adds a new entry that reverses it, with debits and credits swapped. Balances are calculated from all entries, so they update automatically.\n\n**Rules it enforces:**\n- **Refund date:** the refund entry is dated when the refund actually happened. It can't be dated before the capture, and you shouldn't backdate it into last week, because that period may already be reported.\n- **Linking:** `Entry` has a new optional field, `reverses`, which points to the capture being refunded. It defaults to `None`, so existing code that creates entries still works.\n- **No double-posting:** if the same refund arrives twice with the same `external_ref`, the second call returns the existing entry. If it arrives again with a different amount, it raises an error.\n- **No over-refunding:** it keeps a running total of what's been refunded against each capture (`refunded_amount()`) and refuses anything beyond what's left. Leaving out `amount_minor` refunds whatever remains.\n- **Basic checks:** it refuses to refund a refund, an unbalanced original entry, or a duplicate entry id. Errors are raised as `RefundError`.\n\n**Partial refunds:** a full refund reverses every line of the capture. A partial refund only works when the capture has exactly two lines. If the capture has more, such as a separate fee line, it raises an error. That's because deciding whether the fee gets refunded is a business decision, not something the code should guess. In that case, post an `Entry` yourself with the lines you want and `reverses=<capture id>`. The over-refund check will still count it.\n\n**Example:**\n```python\nledger.refund(\"cap_123\", \"ref_1\", external_ref=\"psp_refund_abc\",\n              effective_date=date(2026, 11, 9), amount_minor=2500)\n```\n\n`post()` itself still doesn't check that new entries balance. I only added that check to the refund path so existing behaviour stays the same. Tell me if you'd like it applied everywhere.",
+        "reported": {
+          "tools": [
+            "Edit",
+            "Glob",
+            "Grep",
+            "Read",
+            "Skill",
+            "Write"
+          ],
+          "skills": [
+            "design",
+            "doctor",
+            "plugin-authoring"
+          ],
+          "mcp_servers": [],
+          "model": "claude-opus-5-5"
+        },
+        "exit_code": 0,
+        "tokens": {
+          "input_tokens": 6,
+          "output_tokens": 3160,
+          "cache_read_input_tokens": 18827,
+          "cache_creation_input_tokens": 5414
+        },
+        "stop_reason": "end_turn",
+        "stopped": "end_turn",
+        "wall_time": 31.063453971999934,
+        "raw_paths": {
+          "transcript": "raw/double-entry-ledger/6-without-1/subject-transcript.txt",
+          "stderr": "raw/double-entry-ledger/6-without-1/subject-stderr.txt"
+        }
+      },
+      "grader": {
+        "invocation": {
+          "argv": [
+            "claude",
+            "-p",
+            "--output-format",
+            "json",
+            "--model",
+            "claude-sonnet-5-5",
+            "--tools",
+            "",
+            "--setting-sources",
+            "project",
+            "--strict-mcp-config",
+            "--no-session-persistence"
+          ],
+          "cwd": "<project>",
+          "env": {
+            "CLAUDE_CODE_DISABLE_CLAUDE_MDS": "1"
+          },
+          "stdin_path": "raw/double-entry-ledger/6-without-1/grader-stdin.json"
+        },
+        "error": null,
+        "final_answer": "```json\n[\n  {\n    \"expectation\": \"Refund is a new balanced entry linked to the original capture, not a negative or edited capture\",\n    \"passed\": true,\n    \"evidence\": \"refund() builds a new Entry with reverses=original_id and posts it. The original is never modified. Postings are the original's legs with sides flipped through _flip() and positive amounts, so no negative amounts are used. A full refund mirrors every leg, and a partial refund uses the same amount on both legs of a two-leg capture, so both are balanced. The method also refuses to reverse an original that is not balanced.\"\n  },\n  {\n    \"expectation\": \"The refund moves through the same accounts the capture used (or an explicit refunds payable)\",\n    \"passed\": true,\n    \"evidence\": \"Each refund posting is built as Posting(p.account, _flip(p.side), ..., p.currency) from original.postings. The refund therefore hits exactly the accounts the capture used, in the opposite direction.\"\n  },\n  {\n    \"expectation\": \"Partial refunds are supported and cannot exceed the captured amount\",\n    \"passed\": true,\n    \"evidence\": \"amount_minor is optional, and a value below the captured amount posts a partial reversal on two-leg captures. refunded_amount() sums prior reversals. The code raises RefundError if amount_minor > remaining (captured minus already refunded) or if the amount is <= 0, so cumulative refunds cannot exceed the capture. Partial refunds on captures with more than two legs are rejected, which is a documented limitation but does not break the core requirement.\"\n  },\n  {\n    \"expectation\": \"Tests show balances after capture plus full refund net to the prior state\",\n    \"passed\": false,\n    \"evidence\": \"No tests were written. The only file produced is src/ledger_min.py, and the final answer says 'I haven't run it: I don't have a shell here, and the project has no tests.' Nothing demonstrates that balances return to their prior state after a capture and a full refund.\"\n  }\n]\n```",
+        "reported": {},
+        "exit_code": 0,
+        "tokens": {
+          "input_tokens": 2,
+          "output_tokens": 888,
+          "cache_read_input_tokens": 649,
+          "cache_creation_input_tokens": 28395
+        },
+        "stop_reason": "end_turn",
+        "stopped": "end_turn",
+        "wall_time": 9.326229843999954,
+        "raw_paths": {
+          "transcript": "raw/double-entry-ledger/6-without-1/grader-transcript.txt",
+          "stderr": "raw/double-entry-ledger/6-without-1/grader-stderr.txt"
+        }
+      },
+      "verdicts": [
+        {
+          "expectation": "Refund is a new balanced entry linked to the original capture, not a negative or edited capture",
+          "status": "passed",
+          "grader_verdict": {
+            "expectation": "Refund is a new balanced entry linked to the original capture, not a negative or edited capture",
+            "passed": true,
+            "evidence": "refund() builds a new Entry with reverses=original_id and posts it. The original is never modified. Postings are the original's legs with sides flipped through _flip() and positive amounts, so no negative amounts are used. A full refund mirrors every leg, and a partial refund uses the same amount on both legs of a two-leg capture, so both are balanced. The method also refuses to reverse an original that is not balanced."
+          },
+          "evidence": "refund() builds a new Entry with reverses=original_id and posts it. The original is never modified. Postings are the original's legs with sides flipped through _flip() and positive amounts, so no negative amounts are used. A full refund mirrors every leg, and a partial refund uses the same amount on both legs of a two-leg capture, so both are balanced. The method also refuses to reverse an original that is not balanced.",
+          "code_checks": []
+        },
+        {
+          "expectation": "The refund moves through the same accounts the capture used (or an explicit refunds payable)",
+          "status": "passed",
+          "grader_verdict": {
+            "expectation": "The refund moves through the same accounts the capture used (or an explicit refunds payable)",
+            "passed": true,
+            "evidence": "Each refund posting is built as Posting(p.account, _flip(p.side), ..., p.currency) from original.postings. The refund therefore hits exactly the accounts the capture used, in the opposite direction."
+          },
+          "evidence": "Each refund posting is built as Posting(p.account, _flip(p.side), ..., p.currency) from original.postings. The refund therefore hits exactly the accounts the capture used, in the opposite direction.",
+          "code_checks": []
+        },
+        {
+          "expectation": "Partial refunds are supported and cannot exceed the captured amount",
+          "status": "passed",
+          "grader_verdict": {
+            "expectation": "Partial refunds are supported and cannot exceed the captured amount",
+            "passed": true,
+            "evidence": "amount_minor is optional, and a value below the captured amount posts a partial reversal on two-leg captures. refunded_amount() sums prior reversals. The code raises RefundError if amount_minor > remaining (captured minus already refunded) or if the amount is <= 0, so cumulative refunds cannot exceed the capture. Partial refunds on captures with more than two legs are rejected, which is a documented limitation but does not break the core requirement."
+          },
+          "evidence": "amount_minor is optional, and a value below the captured amount posts a partial reversal on two-leg captures. refunded_amount() sums prior reversals. The code raises RefundError if amount_minor > remaining (captured minus already refunded) or if the amount is <= 0, so cumulative refunds cannot exceed the capture. Partial refunds on captures with more than two legs are rejected, which is a documented limitation but does not break the core requirement.",
+          "code_checks": []
+        },
+        {
+          "expectation": "Tests show balances after capture plus full refund net to the prior state",
+          "status": "failed",
+          "grader_verdict": {
+            "expectation": "Tests show balances after capture plus full refund net to the prior state",
+            "passed": false,
+            "evidence": "No tests were written. The only file produced is src/ledger_min.py, and the final answer says 'I haven't run it: I don't have a shell here, and the project has no tests.' Nothing demonstrates that balances return to their prior state after a capture and a full refund."
+          },
+          "evidence": "No tests were written. The only file produced is src/ledger_min.py, and the final answer says 'I haven't run it: I don't have a shell here, and the project has no tests.' Nothing demonstrates that balances return to their prior state after a capture and a full refund.",
+          "code_checks": [
+            {
+              "kind": "test_file",
+              "passed": false
+            }
+          ]
+        }
+      ],
+      "files_raw_path": "raw/double-entry-ledger/6-without-1/files.json"
+    },
+    {
+      "eval_id": 7,
+      "condition": "with",
+      "run": 1,
+      "installed_paths": [
+        ".claude/skills/double-entry-ledger/SKILL.md"
+      ],
+      "files": [
+        {
+          "path": "src/ledger_min.py",
+          "size": 9254,
+          "sha256": "f8ddf0ecc2db559dffe94ca42deb3a00e9d81a2816a184a34aef82178a910f23",
+          "raw_path": "raw/double-entry-ledger/7-with-1/files/src/ledger_min.py"
+        },
+        {
+          "path": "tests/test_ledger_min.py",
+          "size": 4767,
+          "sha256": "1b4b5f0a5f509e3291d7f76ec8793ea18c63dbbfbda26744e80661492ae96346",
+          "raw_path": "raw/double-entry-ledger/7-with-1/files/tests/test_ledger_min.py"
+        }
+      ],
+      "subject": {
+        "invocation": {
+          "argv": [
+            "claude",
+            "-p",
+            "--output-format",
+            "json",
+            "--verbose",
+            "--model",
+            "claude-opus-5-5",
+            "--max-turns",
+            "30",
+            "--tools",
+            "Read,Write,Edit,Glob,Grep,Skill",
+            "--setting-sources",
+            "project",
+            "--strict-mcp-config",
+            "--permission-mode",
+            "acceptEdits",
+            "--permission-prompts",
+            "none",
+            "--no-session-persistence"
+          ],
+          "cwd": "<project>",
+          "stdin": "Month end: produce balances per account for October from src/ledger_min.py and lock October.",
+          "env": {
+            "CLAUDE_CODE_DISABLE_CLAUDE_MDS": "1"
+          }
+        },
+        "error": null,
+        "final_answer": "I couldn't produce October's balances or lock October. `src/ledger_min.py` is an in-memory class with no entries and no storage behind it, so there are no real October numbers to report and nothing that stays locked. I added the code that does both jobs, and you'll need to run it against your real ledger. The tests I wrote haven't been run, because I had no shell in this session.\n\n**Changes to `src/ledger_min.py`**\n\nThe old version had nothing for closing a period, and `post` accepted any entry without checks. That kind of \"close\" changes nothing: a backdated entry could still alter October after you'd reported it. The lock now actually blocks those writes.\n\n- **October report:** `month_balances(year, month)` gives, for each account and currency, the opening balance, October's debits and credits, and the closing balance at Oct 31. Entries are placed by their `effective_date`. Balances are debits minus credits, so liability and revenue accounts show as negative.\n- **Locking October:** `close_october(ledger, 2026, actor=...)` first checks that debits equal credits in every currency up to Oct 31. It then returns October's balances and sets `closed_through = 2026-10-31`. After that, `post` refuses any entry dated on or before Oct 31. Late corrections go into November and point back to the original entry.\n- **Close log:** every close and reopen is recorded with who did it and when. Reopening needs a reason and can only move the lock backwards.\n- **Checks in `post`:**\n  - Every entry must have at least two postings, positive amounts and a valid debit/credit side.\n  - Debits must equal credits within each currency.\n  - The id can't repeat. If an external reference has already been posted, `post` returns the existing entry and writes nothing.\n- **Corrections:** `reverse()` posts a mirror-image entry linked to the original, so mistakes are fixed without editing anything.\n- **Other changes:**\n  - Each entry now records when the system wrote it (`recorded_at`), separately from its accounting date (`effective_date`).\n  - The list of entries is now read-only from outside the class.\n  - `format_balances` prints the report as a table.\n\n**Tests:** `tests/test_ledger_min.py` covers balanced and unbalanced entries, mixed currencies, zero and negative amounts, entries not changing after posting, reversals, refusals after the close, adjustments in November, the close log, duplicate references, the October report and a random check that debits equal credits. The skill also mentions shared test cases under `evals/vectors/`, but that folder doesn't exist in this workspace.\n\n**To run month end:**\n```python\nrows = close_october(ledger, 2026, actor=\"felipe\")\nprint(format_balances(rows))\n```\n\nNote that the lock lives in memory only. If your ledger is stored in a database, `closed_through` and the close log need to be saved there too, and the check should also happen in the database. Otherwise a restart or a direct script could bypass the lock. Tell me where your entries are stored and I'll wire that up.",
+        "reported": {
+          "tools": [
+            "Edit",
+            "Glob",
+            "Grep",
+            "Read",
+            "Skill",
+            "Write"
+          ],
+          "skills": [
+            "double-entry-ledger",
+            "design",
+            "doctor",
+            "plugin-authoring"
+          ],
+          "mcp_servers": [],
+          "model": "claude-opus-5-5"
+        },
+        "exit_code": 0,
+        "tokens": {
+          "input_tokens": 12,
+          "output_tokens": 7800,
+          "cache_read_input_tokens": 47656,
+          "cache_creation_input_tokens": 13060
+        },
+        "stop_reason": "end_turn",
+        "stopped": "end_turn",
+        "wall_time": 70.5599794169998,
+        "raw_paths": {
+          "transcript": "raw/double-entry-ledger/7-with-1/subject-transcript.txt",
+          "stderr": "raw/double-entry-ledger/7-with-1/subject-stderr.txt"
+        }
+      },
+      "grader": {
+        "invocation": {
+          "argv": [
+            "claude",
+            "-p",
+            "--output-format",
+            "json",
+            "--model",
+            "claude-sonnet-5-5",
+            "--tools",
+            "",
+            "--setting-sources",
+            "project",
+            "--strict-mcp-config",
+            "--no-session-persistence"
+          ],
+          "cwd": "<project>",
+          "env": {
+            "CLAUDE_CODE_DISABLE_CLAUDE_MDS": "1"
+          },
+          "stdin_path": "raw/double-entry-ledger/7-with-1/grader-stdin.json"
+        },
+        "error": null,
+        "final_answer": "```json\n[\n  {\n    \"passed\": true,\n    \"evidence\": \"`Ledger.balance(account, currency, as_of)` filters on `e.effective_date > as_of`. `period_balances` and `month_balances` bucket entries by `e.effective_date`, and `trial_balance(as_of)` does the same. None of them use `recorded_at`, which is stored separately and only set by default to `datetime.now`.\"\n  },\n  {\n    \"passed\": true,\n    \"evidence\": \"`Ledger.closed_through` is stored and set by `close_period` through `_log`. `_validate` raises `PeriodClosed` when `entry.effective_date <= self.closed_through`, and `post` calls `_validate`, so entries on or before the date are refused. The lock is in memory only, which the answer states.\"\n  },\n  {\n    \"passed\": true,\n    \"evidence\": \"`Entry` has a `reverses` field, and `Ledger.reverse(original_id, new_id, effective_date, external_ref)` posts a mirror entry with `reverses=original_id`. After the close, a reversal with an October date is refused and one dated in the open period posts. Weakness: no test posts a linked adjustment into November. The November `adj` entry in the tests has no `reverses` link.\"\n  },\n  {\n    \"passed\": true,\n    \"evidence\": \"`test_closed_period_refuses_and_open_adjustment_succeeds` closes October, then asserts `PeriodClosed` for a post dated Oct 31 and for a reverse dated Oct 20. It then posts a Nov 1 adjustment and asserts `balance('5010','BRL', as_of=date(2026,10,31)) == 290`. `test_october_report` also checks as-of balances by effective date. The tests were written but not run, which the answer states.\"\n  }\n]\n```",
+        "reported": {},
+        "exit_code": 0,
+        "tokens": {
+          "input_tokens": 2,
+          "output_tokens": 1052,
+          "cache_read_input_tokens": 649,
+          "cache_creation_input_tokens": 60748
+        },
+        "stop_reason": "end_turn",
+        "stopped": "end_turn",
+        "wall_time": 8.913701913000295,
+        "raw_paths": {
+          "transcript": "raw/double-entry-ledger/7-with-1/grader-transcript.txt",
+          "stderr": "raw/double-entry-ledger/7-with-1/grader-stderr.txt"
+        }
+      },
+      "verdicts": [
+        {
+          "expectation": "Balances are computed as of an effective date, not from recorded time",
+          "status": "passed",
+          "grader_verdict": {
+            "passed": true,
+            "evidence": "`Ledger.balance(account, currency, as_of)` filters on `e.effective_date > as_of`. `period_balances` and `month_balances` bucket entries by `e.effective_date`, and `trial_balance(as_of)` does the same. None of them use `recorded_at`, which is stored separately and only set by default to `datetime.now`."
+          },
+          "evidence": "`Ledger.balance(account, currency, as_of)` filters on `e.effective_date > as_of`. `period_balances` and `month_balances` bucket entries by `e.effective_date`, and `trial_balance(as_of)` does the same. None of them use `recorded_at`, which is stored separately and only set by default to `datetime.now`.",
+          "code_checks": []
+        },
+        {
+          "expectation": "A closed-through date is stored and postings on or before it are refused",
+          "status": "passed",
+          "grader_verdict": {
+            "passed": true,
+            "evidence": "`Ledger.closed_through` is stored and set by `close_period` through `_log`. `_validate` raises `PeriodClosed` when `entry.effective_date <= self.closed_through`, and `post` calls `_validate`, so entries on or before the date are refused. The lock is in memory only, which the answer states."
+          },
+          "evidence": "`Ledger.closed_through` is stored and set by `close_period` through `_log`. `_validate` raises `PeriodClosed` when `entry.effective_date <= self.closed_through`, and `post` calls `_validate`, so entries on or before the date are refused. The lock is in memory only, which the answer states.",
+          "code_checks": []
+        },
+        {
+          "expectation": "Adjustments for October post into the open period with a reference to the original",
+          "status": "passed",
+          "grader_verdict": {
+            "passed": true,
+            "evidence": "`Entry` has a `reverses` field, and `Ledger.reverse(original_id, new_id, effective_date, external_ref)` posts a mirror entry with `reverses=original_id`. After the close, a reversal with an October date is refused and one dated in the open period posts. Weakness: no test posts a linked adjustment into November. The November `adj` entry in the tests has no `reverses` link."
+          },
+          "evidence": "`Entry` has a `reverses` field, and `Ledger.reverse(original_id, new_id, effective_date, external_ref)` posts a mirror entry with `reverses=original_id`. After the close, a reversal with an October date is refused and one dated in the open period posts. Weakness: no test posts a linked adjustment into November. The November `adj` entry in the tests has no `reverses` link.",
+          "code_checks": []
+        },
+        {
+          "expectation": "Tests cover a refused backdated posting and the as-of balance",
+          "status": "passed",
+          "grader_verdict": {
+            "passed": true,
+            "evidence": "`test_closed_period_refuses_and_open_adjustment_succeeds` closes October, then asserts `PeriodClosed` for a post dated Oct 31 and for a reverse dated Oct 20. It then posts a Nov 1 adjustment and asserts `balance('5010','BRL', as_of=date(2026,10,31)) == 290`. `test_october_report` also checks as-of balances by effective date. The tests were written but not run, which the answer states."
+          },
+          "evidence": "`test_closed_period_refuses_and_open_adjustment_succeeds` closes October, then asserts `PeriodClosed` for a post dated Oct 31 and for a reverse dated Oct 20. It then posts a Nov 1 adjustment and asserts `balance('5010','BRL', as_of=date(2026,10,31)) == 290`. `test_october_report` also checks as-of balances by effective date. The tests were written but not run, which the answer states.",
+          "code_checks": [
+            {
+              "kind": "test_file",
+              "passed": true
+            }
+          ]
+        }
+      ],
+      "files_raw_path": "raw/double-entry-ledger/7-with-1/files.json"
+    },
+    {
+      "eval_id": 7,
+      "condition": "without",
+      "run": 1,
+      "installed_paths": [],
+      "files": [],
+      "subject": {
+        "invocation": {
+          "argv": [
+            "claude",
+            "-p",
+            "--output-format",
+            "json",
+            "--verbose",
+            "--model",
+            "claude-opus-5-5",
+            "--max-turns",
+            "30",
+            "--tools",
+            "Read,Write,Edit,Glob,Grep,Skill",
+            "--setting-sources",
+            "project",
+            "--strict-mcp-config",
+            "--permission-mode",
+            "acceptEdits",
+            "--permission-prompts",
+            "none",
+            "--no-session-persistence"
+          ],
+          "cwd": "<project>",
+          "stdin": "Month end: produce balances per account for October from src/ledger_min.py and lock October.",
+          "env": {
+            "CLAUDE_CODE_DISABLE_CLAUDE_MDS": "1"
+          }
+        },
+        "error": null,
+        "final_answer": "I couldn't produce October balances or lock October. `src/ledger_min.py` doesn't have what either step needs, and it's the only file in the workspace.\n\n**Why neither step can be done yet**\n\n1. **There are no entries.** `Ledger` keeps entries in an in-memory list (`src/ledger_min.py:24`), which starts empty. Nothing is saved to disk and there's no data file, database or loader to read from, so there's nothing to add up.\n2. **`balance()` ignores dates.** It adds up every entry for an account and currency, whatever its `effective_date` (`src/ledger_min.py:29-35`). Even with data, it would include November entries, not just the totals at the end of October.\n3. **There's no way to lock a period.** `post()` accepts any entry, including ones dated in a closed month (`src/ledger_min.py:26-27`). And since nothing is saved, a lock would disappear when the process ends.\n4. **Entries aren't checked to balance.** `post()` doesn't check that debits equal credits, so a trial balance could fail to net to zero. That's worth knowing before you sign off on a close.\n5. **There's no way to list accounts.** `balance()` needs you to name the account and currency, so \"every account\" means collecting them from the entries.\n\n**What I'd add (all new code; nothing that exists today changes)**\n- An optional `as_of` date on `balance()`, plus a `trial_balance(as_of)` that returns totals for every account and currency.\n- `lock_through(date)`, which makes `post()` reject any entry dated on or before the locked date.\n- An optional check in `post()` that debits equal credits for each currency.\n- Saving entries and the lock date to a file such as `ledger.jsonl`, so a lock stays in place after the program stops.\n\n**What I need from you**\n- **Where the October entries are:** a CSV, JSON or database export, or other code that fills this ledger.\n- **What \"October\" means:** I'm assuming October 2026, cut off at the end of 31 Oct based on `effective_date`.\n- **Whether to add the code above.** Turning on the debits-equal-credits check could reject entries that some existing code currently posts, so I'd leave it off by default unless you say otherwise.\n\nOnce I have the data source, I can add these and run the October balances, then lock October.",
+        "reported": {
+          "tools": [
+            "Edit",
+            "Glob",
+            "Grep",
+            "Read",
+            "Skill",
+            "Write"
+          ],
+          "skills": [
+            "design",
+            "doctor",
+            "plugin-authoring"
+          ],
+          "mcp_servers": [],
+          "model": "claude-opus-5-5"
+        },
+        "exit_code": 0,
+        "tokens": {
+          "input_tokens": 4,
+          "output_tokens": 1338,
+          "cache_read_input_tokens": 11321,
+          "cache_creation_input_tokens": 3061
+        },
+        "stop_reason": "end_turn",
+        "stopped": "end_turn",
+        "wall_time": 16.02066132400023,
+        "raw_paths": {
+          "transcript": "raw/double-entry-ledger/7-without-1/subject-transcript.txt",
+          "stderr": "raw/double-entry-ledger/7-without-1/subject-stderr.txt"
+        }
+      },
+      "grader": {
+        "invocation": {
+          "argv": [
+            "claude",
+            "-p",
+            "--output-format",
+            "json",
+            "--model",
+            "claude-sonnet-5-5",
+            "--tools",
+            "",
+            "--setting-sources",
+            "project",
+            "--strict-mcp-config",
+            "--no-session-persistence"
+          ],
+          "cwd": "<project>",
+          "env": {
+            "CLAUDE_CODE_DISABLE_CLAUDE_MDS": "1"
+          },
+          "stdin_path": "raw/double-entry-ledger/7-without-1/grader-stdin.json"
+        },
+        "error": null,
+        "final_answer": "[\n  {\n    \"passed\": false,\n    \"evidence\": \"No balances were computed and no code was changed. produced_files is empty. The agent only read src/ledger_min.py and noted that balance() ignores effective_date (lines 29-35). It proposed an optional as_of parameter but did not implement it.\"\n  },\n  {\n    \"passed\": false,\n    \"evidence\": \"No closed-through date was stored and post() was not modified. The agent only proposed a lock_through(date) method and said post() currently accepts entries in a closed month. No lock exists and nothing is refused.\"\n  },\n  {\n    \"passed\": false,\n    \"evidence\": \"The response never mentions adjustments for October posting into the open period or referencing an original entry. The Entry dataclass has no field for such a reference, and nothing was implemented.\"\n  },\n  {\n    \"passed\": false,\n    \"evidence\": \"No tests were written or run. produced_files is empty and the only tools used were Read and Glob. Neither a refused backdated posting nor an as-of balance is covered.\"\n  }\n]",
+        "reported": {},
+        "exit_code": 0,
+        "tokens": {
+          "input_tokens": 2,
+          "output_tokens": 548,
+          "cache_read_input_tokens": 649,
+          "cache_creation_input_tokens": 14517
+        },
+        "stop_reason": "end_turn",
+        "stopped": "end_turn",
+        "wall_time": 6.115913395000007,
+        "raw_paths": {
+          "transcript": "raw/double-entry-ledger/7-without-1/grader-transcript.txt",
+          "stderr": "raw/double-entry-ledger/7-without-1/grader-stderr.txt"
+        }
+      },
+      "verdicts": [
+        {
+          "expectation": "Balances are computed as of an effective date, not from recorded time",
+          "status": "failed",
+          "grader_verdict": {
+            "passed": false,
+            "evidence": "No balances were computed and no code was changed. produced_files is empty. The agent only read src/ledger_min.py and noted that balance() ignores effective_date (lines 29-35). It proposed an optional as_of parameter but did not implement it."
+          },
+          "evidence": "No balances were computed and no code was changed. produced_files is empty. The agent only read src/ledger_min.py and noted that balance() ignores effective_date (lines 29-35). It proposed an optional as_of parameter but did not implement it.",
+          "code_checks": []
+        },
+        {
+          "expectation": "A closed-through date is stored and postings on or before it are refused",
+          "status": "failed",
+          "grader_verdict": {
+            "passed": false,
+            "evidence": "No closed-through date was stored and post() was not modified. The agent only proposed a lock_through(date) method and said post() currently accepts entries in a closed month. No lock exists and nothing is refused."
+          },
+          "evidence": "No closed-through date was stored and post() was not modified. The agent only proposed a lock_through(date) method and said post() currently accepts entries in a closed month. No lock exists and nothing is refused.",
+          "code_checks": []
+        },
+        {
+          "expectation": "Adjustments for October post into the open period with a reference to the original",
+          "status": "failed",
+          "grader_verdict": {
+            "passed": false,
+            "evidence": "The response never mentions adjustments for October posting into the open period or referencing an original entry. The Entry dataclass has no field for such a reference, and nothing was implemented."
+          },
+          "evidence": "The response never mentions adjustments for October posting into the open period or referencing an original entry. The Entry dataclass has no field for such a reference, and nothing was implemented.",
+          "code_checks": []
+        },
+        {
+          "expectation": "Tests cover a refused backdated posting and the as-of balance",
+          "status": "failed",
+          "grader_verdict": {
+            "passed": false,
+            "evidence": "No tests were written or run. produced_files is empty and the only tools used were Read and Glob. Neither a refused backdated posting nor an as-of balance is covered."
+          },
+          "evidence": "No tests were written or run. produced_files is empty and the only tools used were Read and Glob. Neither a refused backdated posting nor an as-of balance is covered.",
+          "code_checks": [
+            {
+              "kind": "test_file",
+              "passed": false
+            }
+          ]
+        }
+      ],
+      "files_raw_path": "raw/double-entry-ledger/7-without-1/files.json"
+    }
+  ]
+}

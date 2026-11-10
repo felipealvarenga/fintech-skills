@@ -89,6 +89,11 @@ runs with your agent's permissions. The only code in the pack is the vectors you
 `claude plugin update fintech-skills@felipealvarenga`, `codex plugin marketplace upgrade` then the
 `codex plugin add` line again, or `npx skills update`.
 
+skills.sh shows a Snyk badge per skill. On 2026-11-10 four read MEDIUM: `accounting-sync`,
+`brazil-payment-rails`, `transaction-classification` and `webhook-handling`. Those are capability
+labels, "reads third-party content" and "touches payment systems", the same labels Stripe's own
+`stripe-pay` skill carries; no finding names a file. The other nine read "No issues detected".
+
 Skills load when a session starts, so start a new session after installing. Then send
 `Audit this repository's money code with fintech-skills.` on a repo you know: the agent should
 load the `fintech-audit` skill first and report file, line, rule, fix and test. If the transcript

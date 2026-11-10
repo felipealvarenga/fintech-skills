@@ -73,6 +73,11 @@ com as permissões do seu agente. O único código do pacote são os vetores que
 atualizar: `claude plugin update fintech-skills@felipealvarenga`, `codex plugin marketplace upgrade` e a
 linha `codex plugin add` de novo, ou `npx skills update`.
 
+O skills.sh mostra um selo do Snyk por skill. Em 2026-11-10 quatro marcavam MEDIUM: `accounting-sync`,
+`brazil-payment-rails`, `transaction-classification` e `webhook-handling`. São rótulos de capacidade,
+"lê conteúdo de terceiros" e "mexe com sistemas de pagamento", os mesmos que a skill `stripe-pay` da
+própria Stripe carrega; nenhum achado aponta arquivo. As outras nove marcam "No issues detected".
+
 As skills carregam no início da sessão, então abra uma sessão nova depois de instalar. Depois
 mande `Audite o código de dinheiro deste repositório com fintech-skills.` em um repositório que
 você conhece: o agente deve carregar a skill `fintech-audit` primeiro e reportar arquivo, linha,

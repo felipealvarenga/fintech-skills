@@ -135,6 +135,17 @@ def headline(lang, latest, prompts, all_runs=()):
             f"contra as falhas das execuções anteriores neles. " + heldout_sentence("pt", heldout))
 
 
+def heldout_only_models(latest, all_runs=()):
+    """Subject model -> its latest held-out run on the latest skills commit, for models that have no development
+    run there. The skills table shows them in their own column, labelled held-out, with their own noise note."""
+    dev = models_on_commit(latest, all_runs)
+    out = {}
+    for r in all_runs:
+        if r["sha"] == latest["sha"] and r["kind"] == "heldout" and r["meta"]["subject_model"] not in dev:
+            out[r["meta"]["subject_model"]] = r
+    return out
+
+
 def median_cell(run):
     """Expectations in the median skill cell of a run (the table's cells are about this size)."""
     cells = sorted(v["with"]["passed"] + v["with"]["failed"] for v in run["skills"].values())
@@ -144,15 +155,18 @@ def median_cell(run):
 def skills_table(lang, latest, all_runs=()):
     """One `with / without` column per subject model measured on the latest skills commit, named in the header."""
     per_model = models_on_commit(latest, all_runs) if latest else {}
+    heldout = heldout_only_models(latest, all_runs) if latest else {}
     col = "`{m}` with / without" if lang == "en" else "`{m}` com / sem"
-    cols = [col.format(m=m) for m in per_model] or (["With / without"] if lang == "en" else ["Com / sem"])
+    hcol = "`{m}` with / without, held-out" if lang == "en" else "`{m}` com / sem, reservado"
+    cols = ([col.format(m=m) for m in per_model] + [hcol.format(m=m) for m in heldout]) or (["With / without"] if lang == "en" else ["Com / sem"])
+    shown = {**per_model, **heldout}
     head = ("| Skill | Use when | " if lang == "en" else "| Skill | Use quando | ") + " | ".join(cols) + (" | Vectors |" if lang == "en" else " | Vetores |")
     rows = [head, "|" + "---|" * (3 + len(cols))]
     for skill in skills_in_order():
         fm = frontmatter(skill)
         use = STRINGS.get(skill.name, {}).get(lang) or fm["description"].split(".")[0]
         cells = []
-        for run in per_model.values():
+        for run in shown.values():
             r = run["skills"].get(skill.name)
             cells.append(f"{pct(r['with_rate'])} / {pct(r['without_rate'])}" if r else "n/a")
         nums = " | ".join(cells) or "n/a"
@@ -166,10 +180,18 @@ def skills_table(lang, latest, all_runs=()):
             w = run["pack"]["with"]; n_pack = w["passed"] + w["failed"]; n_cell = max(n_cell, median_cell(run))
             cell = max(cell, round(wilson_half(w["rate"], n_cell) * 100)); pack = max(pack, round(wilson_half(w["rate"], n_pack) * 100))
         upto = ("up to " if lang == "en" else "até ") if len(per_model) > 1 else ""
+        notes = []
+        for m, run in heldout.items():
+            w, wo = run["pack"]["with"], run["pack"]["without"]; hc = median_cell(run); hn = round(wilson_half(w["rate"], hc) * 100)
+            if lang == "en":
+                notes.append(f"The `{m}` column is its held-out run (two prompts per skill, cells of about {hc} expectations, about ±{hn} points each); read it at the pack level: {pct(w['rate'])} with, {pct(wo['rate'])} without.")
+            else:
+                notes.append(f"A coluna `{m}` é a execução reservada desse modelo (dois prompts por skill, células de cerca de {hc} expectativas, cerca de ±{hn} pontos cada); leia no nível do pacote: {pct(w['rate'])} com, {pct(wo['rate'])} sem.")
+        tail = (" " + " ".join(notes)) if notes else ""
         if lang == "en":
-            rows += ["", f"One run per prompt. A cell of about {n_cell} expectations carries {upto}about ±{cell} points (95% Wilson interval); the pack-level numbers carry {upto}about ±{pack}. † fintech-audit was measured without the lint it runs: the eval sandbox has no shell, so its row and the sample report (produced with a shell) are not the same setup."]
+            rows += ["", f"One run per prompt. A cell of about {n_cell} expectations carries {upto}about ±{cell} points (95% Wilson interval); the pack-level numbers carry {upto}about ±{pack}.{tail} † fintech-audit was measured without the lint it runs: the eval sandbox has no shell, so its row and the sample report (produced with a shell) are not the same setup."]
         else:
-            rows += ["", f"Uma execução por prompt. Uma célula de cerca de {n_cell} expectativas carrega {upto}cerca de ±{cell} pontos (intervalo de Wilson a 95%); os números do pacote carregam {upto}cerca de ±{pack}. † fintech-audit foi medida sem o lint que ela roda: o sandbox do eval não tem shell, então a linha e o relatório de exemplo (produzido com shell) não são o mesmo arranjo."]
+            rows += ["", f"Uma execução por prompt. Uma célula de cerca de {n_cell} expectativas carrega {upto}cerca de ±{cell} pontos (intervalo de Wilson a 95%); os números do pacote carregam {upto}cerca de ±{pack}.{tail} † fintech-audit foi medida sem o lint que ela roda: o sandbox do eval não tem shell, então a linha e o relatório de exemplo (produzido com shell) não são o mesmo arranjo."]
     return "\n".join(rows)
 
 

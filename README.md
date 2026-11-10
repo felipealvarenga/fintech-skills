@@ -86,23 +86,23 @@ Audit this repository's money code with fintech-skills.
 in 8 files, 4 critical, each with file, line, rule, fix and test. Sonnet 5.5, 7 turns, USD 0.21.
 
 <!-- generated:skills-table -->
-| Skill | Use when | `claude-sonnet-5-5` with / without | `claude-opus-5-5` with / without | Vectors |
-|---|---|---|---|---|
-| [fintech-audit](skills/fintech-audit/SKILL.md)† | Auditing a repo or a PR that touches money; the entry point | 77% / 33% | 83% / 40% | py |
-| [money-arithmetic](skills/money-arithmetic/SKILL.md) | Storing, adding, allocating, converting, rounding or formatting amounts | 83% / 33% | 90% / 47% | py, ts |
-| [double-entry-ledger](skills/double-entry-ledger/SKILL.md) | Any table that answers "how much does X hold or owe" | 82% / 25% | 93% / 39% | py, ts |
-| [idempotent-payments](skills/idempotent-payments/SKILL.md) | Creating, capturing, refunding or paying out money; calling a processor | 86% / 21% | 100% / 36% | py, ts |
-| [webhook-handling](skills/webhook-handling/SKILL.md) | Receiving callbacks from processors, banks and PSPs | 86% / 7% | 86% / 28% | py, ts |
-| [reconciliation](skills/reconciliation/SKILL.md) | Comparing ledger, processor and bank records of the same money | 72% / 10% | 86% / 24% | py |
-| [accounting-sync](skills/accounting-sync/SKILL.md) | Pushing to or reading from QuickBooks, Xero, NetSuite, Omie, Conta Azul | 68% / 21% | 86% / 29% | py |
-| [transaction-classification](skills/transaction-classification/SKILL.md) | Categorizing transactions with rules, ML or an LLM, especially auto-posting | 100% / 22% | 96% / 26% | py |
-| [pii-and-card-data](skills/pii-and-card-data/SKILL.md) | Collecting, logging, displaying or exporting personal, bank or card data | 63% / 37% | 81% / 44% | py |
-| [audit-trail](skills/audit-trail/SKILL.md) | Any mutation of money, limits, permissions or customer data; agent actions | 74% / 26% | 85% / 33% | py |
-| [interest-and-amortization](skills/interest-and-amortization/SKILL.md) | Interest, installments, schedules, accruals, effective rates | 71% / 18% | 79% / 32% | py |
-| [brazil-payment-rails](skills/brazil-payment-rails/SKILL.md) | Pix, boleto, card installments, CPF and CNPJ, NF-e in Brazil | 90% / 21% | 86% / 31% | py, ts |
-| [money-tests](skills/money-tests/SKILL.md) | Writing or reviewing tests for any of the above | 97% / 30% | 100% / 47% | py |
+| Skill | Use when | `claude-sonnet-5-5` with / without | `claude-opus-5-5` with / without | `claude-fable-5-2` with / without, held-out | Vectors |
+|---|---|---|---|---|---|
+| [fintech-audit](skills/fintech-audit/SKILL.md)† | Auditing a repo or a PR that touches money; the entry point | 77% / 33% | 83% / 40% | 100% / 88% | py |
+| [money-arithmetic](skills/money-arithmetic/SKILL.md) | Storing, adding, allocating, converting, rounding or formatting amounts | 83% / 33% | 90% / 47% | 100% / 62% | py, ts |
+| [double-entry-ledger](skills/double-entry-ledger/SKILL.md) | Any table that answers "how much does X hold or owe" | 82% / 25% | 93% / 39% | 100% / 38% | py, ts |
+| [idempotent-payments](skills/idempotent-payments/SKILL.md) | Creating, capturing, refunding or paying out money; calling a processor | 86% / 21% | 100% / 36% | 75% / 25% | py, ts |
+| [webhook-handling](skills/webhook-handling/SKILL.md) | Receiving callbacks from processors, banks and PSPs | 86% / 7% | 86% / 28% | 100% / 22% | py, ts |
+| [reconciliation](skills/reconciliation/SKILL.md) | Comparing ledger, processor and bank records of the same money | 72% / 10% | 86% / 24% | 88% / 25% | py |
+| [accounting-sync](skills/accounting-sync/SKILL.md) | Pushing to or reading from QuickBooks, Xero, NetSuite, Omie, Conta Azul | 68% / 21% | 86% / 29% | 88% / 38% | py |
+| [transaction-classification](skills/transaction-classification/SKILL.md) | Categorizing transactions with rules, ML or an LLM, especially auto-posting | 100% / 22% | 96% / 26% | 100% / 25% | py |
+| [pii-and-card-data](skills/pii-and-card-data/SKILL.md) | Collecting, logging, displaying or exporting personal, bank or card data | 63% / 37% | 81% / 44% | 75% / 62% | py |
+| [audit-trail](skills/audit-trail/SKILL.md) | Any mutation of money, limits, permissions or customer data; agent actions | 74% / 26% | 85% / 33% | 88% / 38% | py |
+| [interest-and-amortization](skills/interest-and-amortization/SKILL.md) | Interest, installments, schedules, accruals, effective rates | 71% / 18% | 79% / 32% | 75% / 38% | py |
+| [brazil-payment-rails](skills/brazil-payment-rails/SKILL.md) | Pix, boleto, card installments, CPF and CNPJ, NF-e in Brazil | 90% / 21% | 86% / 31% | 100% / 0% | py, ts |
+| [money-tests](skills/money-tests/SKILL.md) | Writing or reviewing tests for any of the above | 97% / 30% | 100% / 47% | 50% / 0% | py |
 
-One run per prompt. A cell of about 28 expectations carries up to about ±14 points (95% Wilson interval); the pack-level numbers carry up to about ±4. † fintech-audit was measured without the lint it runs: the eval sandbox has no shell, so its row and the sample report (produced with a shell) are not the same setup.
+One run per prompt. A cell of about 28 expectations carries up to about ±14 points (95% Wilson interval); the pack-level numbers carry up to about ±4. The `claude-fable-5-2` column is its held-out run (two prompts per skill, cells of about 8 expectations, about ±22 points each); read it at the pack level: 88% with, 35% without. † fintech-audit was measured without the lint it runs: the eval sandbox has no shell, so its row and the sample report (produced with a shell) are not the same setup.
 <!-- /generated:skills-table -->
 
 Each `SKILL.md` has the same shape: when to use, numbered rules, how to apply, what to do when the

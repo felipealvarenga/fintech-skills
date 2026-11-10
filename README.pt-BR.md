@@ -73,23 +73,23 @@ plantados: 12 achados em 8 arquivos, 4 críticos, cada um com arquivo, linha, re
 teste. Sonnet 5.5, 7 turnos, USD 0,21.
 
 <!-- generated:skills-table -->
-| Skill | Use quando | `claude-sonnet-5-5` com / sem | `claude-opus-5-5` com / sem | Vetores |
-|---|---|---|---|---|
-| [fintech-audit](skills/fintech-audit/SKILL.md)† | Auditar um repositório ou um PR que mexe com dinheiro; o ponto de entrada | 77% / 33% | 83% / 40% | py |
-| [money-arithmetic](skills/money-arithmetic/SKILL.md) | Guardar, somar, ratear, converter, arredondar ou formatar valores | 83% / 33% | 90% / 47% | py, ts |
-| [double-entry-ledger](skills/double-entry-ledger/SKILL.md) | Qualquer tabela que responde "quanto X tem ou deve" | 82% / 25% | 93% / 39% | py, ts |
-| [idempotent-payments](skills/idempotent-payments/SKILL.md) | Criar, capturar, estornar ou pagar; chamar um processador | 86% / 21% | 100% / 36% | py, ts |
-| [webhook-handling](skills/webhook-handling/SKILL.md) | Receber callbacks de processadores, bancos e PSPs | 86% / 7% | 86% / 28% | py, ts |
-| [reconciliation](skills/reconciliation/SKILL.md) | Conciliar ledger, relatório do processador e extrato bancário | 72% / 10% | 86% / 24% | py |
-| [accounting-sync](skills/accounting-sync/SKILL.md) | Integrar com QuickBooks, Xero, NetSuite, Omie, Conta Azul | 68% / 21% | 86% / 29% | py |
-| [transaction-classification](skills/transaction-classification/SKILL.md) | Categorizar transações com regras, ML ou LLM, em especial com lançamento automático | 100% / 22% | 96% / 26% | py |
-| [pii-and-card-data](skills/pii-and-card-data/SKILL.md) | Coletar, logar, exibir ou exportar dados pessoais, bancários ou de cartão | 63% / 37% | 81% / 44% | py |
-| [audit-trail](skills/audit-trail/SKILL.md) | Qualquer mutação de dinheiro, limites, permissões ou dados de cliente; ações de agentes | 74% / 26% | 85% / 33% | py |
-| [interest-and-amortization](skills/interest-and-amortization/SKILL.md) | Juros, parcelas, tabelas Price e SAC, provisões, taxa efetiva | 71% / 18% | 79% / 32% | py |
-| [brazil-payment-rails](skills/brazil-payment-rails/SKILL.md) | Pix, boleto, parcelamento no cartão, CPF e CNPJ, NF-e | 90% / 21% | 86% / 31% | py, ts |
-| [money-tests](skills/money-tests/SKILL.md) | Escrever ou revisar testes para qualquer item acima | 97% / 30% | 100% / 47% | py |
+| Skill | Use quando | `claude-sonnet-5-5` com / sem | `claude-opus-5-5` com / sem | `claude-fable-5-2` com / sem, reservado | Vetores |
+|---|---|---|---|---|---|
+| [fintech-audit](skills/fintech-audit/SKILL.md)† | Auditar um repositório ou um PR que mexe com dinheiro; o ponto de entrada | 77% / 33% | 83% / 40% | 100% / 88% | py |
+| [money-arithmetic](skills/money-arithmetic/SKILL.md) | Guardar, somar, ratear, converter, arredondar ou formatar valores | 83% / 33% | 90% / 47% | 100% / 62% | py, ts |
+| [double-entry-ledger](skills/double-entry-ledger/SKILL.md) | Qualquer tabela que responde "quanto X tem ou deve" | 82% / 25% | 93% / 39% | 100% / 38% | py, ts |
+| [idempotent-payments](skills/idempotent-payments/SKILL.md) | Criar, capturar, estornar ou pagar; chamar um processador | 86% / 21% | 100% / 36% | 75% / 25% | py, ts |
+| [webhook-handling](skills/webhook-handling/SKILL.md) | Receber callbacks de processadores, bancos e PSPs | 86% / 7% | 86% / 28% | 100% / 22% | py, ts |
+| [reconciliation](skills/reconciliation/SKILL.md) | Conciliar ledger, relatório do processador e extrato bancário | 72% / 10% | 86% / 24% | 88% / 25% | py |
+| [accounting-sync](skills/accounting-sync/SKILL.md) | Integrar com QuickBooks, Xero, NetSuite, Omie, Conta Azul | 68% / 21% | 86% / 29% | 88% / 38% | py |
+| [transaction-classification](skills/transaction-classification/SKILL.md) | Categorizar transações com regras, ML ou LLM, em especial com lançamento automático | 100% / 22% | 96% / 26% | 100% / 25% | py |
+| [pii-and-card-data](skills/pii-and-card-data/SKILL.md) | Coletar, logar, exibir ou exportar dados pessoais, bancários ou de cartão | 63% / 37% | 81% / 44% | 75% / 62% | py |
+| [audit-trail](skills/audit-trail/SKILL.md) | Qualquer mutação de dinheiro, limites, permissões ou dados de cliente; ações de agentes | 74% / 26% | 85% / 33% | 88% / 38% | py |
+| [interest-and-amortization](skills/interest-and-amortization/SKILL.md) | Juros, parcelas, tabelas Price e SAC, provisões, taxa efetiva | 71% / 18% | 79% / 32% | 75% / 38% | py |
+| [brazil-payment-rails](skills/brazil-payment-rails/SKILL.md) | Pix, boleto, parcelamento no cartão, CPF e CNPJ, NF-e | 90% / 21% | 86% / 31% | 100% / 0% | py, ts |
+| [money-tests](skills/money-tests/SKILL.md) | Escrever ou revisar testes para qualquer item acima | 97% / 30% | 100% / 47% | 50% / 0% | py |
 
-Uma execução por prompt. Uma célula de cerca de 28 expectativas carrega até cerca de ±14 pontos (intervalo de Wilson a 95%); os números do pacote carregam até cerca de ±4. † fintech-audit foi medida sem o lint que ela roda: o sandbox do eval não tem shell, então a linha e o relatório de exemplo (produzido com shell) não são o mesmo arranjo.
+Uma execução por prompt. Uma célula de cerca de 28 expectativas carrega até cerca de ±14 pontos (intervalo de Wilson a 95%); os números do pacote carregam até cerca de ±4. A coluna `claude-fable-5-2` é a execução reservada desse modelo (dois prompts por skill, células de cerca de 8 expectativas, cerca de ±22 pontos cada); leia no nível do pacote: 88% com, 35% sem. † fintech-audit foi medida sem o lint que ela roda: o sandbox do eval não tem shell, então a linha e o relatório de exemplo (produzido com shell) não são o mesmo arranjo.
 <!-- /generated:skills-table -->
 
 Toda `SKILL.md` tem a mesma forma: quando usar, regras numeradas, como aplicar, o que fazer

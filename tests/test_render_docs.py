@@ -5,9 +5,8 @@ from scripts import render_docs as rd
 SKILLS = [p.name for p in rd.skills_in_order()]
 
 
-def fake_run(run_id, model, with_rate, without_rate, not_opened=()):
+def fake_run(run_id, model, with_rate, without_rate, not_opened=(), n=28, kind="dev"):
     sha = run_id.split("-")[1]
-    n = 28
     skills = {}
     for i, name in enumerate(SKILLS):
         w = round(with_rate * n) - (i % 2)
@@ -16,7 +15,7 @@ def fake_run(run_id, model, with_rate, without_rate, not_opened=()):
                         "with_rate": w / n, "without_rate": wo / n, "lift_points": round((w - wo) / n * 100, 1)}
     total = n * len(SKILLS)
     pw, pwo = round(with_rate * total), round(without_rate * total)
-    return {"id": run_id, "sha": sha, "kind": "dev", "meta": {"subject_model": model, "grader_model": "claude-sonnet-5-5"},
+    return {"id": run_id, "sha": sha, "kind": kind, "meta": {"subject_model": model, "grader_model": "claude-sonnet-5-5"},
             "pack": {"with": {"rate": pw / total, "passed": pw, "failed": total - pw}, "without": {"rate": pwo / total, "passed": pwo, "failed": total - pwo}},
             "skills": skills, "evals": [{"condition": "with"}] * (7 * len(SKILLS)) + [{"condition": "without"}] * (7 * len(SKILLS)),
             "method": {"skill_not_opened_with": list(not_opened)}}
@@ -67,3 +66,18 @@ def test_named_runs_reads_dev_and_heldout_ids():
             "[x](evals/results/20261108T194552Z-fa81209-heldout/summary.md)")
     assert rd.named_runs(text) == {"20261108T180307Z-fa81209", "20261108T194552Z-fa81209-heldout"}
     assert rd.named_runs("no links here") == set()
+
+
+FABLE_HELDOUT = fake_run("20261110T031626Z-fa81209-heldout", "claude-fable-5-2", 0.88, 0.35, n=8, kind="heldout")
+
+
+def test_model_with_only_a_heldout_run_gets_a_labelled_column_and_its_own_note():
+    table = rd.skills_table("en", OPUS, RUNS + [FABLE_HELDOUT])
+    head = table.split("\n")[0]
+    assert head.endswith("| `claude-opus-5-5` with / without | `claude-fable-5-2` with / without, held-out | Vectors |")
+    assert table.split("\n")[2].count(" / ") == 3
+    assert "The `claude-fable-5-2` column is its held-out run (two prompts per skill, cells of about 8 expectations" in table
+    assert "read it at the pack level: 88% with, 35% without." in table
+    assert "claude-fable-5-2" not in rd.cut_rule("en", OPUS, RUNS + [FABLE_HELDOUT])  # dev runs only
+    pt = rd.skills_table("pt", OPUS, RUNS + [FABLE_HELDOUT])
+    assert "`claude-fable-5-2` com / sem, reservado" in pt.split("\n")[0]

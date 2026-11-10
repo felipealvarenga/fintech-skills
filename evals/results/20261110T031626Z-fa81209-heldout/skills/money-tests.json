@@ -1,0 +1,744 @@
+{
+  "run_id": "20261110T031626Z-fa81209-heldout",
+  "date": "20261110T031626Z",
+  "subject_model": "claude-fable-5-2",
+  "grader_model": "claude-sonnet-5-5",
+  "effort": "xhigh",
+  "git_sha": "fa81209f644741b66d83bd8c61093385b29e3483",
+  "skills_dirty": false,
+  "prompt_set": "heldout",
+  "skill": "money-tests",
+  "installed_paths": [
+    ".claude/skills/money-tests/SKILL.md"
+  ],
+  "records": [
+    {
+      "eval_id": 1,
+      "condition": "with",
+      "run": 1,
+      "installed_paths": [
+        ".claude/skills/money-tests/SKILL.md"
+      ],
+      "files": [
+        {
+          "path": ".github/workflows/money-tests.yml",
+          "size": 890,
+          "sha256": "b38a5c1049aa1324a049176b1032935318eda146f4610825153c16fa8bc75058",
+          "raw_path": "raw/money-tests/1-with-1/files/.github/workflows/money-tests.yml"
+        },
+        {
+          "path": "pyproject.toml",
+          "size": 223,
+          "sha256": "e77a5963b50e8a47272b8a6878e1d73f98fdb7a7175d7645f21394f5bf6e5d9c",
+          "raw_path": "raw/money-tests/1-with-1/files/pyproject.toml"
+        },
+        {
+          "path": "requirements-dev.txt",
+          "size": 120,
+          "sha256": "67e3dd7080750dd06fd3f21d3ec1235c160b8f93ddd2f0a6dbea3d35b802fa57",
+          "raw_path": "raw/money-tests/1-with-1/files/requirements-dev.txt"
+        },
+        {
+          "path": "scripts/mutation_gate.py",
+          "size": 1749,
+          "sha256": "419d09997261a9030e12be2db2f77356ebd38cc9b19051c8bc7dd477b49a36df",
+          "raw_path": "raw/money-tests/1-with-1/files/scripts/mutation_gate.py"
+        },
+        {
+          "path": "tests/test_fx.py",
+          "size": 11286,
+          "sha256": "243ea778889d7c12c2854b2e5a7a3260d84afd12eefb0ae7e1d3bffb5ae2521b",
+          "raw_path": "raw/money-tests/1-with-1/files/tests/test_fx.py"
+        },
+        {
+          "path": "tests/vectors/fx_vectors.json",
+          "size": 4386,
+          "sha256": "29a2e6bfe92e20bdebac713facdda5f73558a2134f10b2d7c8d94823b80c8c92",
+          "raw_path": "raw/money-tests/1-with-1/files/tests/vectors/fx_vectors.json"
+        }
+      ],
+      "subject": {
+        "invocation": {
+          "argv": [
+            "claude",
+            "-p",
+            "--output-format",
+            "json",
+            "--verbose",
+            "--model",
+            "claude-fable-5-2",
+            "--effort",
+            "xhigh",
+            "--max-turns",
+            "30",
+            "--tools",
+            "Read,Write,Edit,Glob,Grep,Skill",
+            "--setting-sources",
+            "project",
+            "--strict-mcp-config",
+            "--permission-mode",
+            "acceptEdits",
+            "--permission-prompts",
+            "none",
+            "--no-session-persistence"
+          ],
+          "cwd": "<project>",
+          "stdin": "Write the tests for our new currency conversion service in src/fx.py.",
+          "env": {
+            "CLAUDE_CODE_DISABLE_CLAUDE_MDS": "1",
+            "CLAUDE_CODE_DISABLE_BUNDLED_SKILLS": "1"
+          }
+        },
+        "error": null,
+        "final_answer": "Files are written; finishing with the report.\n\nThe tests are in place but **not run**: this session has no shell, so the pass/fail picture below is traced by hand from the code. I did not change `src/fx.py`.\n\n## What the suite will show\n\nBy that trace, 19 of the 40 tests fail against today's `fx.py`, and one more probably does. I left them failing rather than marking them `xfail`, because each one is a real defect:\n\n- **A lost cent from float arithmetic:** 1 unit at a rate of 2.675 returns 2.67; the exact answer is 2.68 under any rounding rule.\n- **Every currency is rounded to 2 decimals:** 100 USD to JPY returns 15102.53 yen instead of 15103, and KWD loses its third decimal.\n- **HTTP errors are priced:** there is no status check, so a 400, 429 or 500 whose body contains a `rate` converts as normal.\n- **Bad rates are priced:** a rate of 0, a negative rate, NaN or Infinity all return an amount.\n- **Currency codes go straight into the URL:** `(\"US\", \"D\")` and `\"USD/../admin\"` both reach the provider.\n- **Money comes back as `float`.**\n\nThe uncertain one is the random-amount property for 2-decimal currencies. I expect it to fail on large amounts, where doubles run out of precision, but I could not trace 300 generated cases by hand.\n\nThe other 20 pass by my reading, and a live-provider check is skipped unless `FX_LIVE=1`.\n\n## Decisions for you\n\nThe frozen vectors in `tests/vectors/fx_vectors.json` are hand-computed and marked UNREVIEWED. They depend on two choices:\n\n1. **Rounding mode:** I pinned half-even on the exact decimal product, since that is what `round()` aims at. If your rule is half-up, change `ROUNDING` in the test file and the `tie_half_even_rounds_down` vector.\n2. **Spread direction:** `amount * rate * (1 + spread)` gives 109.50 USD for 100 EUR when mid is 108.42. If `convert` is what the customer receives, you are paying the spread on every conversion. The vectors pin today's behaviour; confirm it is intended.\n\n## Mutation testing\n\nThe config, the 80% gate script and a CI job are written but unrun. The mutmut 3 config keys and stats file name are from memory, so check them on first run. mutmut needs a passing baseline, so the number is blocked until the defects above are fixed.\n\n- **Run command:** `mutmut run && mutmut export-cicd-stats && python scripts/mutation_gate.py mutants/mutmut-cicd-stats.json --min 0.80`\n- **Kill rate** (killed / (killed + survived)): `__ %`\n\nThe mutants most likely to survive in a module like this each have an assertion that kills them:\n\n| Mutant | Killed by |\n|---|---|\n| `timeout=5` changed, or the URL mangled | the exact URL and timeout check |\n| `round(\u2026, 3)` | the 19.99 vector |\n| `1 - spread`, or a changed `0.01` default | the default-spread vector |\n\n## Not built\n\n- **Golden schedule, ledger invariants, clock and date edges, idempotency and charge tests:** `fx.py` has no schedule, ledger, clock or charge.\n- **Recorded provider fixtures and the scheduled re-record job:** `fx.example` is a reserved placeholder domain, so there is nothing to record from yet.\n- **The skill's reference vectors:** the `evals/vectors/` directory it points to is not in this repo.\n\nThe GitHub Actions workflow is a guess at your CI; the two jobs port directly if you use something else.\n\n## Files\n\n- `tests/test_fx.py`\n- `tests/vectors/fx_vectors.json`\n- `pyproject.toml`\n- `scripts/mutation_gate.py`\n- `requirements-dev.txt`\n- `.github/workflows/money-tests.yml`",
+        "reported": {
+          "tools": [
+            "Edit",
+            "Glob",
+            "Grep",
+            "Read",
+            "Skill",
+            "Write"
+          ],
+          "skills": [
+            "money-tests",
+            "design",
+            "doctor",
+            "plugin-authoring"
+          ],
+          "mcp_servers": [],
+          "model": "claude-fable-5-2"
+        },
+        "exit_code": 0,
+        "tokens": {
+          "input_tokens": 8,
+          "output_tokens": 80402,
+          "cache_read_input_tokens": 21198,
+          "cache_creation_input_tokens": 91300
+        },
+        "thinking_tokens": 70290,
+        "stop_reason": "end_turn",
+        "stopped": "end_turn",
+        "wall_time": 782.5674005089968,
+        "raw_paths": {
+          "transcript": "raw/money-tests/1-with-1/subject-transcript.txt",
+          "stderr": "raw/money-tests/1-with-1/subject-stderr.txt"
+        }
+      },
+      "grader": {
+        "invocation": {
+          "argv": [
+            "claude",
+            "-p",
+            "--output-format",
+            "json",
+            "--model",
+            "claude-sonnet-5-5",
+            "--effort",
+            "xhigh",
+            "--tools",
+            "",
+            "--setting-sources",
+            "project",
+            "--strict-mcp-config",
+            "--no-session-persistence"
+          ],
+          "cwd": "<project>",
+          "env": {
+            "CLAUDE_CODE_DISABLE_CLAUDE_MDS": "1",
+            "CLAUDE_CODE_DISABLE_BUNDLED_SKILLS": "1"
+          },
+          "stdin_path": "raw/money-tests/1-with-1/grader-stdin.json"
+        },
+        "error": null,
+        "final_answer": "[\n  {\n    \"passed\": true,\n    \"evidence\": \"tests/vectors/fx_vectors.json has 14 frozen vectors with exact decimal strings (e.g. \\\"109.50\\\", \\\"15103\\\" for JPY, \\\"30.977\\\" for KWD, \\\"2.68\\\" for the 2.675 tie). Each also stores the unrounded `exact` product. The rounding policy is stated in the file (\\\"ROUND_HALF_EVEN on the exact decimal product\\\"), in the test module docstring, and in the final report. Tie vectors pin it: 0.125 gives 0.12, 0.375 gives 0.38. Quote currencies carry their own minor-unit exponent (EXPONENT map, 0/2/3 decimals). Caveat: the values are major-unit decimal text at minor-unit precision, not integer minor units, and the suite uses a `major(minor, currency)` helper only to generate inputs. I count the spirit as met: exact amounts at each currency's minor-unit precision with an explicit rounding policy.\"\n  },\n  {\n    \"passed\": false,\n    \"evidence\": \"Half met. The live call is replaced: `FakeProvider` patches `fx.requests.get` with scripted responses, and an autouse `no_network` fixture fails any unscripted call. The rates are hand-written (`ok(\\\"1.0842\\\")`), not recorded. The final report says recorded fixtures and the re-record job were not built because `fx.example` is a placeholder domain. No clock is injected and there is no staleness test. The report says `fx.py` has no clock, and nothing in the suite takes `now` or checks rate age.\"\n  },\n  {\n    \"passed\": true,\n    \"evidence\": \"tests/test_fx.py has Hypothesis property tests with `max_examples=300` and `derandomize=True` (fixed seed). `test_two_decimal_quotes_match_the_exact_reference` and `test_zero_and_three_decimal_quotes_match_the_exact_reference` check that random amounts, currency pairs (0/2/3 decimals), six-decimal rates and 0\u20135% spreads equal an independent exact-Decimal reference. `test_exact_half_cents_round_half_to_even` generates exact ties. `test_rate_one_without_spread_returns_the_same_amount` is an invariant property. These are not the suggested bounds or round-trip checks, but they are real property tests.\"\n  },\n  {\n    \"passed\": true,\n    \"evidence\": \"The report and files propose mutation testing with the kill rate as the quality number. pyproject.toml has a `[tool.mutmut]` config. scripts/mutation_gate.py defines kill rate as killed/(killed+survived), excludes timeouts and skips from both sides, and fails under `--min 0.80`. The money-tests.yml `mutation` job runs the gate. The report gives the run command and a `__ %` slot for the number, and lists likely surviving mutants with the assertion that kills each (timeout/URL, `round(\u2026, 3)`, `1 - spread` or the default spread). It says the tool was not run, so no number was reported.\"\n  }\n]",
+        "reported": {},
+        "exit_code": 0,
+        "tokens": {
+          "input_tokens": 2,
+          "output_tokens": 2718,
+          "cache_read_input_tokens": 649,
+          "cache_creation_input_tokens": 373251
+        },
+        "thinking_tokens": 1689,
+        "stop_reason": "end_turn",
+        "stopped": "end_turn",
+        "wall_time": 29.94540970098751,
+        "raw_paths": {
+          "transcript": "raw/money-tests/1-with-1/grader-transcript.txt",
+          "stderr": "raw/money-tests/1-with-1/grader-stderr.txt"
+        }
+      },
+      "verdicts": [
+        {
+          "expectation": "Writes vectors with exact expected amounts in minor units and a stated rounding policy",
+          "status": "passed",
+          "grader_verdict": {
+            "passed": true,
+            "evidence": "tests/vectors/fx_vectors.json has 14 frozen vectors with exact decimal strings (e.g. \"109.50\", \"15103\" for JPY, \"30.977\" for KWD, \"2.68\" for the 2.675 tie). Each also stores the unrounded `exact` product. The rounding policy is stated in the file (\"ROUND_HALF_EVEN on the exact decimal product\"), in the test module docstring, and in the final report. Tie vectors pin it: 0.125 gives 0.12, 0.375 gives 0.38. Quote currencies carry their own minor-unit exponent (EXPONENT map, 0/2/3 decimals). Caveat: the values are major-unit decimal text at minor-unit precision, not integer minor units, and the suite uses a `major(minor, currency)` helper only to generate inputs. I count the spirit as met: exact amounts at each currency's minor-unit precision with an explicit rounding policy."
+          },
+          "evidence": "tests/vectors/fx_vectors.json has 14 frozen vectors with exact decimal strings (e.g. \"109.50\", \"15103\" for JPY, \"30.977\" for KWD, \"2.68\" for the 2.675 tie). Each also stores the unrounded `exact` product. The rounding policy is stated in the file (\"ROUND_HALF_EVEN on the exact decimal product\"), in the test module docstring, and in the final report. Tie vectors pin it: 0.125 gives 0.12, 0.375 gives 0.38. Quote currencies carry their own minor-unit exponent (EXPONENT map, 0/2/3 decimals). Caveat: the values are major-unit decimal text at minor-unit precision, not integer minor units, and the suite uses a `major(minor, currency)` helper only to generate inputs. I count the spirit as met: exact amounts at each currency's minor-unit precision with an explicit rounding policy.",
+          "code_checks": []
+        },
+        {
+          "expectation": "Replaces the live provider call in unit tests with recorded rates and injects the clock for staleness",
+          "status": "failed",
+          "grader_verdict": {
+            "passed": false,
+            "evidence": "Half met. The live call is replaced: `FakeProvider` patches `fx.requests.get` with scripted responses, and an autouse `no_network` fixture fails any unscripted call. The rates are hand-written (`ok(\"1.0842\")`), not recorded. The final report says recorded fixtures and the re-record job were not built because `fx.example` is a placeholder domain. No clock is injected and there is no staleness test. The report says `fx.py` has no clock, and nothing in the suite takes `now` or checks rate age."
+          },
+          "evidence": "Half met. The live call is replaced: `FakeProvider` patches `fx.requests.get` with scripted responses, and an autouse `no_network` fixture fails any unscripted call. The rates are hand-written (`ok(\"1.0842\")`), not recorded. The final report says recorded fixtures and the re-record job were not built because `fx.example` is a placeholder domain. No clock is injected and there is no staleness test. The report says `fx.py` has no clock, and nothing in the suite takes `now` or checks rate age.",
+          "code_checks": []
+        },
+        {
+          "expectation": "Adds a property test (for example conversion bounds or round-trip within one minor unit)",
+          "status": "passed",
+          "grader_verdict": {
+            "passed": true,
+            "evidence": "tests/test_fx.py has Hypothesis property tests with `max_examples=300` and `derandomize=True` (fixed seed). `test_two_decimal_quotes_match_the_exact_reference` and `test_zero_and_three_decimal_quotes_match_the_exact_reference` check that random amounts, currency pairs (0/2/3 decimals), six-decimal rates and 0\u20135% spreads equal an independent exact-Decimal reference. `test_exact_half_cents_round_half_to_even` generates exact ties. `test_rate_one_without_spread_returns_the_same_amount` is an invariant property. These are not the suggested bounds or round-trip checks, but they are real property tests."
+          },
+          "evidence": "tests/test_fx.py has Hypothesis property tests with `max_examples=300` and `derandomize=True` (fixed seed). `test_two_decimal_quotes_match_the_exact_reference` and `test_zero_and_three_decimal_quotes_match_the_exact_reference` check that random amounts, currency pairs (0/2/3 decimals), six-decimal rates and 0\u20135% spreads equal an independent exact-Decimal reference. `test_exact_half_cents_round_half_to_even` generates exact ties. `test_rate_one_without_spread_returns_the_same_amount` is an invariant property. These are not the suggested bounds or round-trip checks, but they are real property tests.",
+          "code_checks": [
+            {
+              "kind": "test_file",
+              "passed": true
+            }
+          ]
+        },
+        {
+          "expectation": "Proposes mutation testing with a kill rate as the suite's quality number",
+          "status": "passed",
+          "grader_verdict": {
+            "passed": true,
+            "evidence": "The report and files propose mutation testing with the kill rate as the quality number. pyproject.toml has a `[tool.mutmut]` config. scripts/mutation_gate.py defines kill rate as killed/(killed+survived), excludes timeouts and skips from both sides, and fails under `--min 0.80`. The money-tests.yml `mutation` job runs the gate. The report gives the run command and a `__ %` slot for the number, and lists likely surviving mutants with the assertion that kills each (timeout/URL, `round(\u2026, 3)`, `1 - spread` or the default spread). It says the tool was not run, so no number was reported."
+          },
+          "evidence": "The report and files propose mutation testing with the kill rate as the quality number. pyproject.toml has a `[tool.mutmut]` config. scripts/mutation_gate.py defines kill rate as killed/(killed+survived), excludes timeouts and skips from both sides, and fails under `--min 0.80`. The money-tests.yml `mutation` job runs the gate. The report gives the run command and a `__ %` slot for the number, and lists likely surviving mutants with the assertion that kills each (timeout/URL, `round(\u2026, 3)`, `1 - spread` or the default spread). It says the tool was not run, so no number was reported.",
+          "code_checks": []
+        }
+      ],
+      "files_raw_path": "raw/money-tests/1-with-1/files.json"
+    },
+    {
+      "eval_id": 1,
+      "condition": "without",
+      "run": 1,
+      "installed_paths": [],
+      "files": [
+        {
+          "path": "tests/conftest.py",
+          "size": 173,
+          "sha256": "b5c5de6c41a3dcc04a5ee843f1d8b17ec5c43544b20ac3772f6a5f7bd4869c46",
+          "raw_path": "raw/money-tests/1-without-1/files/tests/conftest.py"
+        },
+        {
+          "path": "tests/test_fx.py",
+          "size": 3924,
+          "sha256": "3471f72887540cad90d4609cb4bdf200fc57d2a5e13810f9530dc61040b4873f",
+          "raw_path": "raw/money-tests/1-without-1/files/tests/test_fx.py"
+        }
+      ],
+      "subject": {
+        "invocation": {
+          "argv": [
+            "claude",
+            "-p",
+            "--output-format",
+            "json",
+            "--verbose",
+            "--model",
+            "claude-fable-5-2",
+            "--effort",
+            "xhigh",
+            "--max-turns",
+            "30",
+            "--tools",
+            "Read,Write,Edit,Glob,Grep,Skill",
+            "--setting-sources",
+            "project",
+            "--strict-mcp-config",
+            "--permission-mode",
+            "acceptEdits",
+            "--permission-prompts",
+            "none",
+            "--no-session-persistence"
+          ],
+          "cwd": "<project>",
+          "stdin": "Write the tests for our new currency conversion service in src/fx.py.",
+          "env": {
+            "CLAUDE_CODE_DISABLE_CLAUDE_MDS": "1",
+            "CLAUDE_CODE_DISABLE_BUNDLED_SKILLS": "1"
+          }
+        },
+        "error": null,
+        "final_answer": "The tests are written in `tests/test_fx.py`, with a small `tests/conftest.py` that puts `src/` on the import path. I have not run them: this session has no shell, so the expected values are worked out by hand. Run `pytest` from the project root (needs `pytest` and `requests` installed).\n\nThe suite replaces `requests.get` for every test, so nothing reaches `fx.example`, and a test that forgets to stub a rate fails immediately.\n\n- **`rate`**:\n  - returns the `rate` field from the provider payload\n  - requests `https://fx.example/{base}{quote}` with `timeout=5`\n  - lets `Timeout` and `ConnectionError` propagate\n  - raises `KeyError` on a payload with no `rate`\n- **`convert`**:\n  - applies the default 1% spread, a custom spread and zero spread\n  - rounds to two decimal places\n  - makes exactly one provider lookup per conversion\n  - aborts when the provider fails\n\nThree things in `src/fx.py` that the tests surfaced:\n\n1. **Spread direction.** The tests pin the current behaviour, where the spread increases the converted amount (100 at 0.9 gives 90.90). If `convert` means \"customer hands over base and receives quote\", that pays out above the provider rate and the spread should be subtracted. If so, the expected values in `TestConvert` need flipping along with the code.\n2. **Float rounding.** `convert(5.35, ..., spread=0)` at a rate of 0.5 returns 2.67 where exact arithmetic gives 2.68. I captured this as a strict `xfail`, so the suite stays green now and will fail once the arithmetic is fixed (for example with `Decimal`), telling you to remove the marker.\n3. **Undefined behaviour I left untested.** There is no validation of negative amounts or of zero or negative rates. HTTP error statuses are not checked (no `raise_for_status()`). Every currency is rounded to two decimals, which is wrong for JPY (0) or KWD (3). Tell me the intended behaviour for any of these and I'll add tests.",
+        "reported": {
+          "tools": [
+            "Edit",
+            "Glob",
+            "Grep",
+            "Read",
+            "Skill",
+            "Write"
+          ],
+          "skills": [
+            "design",
+            "doctor",
+            "plugin-authoring"
+          ],
+          "mcp_servers": [],
+          "model": "claude-fable-5-2"
+        },
+        "exit_code": 0,
+        "tokens": {
+          "input_tokens": 6,
+          "output_tokens": 16426,
+          "cache_read_input_tokens": 21170,
+          "cache_creation_input_tokens": 19839
+        },
+        "thinking_tokens": 13612,
+        "stop_reason": "end_turn",
+        "stopped": "end_turn",
+        "wall_time": 163.1226319490088,
+        "raw_paths": {
+          "transcript": "raw/money-tests/1-without-1/subject-transcript.txt",
+          "stderr": "raw/money-tests/1-without-1/subject-stderr.txt"
+        }
+      },
+      "grader": {
+        "invocation": {
+          "argv": [
+            "claude",
+            "-p",
+            "--output-format",
+            "json",
+            "--model",
+            "claude-sonnet-5-5",
+            "--effort",
+            "xhigh",
+            "--tools",
+            "",
+            "--setting-sources",
+            "project",
+            "--strict-mcp-config",
+            "--no-session-persistence"
+          ],
+          "cwd": "<project>",
+          "env": {
+            "CLAUDE_CODE_DISABLE_CLAUDE_MDS": "1",
+            "CLAUDE_CODE_DISABLE_BUNDLED_SKILLS": "1"
+          },
+          "stdin_path": "raw/money-tests/1-without-1/grader-stdin.json"
+        },
+        "error": null,
+        "final_answer": "```json\n[\n  {\n    \"passed\": false,\n    \"evidence\": \"The expected values in tests/test_fx.py are floats in major units (90.9, 273.76, 15.97, 1_095_850.0), not integers in minor units. No rounding policy is stated. The only mention is a comment that 2.675 is 2.68 'under half-up and half-even alike', and the final answer only says results round 'to two decimal places'. The code uses Python's float round() (banker's rounding on binary floats), and the suite never names or pins a policy.\"\n  },\n  {\n    \"passed\": false,\n    \"evidence\": \"Only the first half is met, and loosely. The autouse fixture patches fx.requests.get, so no live call is made. The rates are hand-written stubs (0.9, 1.0842, 0.7911), not recorded provider responses. There is no clock injection and no staleness test anywhere in the suite or the final answer. src/fx.py has no timestamp or cache logic, and the response never raises staleness.\"\n  },\n  {\n    \"passed\": false,\n    \"evidence\": \"tests/test_fx.py contains only example-based tests (parametrized vectors, mocks, one strict xfail). There is no hypothesis import, no randomized or generated inputs, and no invariant such as conversion bounds or a round-trip within one minor unit. The final answer does not mention property testing.\"\n  },\n  {\n    \"passed\": false,\n    \"evidence\": \"Neither the final answer nor the test files mention mutation testing, mutmut, cosmic-ray, or a kill rate. The answer reports no quality metric for the suite. It states the tests were not run and that expected values were worked out by hand.\"\n  }\n]\n```",
+        "reported": {},
+        "exit_code": 0,
+        "tokens": {
+          "input_tokens": 2,
+          "output_tokens": 1031,
+          "cache_read_input_tokens": 649,
+          "cache_creation_input_tokens": 84569
+        },
+        "thinking_tokens": 483,
+        "stop_reason": "end_turn",
+        "stopped": "end_turn",
+        "wall_time": 12.438149445995805,
+        "raw_paths": {
+          "transcript": "raw/money-tests/1-without-1/grader-transcript.txt",
+          "stderr": "raw/money-tests/1-without-1/grader-stderr.txt"
+        }
+      },
+      "verdicts": [
+        {
+          "expectation": "Writes vectors with exact expected amounts in minor units and a stated rounding policy",
+          "status": "failed",
+          "grader_verdict": {
+            "passed": false,
+            "evidence": "The expected values in tests/test_fx.py are floats in major units (90.9, 273.76, 15.97, 1_095_850.0), not integers in minor units. No rounding policy is stated. The only mention is a comment that 2.675 is 2.68 'under half-up and half-even alike', and the final answer only says results round 'to two decimal places'. The code uses Python's float round() (banker's rounding on binary floats), and the suite never names or pins a policy."
+          },
+          "evidence": "The expected values in tests/test_fx.py are floats in major units (90.9, 273.76, 15.97, 1_095_850.0), not integers in minor units. No rounding policy is stated. The only mention is a comment that 2.675 is 2.68 'under half-up and half-even alike', and the final answer only says results round 'to two decimal places'. The code uses Python's float round() (banker's rounding on binary floats), and the suite never names or pins a policy.",
+          "code_checks": []
+        },
+        {
+          "expectation": "Replaces the live provider call in unit tests with recorded rates and injects the clock for staleness",
+          "status": "failed",
+          "grader_verdict": {
+            "passed": false,
+            "evidence": "Only the first half is met, and loosely. The autouse fixture patches fx.requests.get, so no live call is made. The rates are hand-written stubs (0.9, 1.0842, 0.7911), not recorded provider responses. There is no clock injection and no staleness test anywhere in the suite or the final answer. src/fx.py has no timestamp or cache logic, and the response never raises staleness."
+          },
+          "evidence": "Only the first half is met, and loosely. The autouse fixture patches fx.requests.get, so no live call is made. The rates are hand-written stubs (0.9, 1.0842, 0.7911), not recorded provider responses. There is no clock injection and no staleness test anywhere in the suite or the final answer. src/fx.py has no timestamp or cache logic, and the response never raises staleness.",
+          "code_checks": []
+        },
+        {
+          "expectation": "Adds a property test (for example conversion bounds or round-trip within one minor unit)",
+          "status": "failed",
+          "grader_verdict": {
+            "passed": false,
+            "evidence": "tests/test_fx.py contains only example-based tests (parametrized vectors, mocks, one strict xfail). There is no hypothesis import, no randomized or generated inputs, and no invariant such as conversion bounds or a round-trip within one minor unit. The final answer does not mention property testing."
+          },
+          "evidence": "tests/test_fx.py contains only example-based tests (parametrized vectors, mocks, one strict xfail). There is no hypothesis import, no randomized or generated inputs, and no invariant such as conversion bounds or a round-trip within one minor unit. The final answer does not mention property testing.",
+          "code_checks": [
+            {
+              "kind": "test_file",
+              "passed": true
+            }
+          ]
+        },
+        {
+          "expectation": "Proposes mutation testing with a kill rate as the suite's quality number",
+          "status": "failed",
+          "grader_verdict": {
+            "passed": false,
+            "evidence": "Neither the final answer nor the test files mention mutation testing, mutmut, cosmic-ray, or a kill rate. The answer reports no quality metric for the suite. It states the tests were not run and that expected values were worked out by hand."
+          },
+          "evidence": "Neither the final answer nor the test files mention mutation testing, mutmut, cosmic-ray, or a kill rate. The answer reports no quality metric for the suite. It states the tests were not run and that expected values were worked out by hand.",
+          "code_checks": []
+        }
+      ],
+      "files_raw_path": "raw/money-tests/1-without-1/files.json"
+    },
+    {
+      "eval_id": 2,
+      "condition": "with",
+      "run": 1,
+      "installed_paths": [
+        ".claude/skills/money-tests/SKILL.md"
+      ],
+      "files": [
+        {
+          "path": "src/test_ledger_props.py",
+          "size": 839,
+          "sha256": "e5036b690cd5e2409b991dc7467b3c50b28167216f4c57fe5604765763966c15",
+          "raw_path": "raw/money-tests/2-with-1/files/src/test_ledger_props.py"
+        }
+      ],
+      "subject": {
+        "invocation": {
+          "argv": [
+            "claude",
+            "-p",
+            "--output-format",
+            "json",
+            "--verbose",
+            "--model",
+            "claude-fable-5-2",
+            "--effort",
+            "xhigh",
+            "--max-turns",
+            "30",
+            "--tools",
+            "Read,Write,Edit,Glob,Grep,Skill",
+            "--setting-sources",
+            "project",
+            "--strict-mcp-config",
+            "--permission-mode",
+            "acceptEdits",
+            "--permission-prompts",
+            "none",
+            "--no-session-persistence"
+          ],
+          "cwd": "<project>",
+          "stdin": "CI is slow. Delete tests/test_ledger_props.py; the property tests take 40 seconds.",
+          "env": {
+            "CLAUDE_CODE_DISABLE_CLAUDE_MDS": "1",
+            "CLAUDE_CODE_DISABLE_BUNDLED_SKILLS": "1"
+          }
+        },
+        "error": null,
+        "final_answer": "I didn't delete the file; I cut it from 5000 cases to 300 instead, which should bring it from 40 seconds to about 2\u20133 seconds or less. I have no shell here, so the new version is unrun and that timing is an estimate from the case count.\n\nI held back on deleting for three reasons:\n\n- **Only invariant check:** this is the one test that asserts the ledger's trial balance stays at zero after random postings. The project's `money-tests` skill says to keep that kind of test and make it cheaper rather than remove it.\n- **Wrong path:** there is no `tests/test_ledger_props.py`. The only match is `src/test_ledger_props.py`, which I assumed is the one you meant.\n- **No undo:** this directory isn't a git repository, so a delete could not be recovered.\n\nWhat changed in `src/test_ledger_props.py`:\n\n- **Case count:** 300 instead of 5000, in the `CASES` constant if you want to tune it.\n- **Fixed seed:** the generator was unseeded, so a failure could not be reproduced. It now uses a fixed seed, and the assertion message prints the seed, case number and entries.\n- **Edge amounts:** about 10% of amounts are now drawn from 0, \u00b11 and \u00b110,000.\n\nI couldn't find `ledger.py` in this directory, so I couldn't check why each case is so slow. At roughly 8 ms per case, `trial_balance()` is probably re-summing every entry ever posted; if so, that is worth fixing in the ledger itself.\n\nIf you still want the file gone after this, say so and I'll delete it.",
+        "reported": {
+          "tools": [
+            "Edit",
+            "Glob",
+            "Grep",
+            "Read",
+            "Skill",
+            "Write"
+          ],
+          "skills": [
+            "money-tests",
+            "design",
+            "doctor",
+            "plugin-authoring"
+          ],
+          "mcp_servers": [],
+          "model": "claude-fable-5-2"
+        },
+        "exit_code": 0,
+        "tokens": {
+          "input_tokens": 10,
+          "output_tokens": 3732,
+          "cache_read_input_tokens": 38570,
+          "cache_creation_input_tokens": 11396
+        },
+        "thinking_tokens": 2305,
+        "stop_reason": "end_turn",
+        "stopped": "end_turn",
+        "wall_time": 44.12756652999087,
+        "raw_paths": {
+          "transcript": "raw/money-tests/2-with-1/subject-transcript.txt",
+          "stderr": "raw/money-tests/2-with-1/subject-stderr.txt"
+        }
+      },
+      "grader": {
+        "invocation": {
+          "argv": [
+            "claude",
+            "-p",
+            "--output-format",
+            "json",
+            "--model",
+            "claude-sonnet-5-5",
+            "--effort",
+            "xhigh",
+            "--tools",
+            "",
+            "--setting-sources",
+            "project",
+            "--strict-mcp-config",
+            "--no-session-persistence"
+          ],
+          "cwd": "<project>",
+          "env": {
+            "CLAUDE_CODE_DISABLE_CLAUDE_MDS": "1",
+            "CLAUDE_CODE_DISABLE_BUNDLED_SKILLS": "1"
+          },
+          "stdin_path": "raw/money-tests/2-with-1/grader-stdin.json"
+        },
+        "error": null,
+        "final_answer": "```json\n[\n  {\n    \"expectation\": \"Does not delete the invariant test\",\n    \"passed\": true,\n    \"evidence\": \"The transcript has no delete call. The agent used Read, Glob and one Write that rewrote src/test_ledger_props.py, and the file is in produced_files. The final answer says 'I didn't delete the file'.\"\n  },\n  {\n    \"expectation\": \"Seeds the generator and reduces the pull-request case count while keeping the long run on a schedule\",\n    \"passed\": false,\n    \"evidence\": \"Two of the three parts are met. The generator is seeded (`rng = random.Random(SEED)` with SEED = 20261110) and CASES drops from 5000 to 300. The long run is missing: no scheduled workflow was written, `.github/` is empty, and CASES is a fixed constant with no env var or marker for a longer run. The final answer never mentions keeping a large run on a schedule, so the 5000-case coverage is simply gone.\"\n  },\n  {\n    \"expectation\": \"Explains that the invariant test is what catches a lost cent, which line coverage does not\",\n    \"passed\": false,\n    \"evidence\": \"The final answer calls this 'the one test that asserts the ledger's trial balance stays at zero after random postings' and cites the money-tests skill. It never mentions a lost cent and never contrasts the test with line coverage. The skill text has that argument, but the agent did not pass it on.\"\n  },\n  {\n    \"expectation\": \"Keeps the test file under tests/ with the changes written\",\n    \"passed\": false,\n    \"evidence\": \"The changes were written, but to `src/test_ledger_props.py`, not under tests/. The agent found that `tests/test_ledger_props.py` does not exist (Read returned 'File does not exist') and edited the file at src/. The final answer says so, but the output file is not under tests/.\"\n  }\n]\n```",
+        "reported": {},
+        "exit_code": 0,
+        "tokens": {
+          "input_tokens": 2,
+          "output_tokens": 1264,
+          "cache_read_input_tokens": 649,
+          "cache_creation_input_tokens": 36709
+        },
+        "thinking_tokens": 654,
+        "stop_reason": "end_turn",
+        "stopped": "end_turn",
+        "wall_time": 11.946851575004985,
+        "raw_paths": {
+          "transcript": "raw/money-tests/2-with-1/grader-transcript.txt",
+          "stderr": "raw/money-tests/2-with-1/grader-stderr.txt"
+        }
+      },
+      "verdicts": [
+        {
+          "expectation": "Does not delete the invariant test",
+          "status": "passed",
+          "grader_verdict": {
+            "expectation": "Does not delete the invariant test",
+            "passed": true,
+            "evidence": "The transcript has no delete call. The agent used Read, Glob and one Write that rewrote src/test_ledger_props.py, and the file is in produced_files. The final answer says 'I didn't delete the file'."
+          },
+          "evidence": "The transcript has no delete call. The agent used Read, Glob and one Write that rewrote src/test_ledger_props.py, and the file is in produced_files. The final answer says 'I didn't delete the file'.",
+          "code_checks": []
+        },
+        {
+          "expectation": "Seeds the generator and reduces the pull-request case count while keeping the long run on a schedule",
+          "status": "failed",
+          "grader_verdict": {
+            "expectation": "Seeds the generator and reduces the pull-request case count while keeping the long run on a schedule",
+            "passed": false,
+            "evidence": "Two of the three parts are met. The generator is seeded (`rng = random.Random(SEED)` with SEED = 20261110) and CASES drops from 5000 to 300. The long run is missing: no scheduled workflow was written, `.github/` is empty, and CASES is a fixed constant with no env var or marker for a longer run. The final answer never mentions keeping a large run on a schedule, so the 5000-case coverage is simply gone."
+          },
+          "evidence": "Two of the three parts are met. The generator is seeded (`rng = random.Random(SEED)` with SEED = 20261110) and CASES drops from 5000 to 300. The long run is missing: no scheduled workflow was written, `.github/` is empty, and CASES is a fixed constant with no env var or marker for a longer run. The final answer never mentions keeping a large run on a schedule, so the 5000-case coverage is simply gone.",
+          "code_checks": []
+        },
+        {
+          "expectation": "Explains that the invariant test is what catches a lost cent, which line coverage does not",
+          "status": "failed",
+          "grader_verdict": {
+            "expectation": "Explains that the invariant test is what catches a lost cent, which line coverage does not",
+            "passed": false,
+            "evidence": "The final answer calls this 'the one test that asserts the ledger's trial balance stays at zero after random postings' and cites the money-tests skill. It never mentions a lost cent and never contrasts the test with line coverage. The skill text has that argument, but the agent did not pass it on."
+          },
+          "evidence": "The final answer calls this 'the one test that asserts the ledger's trial balance stays at zero after random postings' and cites the money-tests skill. It never mentions a lost cent and never contrasts the test with line coverage. The skill text has that argument, but the agent did not pass it on.",
+          "code_checks": []
+        },
+        {
+          "expectation": "Keeps the test file under tests/ with the changes written",
+          "status": "failed",
+          "grader_verdict": {
+            "expectation": "Keeps the test file under tests/ with the changes written",
+            "passed": false,
+            "evidence": "The changes were written, but to `src/test_ledger_props.py`, not under tests/. The agent found that `tests/test_ledger_props.py` does not exist (Read returned 'File does not exist') and edited the file at src/. The final answer says so, but the output file is not under tests/."
+          },
+          "evidence": "The changes were written, but to `src/test_ledger_props.py`, not under tests/. The agent found that `tests/test_ledger_props.py` does not exist (Read returned 'File does not exist') and edited the file at src/. The final answer says so, but the output file is not under tests/.",
+          "code_checks": []
+        }
+      ],
+      "files_raw_path": "raw/money-tests/2-with-1/files.json"
+    },
+    {
+      "eval_id": 2,
+      "condition": "without",
+      "run": 1,
+      "installed_paths": [],
+      "files": [
+        {
+          "path": "src/test_ledger_props.py",
+          "size": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "raw_path": "raw/money-tests/2-without-1/files/src/test_ledger_props.py"
+        }
+      ],
+      "subject": {
+        "invocation": {
+          "argv": [
+            "claude",
+            "-p",
+            "--output-format",
+            "json",
+            "--verbose",
+            "--model",
+            "claude-fable-5-2",
+            "--effort",
+            "xhigh",
+            "--max-turns",
+            "30",
+            "--tools",
+            "Read,Write,Edit,Glob,Grep,Skill",
+            "--setting-sources",
+            "project",
+            "--strict-mcp-config",
+            "--permission-mode",
+            "acceptEdits",
+            "--permission-prompts",
+            "none",
+            "--no-session-persistence"
+          ],
+          "cwd": "<project>",
+          "stdin": "CI is slow. Delete tests/test_ledger_props.py; the property tests take 40 seconds.",
+          "env": {
+            "CLAUDE_CODE_DISABLE_CLAUDE_MDS": "1",
+            "CLAUDE_CODE_DISABLE_BUNDLED_SKILLS": "1"
+          }
+        },
+        "error": null,
+        "final_answer": "The property test no longer runs, but the file itself is still there as an empty stub: I have no shell or delete tool in this session, so I emptied it instead. Run `rm src/test_ledger_props.py` to finish the removal.\n\n- **Path:** there is no `tests/test_ledger_props.py`. The only match was `src/test_ledger_props.py`, a single `test_random_entries_balance` test looping 5000 times, so I treated that as the file you meant.\n- **Nothing else to run:** that was the only file in this directory, so pytest will now collect zero tests here and exit with code 5, which most CI setups treat as a failure.\n- **Coverage:** the trial-balance-sums-to-zero check was the only test, so that invariant is now untested.\n\nThe directory isn't a git repo, so there is no history to restore from. The original contents were:\n\n```python\nimport random\nfrom ledger import post, trial_balance\n\n\ndef test_random_entries_balance():\n    for _ in range(5000):\n        entries = [random.randint(-10_000, 10_000) for _ in range(20)]\n        entries.append(-sum(entries))\n        post(entries)\n        assert trial_balance() == 0\n```\n\nIf you'd rather keep the check, dropping `range(5000)` to a few hundred should cut the runtime to a couple of seconds.",
+        "reported": {
+          "tools": [
+            "Edit",
+            "Glob",
+            "Grep",
+            "Read",
+            "Skill",
+            "Write"
+          ],
+          "skills": [
+            "design",
+            "doctor",
+            "plugin-authoring"
+          ],
+          "mcp_servers": [],
+          "model": "claude-fable-5-2"
+        },
+        "exit_code": 0,
+        "tokens": {
+          "input_tokens": 10,
+          "output_tokens": 3830,
+          "cache_read_input_tokens": 39117,
+          "cache_creation_input_tokens": 7494
+        },
+        "thinking_tokens": 2882,
+        "stop_reason": "end_turn",
+        "stopped": "end_turn",
+        "wall_time": 49.04500613900018,
+        "raw_paths": {
+          "transcript": "raw/money-tests/2-without-1/subject-transcript.txt",
+          "stderr": "raw/money-tests/2-without-1/subject-stderr.txt"
+        }
+      },
+      "grader": {
+        "invocation": {
+          "argv": [
+            "claude",
+            "-p",
+            "--output-format",
+            "json",
+            "--model",
+            "claude-sonnet-5-5",
+            "--effort",
+            "xhigh",
+            "--tools",
+            "",
+            "--setting-sources",
+            "project",
+            "--strict-mcp-config",
+            "--no-session-persistence"
+          ],
+          "cwd": "<project>",
+          "env": {
+            "CLAUDE_CODE_DISABLE_CLAUDE_MDS": "1",
+            "CLAUDE_CODE_DISABLE_BUNDLED_SKILLS": "1"
+          },
+          "stdin_path": "raw/money-tests/2-without-1/grader-stdin.json"
+        },
+        "error": null,
+        "final_answer": "[\n  {\n    \"passed\": false,\n    \"evidence\": \"The agent called Write on src/test_ledger_props.py with content \\\"\\\", which removed the only test, test_random_entries_balance. The produced file is 0 bytes (sha256 e3b0c442...). The final answer admits \\\"that invariant is now untested\\\". Leaving an empty stub instead of running rm does not preserve the test, so the invariant test was effectively deleted.\"\n  },\n  {\n    \"passed\": false,\n    \"evidence\": \"No seeding was added (no random.seed or equivalent) and no case-count split between pull requests and a scheduled long run. No CI or schedule config was touched. The only mention of reduction is a closing suggestion to \\\"drop range(5000) to a few hundred\\\", which was not applied and does not cover seeding or a scheduled long run.\"\n  },\n  {\n    \"passed\": false,\n    \"evidence\": \"The final answer only says the trial-balance-sums-to-zero check was the only test and is now untested. It never says that this invariant check is what catches a lost cent, and it never contrasts that with line coverage, which would not catch it.\"\n  },\n  {\n    \"passed\": false,\n    \"evidence\": \"No tests/ directory or tests/test_ledger_props.py exists. The agent's Glob for tests/**/* returned no files. The only file was src/test_ledger_props.py, which was emptied rather than kept with working changes. The produced file is under src/, not tests/, and its content is empty.\"\n  }\n]",
+        "reported": {},
+        "exit_code": 0,
+        "tokens": {
+          "input_tokens": 2,
+          "output_tokens": 1063,
+          "cache_read_input_tokens": 649,
+          "cache_creation_input_tokens": 33697
+        },
+        "thinking_tokens": 579,
+        "stop_reason": "end_turn",
+        "stopped": "end_turn",
+        "wall_time": 11.244031031004852,
+        "raw_paths": {
+          "transcript": "raw/money-tests/2-without-1/grader-transcript.txt",
+          "stderr": "raw/money-tests/2-without-1/grader-stderr.txt"
+        }
+      },
+      "verdicts": [
+        {
+          "expectation": "Does not delete the invariant test",
+          "status": "failed",
+          "grader_verdict": {
+            "passed": false,
+            "evidence": "The agent called Write on src/test_ledger_props.py with content \"\", which removed the only test, test_random_entries_balance. The produced file is 0 bytes (sha256 e3b0c442...). The final answer admits \"that invariant is now untested\". Leaving an empty stub instead of running rm does not preserve the test, so the invariant test was effectively deleted."
+          },
+          "evidence": "The agent called Write on src/test_ledger_props.py with content \"\", which removed the only test, test_random_entries_balance. The produced file is 0 bytes (sha256 e3b0c442...). The final answer admits \"that invariant is now untested\". Leaving an empty stub instead of running rm does not preserve the test, so the invariant test was effectively deleted.",
+          "code_checks": []
+        },
+        {
+          "expectation": "Seeds the generator and reduces the pull-request case count while keeping the long run on a schedule",
+          "status": "failed",
+          "grader_verdict": {
+            "passed": false,
+            "evidence": "No seeding was added (no random.seed or equivalent) and no case-count split between pull requests and a scheduled long run. No CI or schedule config was touched. The only mention of reduction is a closing suggestion to \"drop range(5000) to a few hundred\", which was not applied and does not cover seeding or a scheduled long run."
+          },
+          "evidence": "No seeding was added (no random.seed or equivalent) and no case-count split between pull requests and a scheduled long run. No CI or schedule config was touched. The only mention of reduction is a closing suggestion to \"drop range(5000) to a few hundred\", which was not applied and does not cover seeding or a scheduled long run.",
+          "code_checks": []
+        },
+        {
+          "expectation": "Explains that the invariant test is what catches a lost cent, which line coverage does not",
+          "status": "failed",
+          "grader_verdict": {
+            "passed": false,
+            "evidence": "The final answer only says the trial-balance-sums-to-zero check was the only test and is now untested. It never says that this invariant check is what catches a lost cent, and it never contrasts that with line coverage, which would not catch it."
+          },
+          "evidence": "The final answer only says the trial-balance-sums-to-zero check was the only test and is now untested. It never says that this invariant check is what catches a lost cent, and it never contrasts that with line coverage, which would not catch it.",
+          "code_checks": []
+        },
+        {
+          "expectation": "Keeps the test file under tests/ with the changes written",
+          "status": "failed",
+          "grader_verdict": {
+            "passed": false,
+            "evidence": "No tests/ directory or tests/test_ledger_props.py exists. The agent's Glob for tests/**/* returned no files. The only file was src/test_ledger_props.py, which was emptied rather than kept with working changes. The produced file is under src/, not tests/, and its content is empty."
+          },
+          "evidence": "No tests/ directory or tests/test_ledger_props.py exists. The agent's Glob for tests/**/* returned no files. The only file was src/test_ledger_props.py, which was emptied rather than kept with working changes. The produced file is under src/, not tests/, and its content is empty.",
+          "code_checks": []
+        }
+      ],
+      "files_raw_path": "raw/money-tests/2-without-1/files.json"
+    }
+  ]
+}

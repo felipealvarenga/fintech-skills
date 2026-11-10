@@ -5,6 +5,11 @@ skills que ensinam Claude Code, Codex, Cursor, Copilot e qualquer agente que lei
 tratar dinheiro como sistemas fintech de produção tratam. Toda skill vem com evals e vetores de
 teste que rodam no CI.
 
+**Para** quem revisa o código de dinheiro que um agente escreveu, numa fintech ou num SaaS que
+movimenta dinheiro, e quer que o agente faça as escolhas que um engenheiro sênior de pagamentos
+faria, com os testes na mesma mudança. E para o time brasileiro que precisa de Pix, boleto, CPF e
+CNPJ e NF-e certos de primeira.
+
 [English](README.md)
 
 <!-- generated:headline -->
@@ -16,12 +21,28 @@ método e transcrições brutas: [evals/results/20261108T180307Z-fa81209](evals/
 contra as falhas das execuções anteriores neles. No conjunto reservado, prompts em `evals/heldout/` nunca lidos ao editar uma skill: `claude-sonnet-5-5`: **70% com, 24% sem** (73 contra 25 de 105, [evals/results/20261108T194552Z-fa81209-heldout](evals/results/20261108T194552Z-fa81209-heldout/summary.md)); `claude-opus-5-5`: **81% com, 31% sem** (85 contra 33 de 105, [evals/results/20261109T110030Z-fa81209-heldout](evals/results/20261109T110030Z-fa81209-heldout/summary.md)); `claude-fable-5-2`: **88% com, 35% sem** (92 contra 37 de 105, [evals/results/20261110T031626Z-fa81209-heldout](evals/results/20261110T031626Z-fa81209-heldout/summary.md)).
 <!-- /generated:headline -->
 
-## Por quê
+## Por que instalar
 
 Agentes escrevem código de pagamento rápido e errado do mesmo jeito que pessoas: float para
 valores, coluna de saldo atualizada no lugar, retry que cobra duas vezes, webhook tratado como
 verdade, conciliação que esconde diferenças atrás de uma tolerância. Cada skill corrige um
 desses, com regras testáveis, um checklist de revisão e os testes que a mudança precisa incluir.
+
+O que você ganha nos primeiros dez minutos:
+
+- Um prompt, `Audit this repository's money code with fintech-skills.`, e o agente devolve o que
+  corrigir com arquivo, linha, regra, correção e o teste que prova. No fixture com defeitos
+  plantados: 12 achados em 8 arquivos, 4 críticos.
+- Vetores de teste com implementação de referência para toda skill, Python e TypeScript para as
+  principais. Aponte para o seu módulo de dinheiro e rode no CI.
+- Regras que o agente segue quando escreve, não só quando revisa: testes na mesma mudança, nada de
+  float para valores, uma chave de idempotência por operação, webhook verificado antes de confiar.
+- Números que você pode conferir. Toda execução é publicada com as transcrições, e os prompts
+  reservados nunca foram usados para ajustar as skills.
+
+Não é a ferramenta certa se você quer a API de um fornecedor documentada (use o plugin do
+fornecedor, veja Escopo) ou um framework de processo para todo o desenvolvimento; estas skills são
+regras de domínio e convivem com esses pacotes.
 
 ## Instalação
 
@@ -126,8 +147,10 @@ Em 2 das 91 sessões com skill da execução `claude-sonnet-5-5` em `fa81209` o 
 
 São práticas de engenharia, não aconselhamento contábil, fiscal ou jurídico. Onde uma regra
 depende da jurisdição (arredondamento legal, códigos de imposto, CET, prazos de retenção), a
-skill diz isso e mantém a parte de engenharia. Mecânica de API de fornecedor fica com o plugin
-do fornecedor: a Stripe tem o dela, a Intuit tem `intuit-developer` e `quickbooks-labs`.
+skill diz isso e mantém a parte de engenharia. Mecânica de API de fornecedor (endpoints, OAuth,
+chamadas de SDK) fica fora do escopo: use o plugin do próprio fornecedor para isso, como o plugin
+oficial da Stripe ou os `intuit-developer` e `quickbooks-labs` da Intuit. Estas skills cobrem o
+que esses plugins não cobrem: as regras de engenharia para dinheiro.
 
 ## Como foi feito
 

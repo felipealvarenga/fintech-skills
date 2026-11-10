@@ -4,6 +4,11 @@ Fintech engineering skills for coding agents: an audit entry point and twelve sk
 Claude Code, Codex, Cursor, Copilot and any agent that reads `SKILL.md` how to handle money the
 way production fintech systems do. Every skill ships evals and test vectors that run in CI.
 
+**For** the engineer who reviews the money code a coding agent wrote, at a fintech or a SaaS that
+moves money, and wants the agent to make the choices a senior payments engineer makes, with the
+tests in the same change. Also for the Brazilian team that needs Pix, boleto, CPF and CNPJ and
+NF-e right the first time.
+
 [![ci](https://github.com/felipealvarenga/fintech-skills/actions/workflows/ci.yml/badge.svg)](https://github.com/felipealvarenga/fintech-skills/actions/workflows/ci.yml)
 [![license](https://img.shields.io/badge/license-MIT-111111)](LICENSE)
 
@@ -18,7 +23,7 @@ method and raw transcripts: [evals/results/20261108T180307Z-fa81209](evals/resul
 earlier runs' failures on them. On the held-out set, prompts in `evals/heldout/` that are never read when editing a skill: `claude-sonnet-5-5`: **70% with, 24% without** (73 against 25 of 105, [evals/results/20261108T194552Z-fa81209-heldout](evals/results/20261108T194552Z-fa81209-heldout/summary.md)); `claude-opus-5-5`: **81% with, 31% without** (85 against 33 of 105, [evals/results/20261109T110030Z-fa81209-heldout](evals/results/20261109T110030Z-fa81209-heldout/summary.md)); `claude-fable-5-2`: **88% with, 35% without** (92 against 37 of 105, [evals/results/20261110T031626Z-fa81209-heldout](evals/results/20261110T031626Z-fa81209-heldout/summary.md)).
 <!-- /generated:headline -->
 
-## Why
+## Why install this
 
 Agents write payment code fast and wrong in the same ways people do: floats for amounts, a
 balance column updated in place, a retry that charges twice, a webhook trusted as truth, a
@@ -38,6 +43,22 @@ The left column loses or invents cents on real ratios; the right column preserve
 construction. The left key charges the customer twice after one timeout; with the right key the
 retry is a duplicate the processor dedupes, for as long as the processor keeps the key. The skills
 carry the other hundred rules like these, each with a test.
+
+What you get in the first ten minutes:
+
+- One prompt, `Audit this repository's money code with fintech-skills.`, and the agent reports what
+  to fix with file, line, rule, fix and the test that proves it. On the planted fixture: 12 findings
+  in 8 files, 4 critical.
+- Test vectors with a reference implementation for every skill, Python and TypeScript for the main
+  ones. Point them at your own money module and run them in CI.
+- Rules the agent follows when it writes, not only when it reviews: tests in the same change, no
+  float for amounts, one idempotency key per operation, a webhook verified before it is trusted.
+- Numbers you can check. Every run is published with its transcripts, and the held-out prompts were
+  never used to tune the skills.
+
+Not the right tool if you want a vendor's API documented (use the vendor's plugin, see Scope) or a
+process framework for all of software development; these skills are domain rules and work beside
+such packs.
 
 ## Install
 
@@ -143,9 +164,10 @@ npm ci && npm run test:ts    # TypeScript vectors
 
 These skills are engineering practice. They are not accounting, tax or legal advice; where a
 rule depends on a jurisdiction (statutory rounding, tax codes, disclosed rates, retention
-periods), the skill says so and keeps the engineering part. Vendor API mechanics belong to
-vendor plugins: Stripe ships its own, Intuit ships `intuit-developer` and `quickbooks-labs`.
-The skills link to them instead of duplicating them.
+periods), the skill says so and keeps the engineering part. Vendor API mechanics (endpoints,
+OAuth, SDK calls) are out of scope: use the vendor's own agent plugin for those, such as Stripe's
+official plugin or Intuit's `intuit-developer` and `quickbooks-labs`. These skills cover what those
+plugins do not: the engineering rules for money.
 
 ## How this was built
 

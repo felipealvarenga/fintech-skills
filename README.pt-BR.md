@@ -13,7 +13,7 @@ teste que rodam no CI.
 da execução. A nota é a fração das expectativas que o avaliador marcou como atendidas; o código do agente é
 lido, não executado. `claude-sonnet-5-5`: **81% com as skills, 24% sem** (299 contra 87 de 370); `claude-opus-5-5`: **89% com as skills, 35% sem** (328 contra 130 de 370). Por skill,
 método e transcrições brutas: [evals/results/20261108T180307Z-fa81209](evals/results/20261108T180307Z-fa81209/summary.md), [evals/results/20261109T103432Z-fa81209](evals/results/20261109T103432Z-fa81209/summary.md). Esses prompts são prompts de desenvolvimento: as skills foram revisadas
-contra as falhas das execuções anteriores neles. No conjunto reservado, prompts em `evals/heldout/` nunca lidos ao editar uma skill: `claude-sonnet-5-5`: **70% com, 24% sem** (73 contra 25 de 105, [evals/results/20261108T194552Z-fa81209-heldout](evals/results/20261108T194552Z-fa81209-heldout/summary.md)); `claude-opus-5-5`: **81% com, 31% sem** (85 contra 33 de 105, [evals/results/20261109T110030Z-fa81209-heldout](evals/results/20261109T110030Z-fa81209-heldout/summary.md)).
+contra as falhas das execuções anteriores neles. No conjunto reservado, prompts em `evals/heldout/` nunca lidos ao editar uma skill: `claude-sonnet-5-5`: **70% com, 24% sem** (73 contra 25 de 105, [evals/results/20261108T194552Z-fa81209-heldout](evals/results/20261108T194552Z-fa81209-heldout/summary.md)); `claude-opus-5-5`: **81% com, 31% sem** (85 contra 33 de 105, [evals/results/20261109T110030Z-fa81209-heldout](evals/results/20261109T110030Z-fa81209-heldout/summary.md)); `claude-fable-5-2`: **88% com, 35% sem** (92 contra 37 de 105, [evals/results/20261110T031626Z-fa81209-heldout](evals/results/20261110T031626Z-fa81209-heldout/summary.md)).
 <!-- /generated:headline -->
 
 ## Por quê
@@ -117,6 +117,7 @@ arquivos que o agente escreveu. Pastas antigas nunca são editadas. Método e fl
 | [20261108T194552Z-fa81209-heldout](evals/results/20261108T194552Z-fa81209-heldout/summary.md) | `fa81209` | reservado | `claude-sonnet-5-5` | 70% | 24% | 45.7 |
 | [20261109T103432Z-fa81209](evals/results/20261109T103432Z-fa81209/summary.md) | `fa81209` | desenvolvimento | `claude-opus-5-5` | 89% | 35% | 53.5 |
 | [20261109T110030Z-fa81209-heldout](evals/results/20261109T110030Z-fa81209-heldout/summary.md) | `fa81209` | reservado | `claude-opus-5-5` | 81% | 31% | 49.5 |
+| [20261110T031626Z-fa81209-heldout](evals/results/20261110T031626Z-fa81209-heldout/summary.md) | `fa81209` | reservado | `claude-fable-5-2` | 88% | 35% | 52.4 |
 
 Em 2 das 91 sessões com skill da execução `claude-sonnet-5-5` em `fa81209` o agente nunca abriu a skill; essas sessões contam contra as skills. Em todas as 91 sessões com skill da execução `claude-opus-5-5` em `fa81209` o agente abriu a skill.
 <!-- /generated:runs -->

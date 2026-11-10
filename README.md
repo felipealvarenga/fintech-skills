@@ -15,7 +15,7 @@ way production fintech systems do. Every skill ships evals and test vectors that
 the run. The score is the share of expectations the grader marked passed; the agent's code is read, not
 executed. `claude-sonnet-5-5`: **81% with the skills, 24% without** (299 against 87 of 370); `claude-opus-5-5`: **89% with the skills, 35% without** (328 against 130 of 370). Per skill,
 method and raw transcripts: [evals/results/20261108T180307Z-fa81209](evals/results/20261108T180307Z-fa81209/summary.md), [evals/results/20261109T103432Z-fa81209](evals/results/20261109T103432Z-fa81209/summary.md). Those prompts are development prompts: the skills were revised against
-earlier runs' failures on them. On the held-out set, prompts in `evals/heldout/` that are never read when editing a skill: `claude-sonnet-5-5`: **70% with, 24% without** (73 against 25 of 105, [evals/results/20261108T194552Z-fa81209-heldout](evals/results/20261108T194552Z-fa81209-heldout/summary.md)); `claude-opus-5-5`: **81% with, 31% without** (85 against 33 of 105, [evals/results/20261109T110030Z-fa81209-heldout](evals/results/20261109T110030Z-fa81209-heldout/summary.md)).
+earlier runs' failures on them. On the held-out set, prompts in `evals/heldout/` that are never read when editing a skill: `claude-sonnet-5-5`: **70% with, 24% without** (73 against 25 of 105, [evals/results/20261108T194552Z-fa81209-heldout](evals/results/20261108T194552Z-fa81209-heldout/summary.md)); `claude-opus-5-5`: **81% with, 31% without** (85 against 33 of 105, [evals/results/20261109T110030Z-fa81209-heldout](evals/results/20261109T110030Z-fa81209-heldout/summary.md)); `claude-fable-5-2`: **88% with, 35% without** (92 against 37 of 105, [evals/results/20261110T031626Z-fa81209-heldout](evals/results/20261110T031626Z-fa81209-heldout/summary.md)).
 <!-- /generated:headline -->
 
 ## Why
@@ -128,6 +128,7 @@ Old folders are never edited. Method and flags: [evals/README.md](evals/README.m
 | [20261108T194552Z-fa81209-heldout](evals/results/20261108T194552Z-fa81209-heldout/summary.md) | `fa81209` | held-out | `claude-sonnet-5-5` | 70% | 24% | 45.7 |
 | [20261109T103432Z-fa81209](evals/results/20261109T103432Z-fa81209/summary.md) | `fa81209` | development | `claude-opus-5-5` | 89% | 35% | 53.5 |
 | [20261109T110030Z-fa81209-heldout](evals/results/20261109T110030Z-fa81209-heldout/summary.md) | `fa81209` | held-out | `claude-opus-5-5` | 81% | 31% | 49.5 |
+| [20261110T031626Z-fa81209-heldout](evals/results/20261110T031626Z-fa81209-heldout/summary.md) | `fa81209` | held-out | `claude-fable-5-2` | 88% | 35% | 52.4 |
 
 In 2 of the 91 with-skill sessions of the `claude-sonnet-5-5` run on `fa81209` the agent never opened the skill; those sessions count against the skills. In all 91 with-skill sessions of the `claude-opus-5-5` run on `fa81209` the agent opened the skill.
 <!-- /generated:runs -->

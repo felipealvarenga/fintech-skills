@@ -1,0 +1,750 @@
+{
+  "run_id": "20261110T031626Z-fa81209-heldout",
+  "date": "20261110T031626Z",
+  "subject_model": "claude-fable-5-2",
+  "grader_model": "claude-sonnet-5-5",
+  "effort": "xhigh",
+  "git_sha": "fa81209f644741b66d83bd8c61093385b29e3483",
+  "skills_dirty": false,
+  "prompt_set": "heldout",
+  "skill": "audit-trail",
+  "installed_paths": [
+    ".claude/skills/audit-trail/SKILL.md"
+  ],
+  "records": [
+    {
+      "eval_id": 1,
+      "condition": "with",
+      "run": 1,
+      "installed_paths": [
+        ".claude/skills/audit-trail/SKILL.md"
+      ],
+      "files": [
+        {
+          "path": "migrations/0001_audit_events.sql",
+          "size": 1849,
+          "sha256": "ab6b806e8de9646bee9d1d0e7b80ddeddb83a40afc0041bfa07052628eaee6af",
+          "raw_path": "raw/audit-trail/1-with-1/files/migrations/0001_audit_events.sql"
+        },
+        {
+          "path": "migrations/0002_audit_events_append_only.sql",
+          "size": 775,
+          "sha256": "78d8bbb9404bb5def6736fd4643febf08a7fdcdc6c8f7b56b5155d6be5eca177",
+          "raw_path": "raw/audit-trail/1-with-1/files/migrations/0002_audit_events_append_only.sql"
+        },
+        {
+          "path": "src/audit.py",
+          "size": 8561,
+          "sha256": "c850e7586c1d0f8aaf5c955583f03f419e66aba8cb8d7947972287f300be73e9",
+          "raw_path": "raw/audit-trail/1-with-1/files/src/audit.py"
+        },
+        {
+          "path": "src/limits.py",
+          "size": 4154,
+          "sha256": "7b91146dd71680b30816e9ecb690792d438f55c4f7ef7e00392851f92074255f",
+          "raw_path": "raw/audit-trail/1-with-1/files/src/limits.py"
+        },
+        {
+          "path": "tests/test_limits_audit.py",
+          "size": 9497,
+          "sha256": "8dc31887ca1549b6d7845d6fd40ec517c14e82ef3961ae2cc5afd7fc9c106069",
+          "raw_path": "raw/audit-trail/1-with-1/files/tests/test_limits_audit.py"
+        }
+      ],
+      "subject": {
+        "invocation": {
+          "argv": [
+            "claude",
+            "-p",
+            "--output-format",
+            "json",
+            "--verbose",
+            "--model",
+            "claude-fable-5-2",
+            "--effort",
+            "xhigh",
+            "--max-turns",
+            "30",
+            "--tools",
+            "Read,Write,Edit,Glob,Grep,Skill",
+            "--setting-sources",
+            "project",
+            "--strict-mcp-config",
+            "--permission-mode",
+            "acceptEdits",
+            "--permission-prompts",
+            "none",
+            "--no-session-persistence"
+          ],
+          "cwd": "<project>",
+          "stdin": "Add an admin action to adjust a customer's credit limit, in src/limits.py.",
+          "env": {
+            "CLAUDE_CODE_DISABLE_CLAUDE_MDS": "1",
+            "CLAUDE_CODE_DISABLE_BUNDLED_SKILLS": "1"
+          }
+        },
+        "error": null,
+        "final_answer": "`adjust_credit_limit` is now in `src/limits.py`, built to the project's audit-trail skill: it changes the limit and writes an audit event in the same transaction. Nothing has been run \u2014 I have no shell in this session \u2014 so the code and the tests are unverified.\n\n## What the action does\n\n- **Authorisation:** the actor must hold the `credit_limit:adjust` permission, otherwise it raises `PermissionError`.\n- **Required inputs:** a reason code from a fixed list, a reason text or ticket reference, and a request id.\n- **Event content:** the actor (and who they act for), the limit before and after, the reason, request id, idempotency key, UTC time and a per-customer sequence number.\n- **Atomicity:** if the event write fails, the limit change rolls back, even if the caller commits anyway.\n- **Replays:** repeating an idempotency key returns the original event and changes nothing.\n- **Agents:** an agent actor must name the person it acts for and pass its run or policy id.\n\n## What I added around it\n\n- **`src/audit.py`:** the event writer, a per-customer hash chain with a verifier, queries by customer or actor and time window, and a JSON-lines export for auditors.\n- **`migrations/0001_audit_events.sql`:** the `audit_events` table.\n- **`migrations/0002_audit_events_append_only.sql`:** Postgres grants and triggers that block update, delete and truncate.\n- **`tests/test_limits_audit.py`:** runs on stdlib sqlite3 with pytest, plus one opt-in Postgres privilege test enabled by setting `AUDIT_TEST_APP_DSN`.\n\n## Things you should know\n\n- **`set_limit` is gone.** I removed it because it was an unaudited way to make the same change. Nothing else in this directory called it; any caller elsewhere must move to `adjust_credit_limit`.\n- **It must run inside an open transaction.** On an autocommit Postgres connection it fails rather than writing the change and the event separately.\n- **I assumed Postgres** (from the `%s` placeholders) and that `src/` is on the import path (`import audit`).\n- **The role name in `0002` is a placeholder.** Replace `app_rw` with your application role before applying it.\n- **The permission check needs wiring.** Your auth layer has to populate `Actor.permissions`; an actor with none is refused.\n- **The reason codes are my proposal.** They are `customer_request`, `risk_review`, `income_reassessment`, `delinquency`, `fraud_prevention`, `regulatory_requirement` and `error_correction`; risk or compliance should confirm the list.\n- **The concurrency test does not exercise Postgres row locking.** On SQLite, writers are serialised by the database lock, so the `FOR UPDATE` path is only tested on a real Postgres.\n\n## Not done\n\n- **Endpoint and admin form:** the repo has no web layer, so there is no endpoint or form that enforces the reason code in the UI.\n- **Masking:** the event holds only the customer id and limit amounts, so I added no masking and no CPF test.\n- **Approval step:** there is no second-person approval; if you add one, it should be its own event.\n- **Reference vectors:** the skill's `evals/vectors/test_audit.py` is not in this repo, so I could not wire it up.\n- **Retention and off-database tamper evidence:** the retention period and a digest stored outside the database are for compliance and ops to set.",
+        "reported": {
+          "tools": [
+            "Edit",
+            "Glob",
+            "Grep",
+            "Read",
+            "Skill",
+            "Write"
+          ],
+          "skills": [
+            "audit-trail",
+            "design",
+            "doctor",
+            "plugin-authoring"
+          ],
+          "mcp_servers": [],
+          "model": "claude-fable-5-2"
+        },
+        "exit_code": 0,
+        "tokens": {
+          "input_tokens": 10,
+          "output_tokens": 57772,
+          "cache_read_input_tokens": 88459,
+          "cache_creation_input_tokens": 66296
+        },
+        "thinking_tokens": 45778,
+        "stop_reason": "end_turn",
+        "stopped": "end_turn",
+        "wall_time": 541.7677343189935,
+        "raw_paths": {
+          "transcript": "raw/audit-trail/1-with-1/subject-transcript.txt",
+          "stderr": "raw/audit-trail/1-with-1/subject-stderr.txt"
+        }
+      },
+      "grader": {
+        "invocation": {
+          "argv": [
+            "claude",
+            "-p",
+            "--output-format",
+            "json",
+            "--model",
+            "claude-sonnet-5-5",
+            "--effort",
+            "xhigh",
+            "--tools",
+            "",
+            "--setting-sources",
+            "project",
+            "--strict-mcp-config",
+            "--no-session-persistence"
+          ],
+          "cwd": "<project>",
+          "env": {
+            "CLAUDE_CODE_DISABLE_CLAUDE_MDS": "1",
+            "CLAUDE_CODE_DISABLE_BUNDLED_SKILLS": "1"
+          },
+          "stdin_path": "raw/audit-trail/1-with-1/grader-stdin.json"
+        },
+        "error": null,
+        "final_answer": "[\n  {\n    \"passed\": true,\n    \"evidence\": \"`audit.record_event` in src/audit.py inserts actor_type, actor_id and on_behalf_of, `before` and `after` as JSON, reason_code and reason_text, occurred_at, and a database-assigned recorded_at. `adjust_credit_limit` passes `before={'credit_limit': current}` and `after={'credit_limit': new_limit_minor}`. It runs in the same transaction as the UPDATE, inside a savepoint. Append-only is enforced by migrations/0002 (REVOKE UPDATE/DELETE/TRUNCATE from the app role, plus triggers that raise). The tests have not been run, as the final answer says.\"\n  },\n  {\n    \"passed\": true,\n    \"evidence\": \"`adjust_credit_limit` raises ValueError when reason_code is not in REASON_CODES or reason_text is blank, and raises PermissionError if the actor lacks `credit_limit:adjust`. `audit.Actor.__post_init__` raises ValueError when actor_id is empty. `record_event` and the table's CHECK constraints also require a reason for user actors. The parametrized test `test_refused_adjustment_changes_nothing_and_writes_no_event` covers a bad reason_code, a blank reason_text and an unprivileged actor, and asserts the limit is unchanged and no event is written. There is no direct test for an empty actor_id, but the `Actor` constructor rejects it.\"\n  },\n  {\n    \"passed\": false,\n    \"evidence\": \"No approval or second-person step exists. `adjust_credit_limit` applies the change immediately for any actor with the `credit_limit:adjust` permission, and there is no threshold on the limit amount or delta. The final answer lists this under 'Not done': 'there is no second-person approval; if you add one, it should be its own event.' No test covers approval either.\"\n  },\n  {\n    \"passed\": true,\n    \"evidence\": \"tests/test_limits_audit.py has `test_adjustment_writes_exactly_one_complete_event`, which asserts exactly one event after the change with the correct before, after, actor, reason, request_id and timestamp. It also has `test_events_cannot_be_updated_or_deleted`, parametrized over UPDATE and DELETE, which expects a 'append-only' error and asserts the trail is unchanged. That test uses SQLite triggers as a stand-in for migrations/0002, so it does not exercise the real migration. An opt-in Postgres test, `test_application_role_cannot_rewrite_events_on_postgres`, checks 'permission denied' for UPDATE, DELETE and TRUNCATE when AUDIT_TEST_APP_DSN is set. None of the tests were executed.\"\n  }\n]",
+        "reported": {},
+        "exit_code": 0,
+        "tokens": {
+          "input_tokens": 2,
+          "output_tokens": 1643,
+          "cache_read_input_tokens": 649,
+          "cache_creation_input_tokens": 278120
+        },
+        "thinking_tokens": 724,
+        "stop_reason": "end_turn",
+        "stopped": "end_turn",
+        "wall_time": 18.521260746005282,
+        "raw_paths": {
+          "transcript": "raw/audit-trail/1-with-1/grader-transcript.txt",
+          "stderr": "raw/audit-trail/1-with-1/grader-stderr.txt"
+        }
+      },
+      "verdicts": [
+        {
+          "expectation": "Writes an append-only audit record with actor, timestamp, previous value, new value and reason",
+          "status": "passed",
+          "grader_verdict": {
+            "passed": true,
+            "evidence": "`audit.record_event` in src/audit.py inserts actor_type, actor_id and on_behalf_of, `before` and `after` as JSON, reason_code and reason_text, occurred_at, and a database-assigned recorded_at. `adjust_credit_limit` passes `before={'credit_limit': current}` and `after={'credit_limit': new_limit_minor}`. It runs in the same transaction as the UPDATE, inside a savepoint. Append-only is enforced by migrations/0002 (REVOKE UPDATE/DELETE/TRUNCATE from the app role, plus triggers that raise). The tests have not been run, as the final answer says."
+          },
+          "evidence": "`audit.record_event` in src/audit.py inserts actor_type, actor_id and on_behalf_of, `before` and `after` as JSON, reason_code and reason_text, occurred_at, and a database-assigned recorded_at. `adjust_credit_limit` passes `before={'credit_limit': current}` and `after={'credit_limit': new_limit_minor}`. It runs in the same transaction as the UPDATE, inside a savepoint. Append-only is enforced by migrations/0002 (REVOKE UPDATE/DELETE/TRUNCATE from the app role, plus triggers that raise). The tests have not been run, as the final answer says.",
+          "code_checks": []
+        },
+        {
+          "expectation": "Rejects an adjustment without a reason or an identified actor",
+          "status": "passed",
+          "grader_verdict": {
+            "passed": true,
+            "evidence": "`adjust_credit_limit` raises ValueError when reason_code is not in REASON_CODES or reason_text is blank, and raises PermissionError if the actor lacks `credit_limit:adjust`. `audit.Actor.__post_init__` raises ValueError when actor_id is empty. `record_event` and the table's CHECK constraints also require a reason for user actors. The parametrized test `test_refused_adjustment_changes_nothing_and_writes_no_event` covers a bad reason_code, a blank reason_text and an unprivileged actor, and asserts the limit is unchanged and no event is written. There is no direct test for an empty actor_id, but the `Actor` constructor rejects it."
+          },
+          "evidence": "`adjust_credit_limit` raises ValueError when reason_code is not in REASON_CODES or reason_text is blank, and raises PermissionError if the actor lacks `credit_limit:adjust`. `audit.Actor.__post_init__` raises ValueError when actor_id is empty. `record_event` and the table's CHECK constraints also require a reason for user actors. The parametrized test `test_refused_adjustment_changes_nothing_and_writes_no_event` covers a bad reason_code, a blank reason_text and an unprivileged actor, and asserts the limit is unchanged and no event is written. There is no direct test for an empty actor_id, but the `Actor` constructor rejects it.",
+          "code_checks": []
+        },
+        {
+          "expectation": "Requires approval or a second person above a threshold",
+          "status": "failed",
+          "grader_verdict": {
+            "passed": false,
+            "evidence": "No approval or second-person step exists. `adjust_credit_limit` applies the change immediately for any actor with the `credit_limit:adjust` permission, and there is no threshold on the limit amount or delta. The final answer lists this under 'Not done': 'there is no second-person approval; if you add one, it should be its own event.' No test covers approval either."
+          },
+          "evidence": "No approval or second-person step exists. `adjust_credit_limit` applies the change immediately for any actor with the `credit_limit:adjust` permission, and there is no threshold on the limit amount or delta. The final answer lists this under 'Not done': 'there is no second-person approval; if you add one, it should be its own event.' No test covers approval either.",
+          "code_checks": []
+        },
+        {
+          "expectation": "Tests that the audit record exists after the change and that the record cannot be updated or deleted",
+          "status": "passed",
+          "grader_verdict": {
+            "passed": true,
+            "evidence": "tests/test_limits_audit.py has `test_adjustment_writes_exactly_one_complete_event`, which asserts exactly one event after the change with the correct before, after, actor, reason, request_id and timestamp. It also has `test_events_cannot_be_updated_or_deleted`, parametrized over UPDATE and DELETE, which expects a 'append-only' error and asserts the trail is unchanged. That test uses SQLite triggers as a stand-in for migrations/0002, so it does not exercise the real migration. An opt-in Postgres test, `test_application_role_cannot_rewrite_events_on_postgres`, checks 'permission denied' for UPDATE, DELETE and TRUNCATE when AUDIT_TEST_APP_DSN is set. None of the tests were executed."
+          },
+          "evidence": "tests/test_limits_audit.py has `test_adjustment_writes_exactly_one_complete_event`, which asserts exactly one event after the change with the correct before, after, actor, reason, request_id and timestamp. It also has `test_events_cannot_be_updated_or_deleted`, parametrized over UPDATE and DELETE, which expects a 'append-only' error and asserts the trail is unchanged. That test uses SQLite triggers as a stand-in for migrations/0002, so it does not exercise the real migration. An opt-in Postgres test, `test_application_role_cannot_rewrite_events_on_postgres`, checks 'permission denied' for UPDATE, DELETE and TRUNCATE when AUDIT_TEST_APP_DSN is set. None of the tests were executed.",
+          "code_checks": [
+            {
+              "kind": "test_file",
+              "passed": true
+            }
+          ]
+        }
+      ],
+      "files_raw_path": "raw/audit-trail/1-with-1/files.json"
+    },
+    {
+      "eval_id": 1,
+      "condition": "without",
+      "run": 1,
+      "installed_paths": [],
+      "files": [
+        {
+          "path": "src/limits.py",
+          "size": 1708,
+          "sha256": "a35e2d5a423a5a5fe80d185581c38f1efbd7f18bb0f67e652540935bff2b0c26",
+          "raw_path": "raw/audit-trail/1-without-1/files/src/limits.py"
+        }
+      ],
+      "subject": {
+        "invocation": {
+          "argv": [
+            "claude",
+            "-p",
+            "--output-format",
+            "json",
+            "--verbose",
+            "--model",
+            "claude-fable-5-2",
+            "--effort",
+            "xhigh",
+            "--max-turns",
+            "30",
+            "--tools",
+            "Read,Write,Edit,Glob,Grep,Skill",
+            "--setting-sources",
+            "project",
+            "--strict-mcp-config",
+            "--permission-mode",
+            "acceptEdits",
+            "--permission-prompts",
+            "none",
+            "--no-session-persistence"
+          ],
+          "cwd": "<project>",
+          "stdin": "Add an admin action to adjust a customer's credit limit, in src/limits.py.",
+          "env": {
+            "CLAUDE_CODE_DISABLE_CLAUDE_MDS": "1",
+            "CLAUDE_CODE_DISABLE_BUNDLED_SKILLS": "1"
+          }
+        },
+        "error": null,
+        "final_answer": "I added `admin_adjust_limit(db, actor, customer_id, new_limit_minor, reason)` to `src/limits.py`. It has not been run or tested: the repo contains only this one file, and I had no way to execute code here.\n\nThe function does the following, in order:\n\n1. **Checks the actor is an admin.** It raises `PermissionError` unless `actor.is_admin is True`; anything else, including a missing attribute, counts as not an admin.\n2. **Validates the input.** It raises `ValueError` unless the limit is a non-negative integer in minor units (floats and bools are rejected) and the reason is a non-empty string.\n3. **Writes the limit** through the existing `set_limit`, which is unchanged. Like `set_limit`, it does not commit.\n4. **Logs the change** with customer id, new limit, `actor.id` and the reason, using the standard `logging` module.\n\nThe repo has no auth model, audit table or DB wrapper to follow, so these are my assumptions:\n\n- **Admin representation:** I assumed a user object with a boolean `is_admin` attribute and an `id`. If your admins are identified by a role or permission check instead, the first check needs to change.\n- **Absolute, not relative:** \"adjust\" sets the limit to a new value, matching `set_limit`, rather than adding or subtracting an amount.\n- **Required reason:** I made `reason` mandatory; that is my addition, not something you asked for.\n- **No customer-exists check:** an unknown `customer_id` updates zero rows silently, as `set_limit` does today. I couldn't tell what `db.execute` returns, so I didn't rely on a row count.\n- **Audit is only a log line:** if you need a durable record, it should be an audit table row written in the same transaction as the update.",
+        "reported": {
+          "tools": [
+            "Edit",
+            "Glob",
+            "Grep",
+            "Read",
+            "Skill",
+            "Write"
+          ],
+          "skills": [
+            "design",
+            "doctor",
+            "plugin-authoring"
+          ],
+          "mcp_servers": [],
+          "model": "claude-fable-5-2"
+        },
+        "exit_code": 0,
+        "tokens": {
+          "input_tokens": 6,
+          "output_tokens": 3547,
+          "cache_read_input_tokens": 20997,
+          "cache_creation_input_tokens": 6866
+        },
+        "thinking_tokens": 2057,
+        "stop_reason": "end_turn",
+        "stopped": "end_turn",
+        "wall_time": 38.84701618600229,
+        "raw_paths": {
+          "transcript": "raw/audit-trail/1-without-1/subject-transcript.txt",
+          "stderr": "raw/audit-trail/1-without-1/subject-stderr.txt"
+        }
+      },
+      "grader": {
+        "invocation": {
+          "argv": [
+            "claude",
+            "-p",
+            "--output-format",
+            "json",
+            "--model",
+            "claude-sonnet-5-5",
+            "--effort",
+            "xhigh",
+            "--tools",
+            "",
+            "--setting-sources",
+            "project",
+            "--strict-mcp-config",
+            "--no-session-persistence"
+          ],
+          "cwd": "<project>",
+          "env": {
+            "CLAUDE_CODE_DISABLE_CLAUDE_MDS": "1",
+            "CLAUDE_CODE_DISABLE_BUNDLED_SKILLS": "1"
+          },
+          "stdin_path": "raw/audit-trail/1-without-1/grader-stdin.json"
+        },
+        "error": null,
+        "final_answer": "[\n  {\n    \"expectation\": \"Writes an append-only audit record with actor, timestamp, previous value, new value and reason\",\n    \"passed\": false,\n    \"evidence\": \"src/limits.py only calls logger.info(...) with customer_id, new_limit_minor, actor_id and reason. It writes no audit table row or other durable record, and the log line is not append-only by construction. It never reads the previous limit, so previous value is missing. It sets no explicit timestamp. The final answer admits this: 'Audit is only a log line'.\"\n  },\n  {\n    \"expectation\": \"Rejects an adjustment without a reason or an identified actor\",\n    \"passed\": false,\n    \"evidence\": \"The reason check works: a non-string or blank reason raises ValueError. Actor identification is only partly enforced. The code requires `getattr(actor, 'is_admin', False) is True`, so a None actor is rejected, but it never validates `actor.id`. An admin object with no id passes and is logged with `actor_id=None` via `getattr(actor, 'id', None)`. The actor is therefore not required to be identified, and only half of the expectation is met.\"\n  },\n  {\n    \"expectation\": \"Requires approval or a second person above a threshold\",\n    \"passed\": false,\n    \"evidence\": \"No threshold, approval step or second-approver logic exists in admin_adjust_limit. Any single admin can set any non-negative integer limit. The final answer does not mention this gap.\"\n  },\n  {\n    \"expectation\": \"Tests that the audit record exists after the change and that the record cannot be updated or deleted\",\n    \"passed\": false,\n    \"evidence\": \"No test file was created. The only produced file is src/limits.py, and the final answer says 'It has not been run or tested'. No audit record exists to test, and nothing enforces that one cannot be updated or deleted.\"\n  }\n]",
+        "reported": {},
+        "exit_code": 0,
+        "tokens": {
+          "input_tokens": 2,
+          "output_tokens": 1202,
+          "cache_read_input_tokens": 649,
+          "cache_creation_input_tokens": 27447
+        },
+        "thinking_tokens": 601,
+        "stop_reason": "end_turn",
+        "stopped": "end_turn",
+        "wall_time": 11.359001557000738,
+        "raw_paths": {
+          "transcript": "raw/audit-trail/1-without-1/grader-transcript.txt",
+          "stderr": "raw/audit-trail/1-without-1/grader-stderr.txt"
+        }
+      },
+      "verdicts": [
+        {
+          "expectation": "Writes an append-only audit record with actor, timestamp, previous value, new value and reason",
+          "status": "failed",
+          "grader_verdict": {
+            "expectation": "Writes an append-only audit record with actor, timestamp, previous value, new value and reason",
+            "passed": false,
+            "evidence": "src/limits.py only calls logger.info(...) with customer_id, new_limit_minor, actor_id and reason. It writes no audit table row or other durable record, and the log line is not append-only by construction. It never reads the previous limit, so previous value is missing. It sets no explicit timestamp. The final answer admits this: 'Audit is only a log line'."
+          },
+          "evidence": "src/limits.py only calls logger.info(...) with customer_id, new_limit_minor, actor_id and reason. It writes no audit table row or other durable record, and the log line is not append-only by construction. It never reads the previous limit, so previous value is missing. It sets no explicit timestamp. The final answer admits this: 'Audit is only a log line'.",
+          "code_checks": []
+        },
+        {
+          "expectation": "Rejects an adjustment without a reason or an identified actor",
+          "status": "failed",
+          "grader_verdict": {
+            "expectation": "Rejects an adjustment without a reason or an identified actor",
+            "passed": false,
+            "evidence": "The reason check works: a non-string or blank reason raises ValueError. Actor identification is only partly enforced. The code requires `getattr(actor, 'is_admin', False) is True`, so a None actor is rejected, but it never validates `actor.id`. An admin object with no id passes and is logged with `actor_id=None` via `getattr(actor, 'id', None)`. The actor is therefore not required to be identified, and only half of the expectation is met."
+          },
+          "evidence": "The reason check works: a non-string or blank reason raises ValueError. Actor identification is only partly enforced. The code requires `getattr(actor, 'is_admin', False) is True`, so a None actor is rejected, but it never validates `actor.id`. An admin object with no id passes and is logged with `actor_id=None` via `getattr(actor, 'id', None)`. The actor is therefore not required to be identified, and only half of the expectation is met.",
+          "code_checks": []
+        },
+        {
+          "expectation": "Requires approval or a second person above a threshold",
+          "status": "failed",
+          "grader_verdict": {
+            "expectation": "Requires approval or a second person above a threshold",
+            "passed": false,
+            "evidence": "No threshold, approval step or second-approver logic exists in admin_adjust_limit. Any single admin can set any non-negative integer limit. The final answer does not mention this gap."
+          },
+          "evidence": "No threshold, approval step or second-approver logic exists in admin_adjust_limit. Any single admin can set any non-negative integer limit. The final answer does not mention this gap.",
+          "code_checks": []
+        },
+        {
+          "expectation": "Tests that the audit record exists after the change and that the record cannot be updated or deleted",
+          "status": "failed",
+          "grader_verdict": {
+            "expectation": "Tests that the audit record exists after the change and that the record cannot be updated or deleted",
+            "passed": false,
+            "evidence": "No test file was created. The only produced file is src/limits.py, and the final answer says 'It has not been run or tested'. No audit record exists to test, and nothing enforces that one cannot be updated or deleted."
+          },
+          "evidence": "No test file was created. The only produced file is src/limits.py, and the final answer says 'It has not been run or tested'. No audit record exists to test, and nothing enforces that one cannot be updated or deleted.",
+          "code_checks": [
+            {
+              "kind": "test_file",
+              "passed": false
+            }
+          ]
+        }
+      ],
+      "files_raw_path": "raw/audit-trail/1-without-1/files.json"
+    },
+    {
+      "eval_id": 2,
+      "condition": "with",
+      "run": 1,
+      "installed_paths": [
+        ".claude/skills/audit-trail/SKILL.md"
+      ],
+      "files": [
+        {
+          "path": "migrations/001_audit_events.sql",
+          "size": 8373,
+          "sha256": "a22c9c0c0ced05cb4ebd59ffe085ef2c2323a573c87f8757f88ed8e452f8c7da",
+          "raw_path": "raw/audit-trail/2-with-1/files/migrations/001_audit_events.sql"
+        },
+        {
+          "path": "src/fee_table.py",
+          "size": 8583,
+          "sha256": "f5caed92ca65ec67adcf3cd4d58e8b7d03ce981c25c2c85e720598f767e5fa22",
+          "raw_path": "raw/audit-trail/2-with-1/files/src/fee_table.py"
+        },
+        {
+          "path": "tests/test_fee_audit.py",
+          "size": 11766,
+          "sha256": "cdac6a1f052eaac30ecb718b2cbcee0f5e3ac2cd27422e3907b33d8b3c4ec7c3",
+          "raw_path": "raw/audit-trail/2-with-1/files/tests/test_fee_audit.py"
+        }
+      ],
+      "subject": {
+        "invocation": {
+          "argv": [
+            "claude",
+            "-p",
+            "--output-format",
+            "json",
+            "--verbose",
+            "--model",
+            "claude-fable-5-2",
+            "--effort",
+            "xhigh",
+            "--max-turns",
+            "30",
+            "--tools",
+            "Read,Write,Edit,Glob,Grep,Skill",
+            "--setting-sources",
+            "project",
+            "--strict-mcp-config",
+            "--permission-mode",
+            "acceptEdits",
+            "--permission-prompts",
+            "none",
+            "--no-session-persistence"
+          ],
+          "cwd": "<project>",
+          "stdin": "Compliance asks who changed the fee schedule in March and what it looked like before. Our fee table only has updated_at. See src/fee_table.py.",
+          "env": {
+            "CLAUDE_CODE_DISABLE_CLAUDE_MDS": "1",
+            "CLAUDE_CODE_DISABLE_BUNDLED_SKILLS": "1"
+          }
+        },
+        "error": null,
+        "final_answer": "Finished writing the audit trail; nothing has been run, since I have no shell or database here.\n\n## The March question\n\n**It can't be answered from the fee table or this code.** `update_fee` overwrote `fee_bps` in place and never recorded an actor, so the earlier values and the person were never stored.\n\nThe table can still tell you one thing, so run this before anyone changes another fee (the next change overwrites the timestamp):\n\n```sql\nSELECT product, fee_bps, updated_at FROM fees ORDER BY product;\n```\n\n- **`updated_at` in March:** that product was last changed then, and the current `fee_bps` is the post-change value.\n- **`updated_at` after March:** even the fact of a March change is gone from this table.\n\nThe answer may still exist outside this repo:\n\n- **What it looked like before:** a database backup or warehouse snapshot from February, or the rate actually applied to transactions charged before and after the change.\n- **Who:** access or request logs of whatever calls `update_fee`, database statement logs, deploy history, and the change ticket or approval thread.\n\n## What I changed so it is answerable from now on\n\n- **`migrations/001_audit_events.sql`** adds an `audit_events` table that records who, what, before, after, why and when, with a per-product sequence and a hash chain. Triggers and privileges block update and delete. The migration also snapshots today's schedule, including each `updated_at`, as a baseline.\n- **`src/fee_table.py`**: `update_fee` now writes the fee change and its event in one SQL statement, so neither can happen without the other. I added `fee_history` (filter by product, actor, time), `export_fee_history` (JSON lines) and `fee_chain_breaks`.\n- **`tests/test_fee_audit.py`** has one test per rule. The tests are unrun and need `TEST_DATABASE_URL` and psycopg 3.\n\n## Before you deploy\n\n- **Callers will break.** `update_fee` now requires `actor`, `reason_code`, `request_id` and `source`. It also raises `FeeNotFound` for an unknown product instead of silently doing nothing. I could not see any callers in this repo.\n- **The migration needs your application's database role.** It fails until you set `audit.app_role`; the command is in the file header. Run it as a different, owner role.\n- **The reason-code list is my proposal.** Compliance should confirm `REASON_CODES`.\n- **I assumed PostgreSQL 13+ with psycopg**, based on the `%s` placeholders. If that is wrong, the migration and SQL need porting.\n\n## Not covered\n\n- The skill's reference vectors file (`evals/vectors/test_audit.py`) is not in the repo, so it was not wired up.\n- There are no masking or approver tests: fee events hold no personal data and there is no approval flow.\n- Removal of an object's newest events is only detectable if the head hashes are copied outside the database.\n- The retention period has to come from compliance; nothing here deletes events.",
+        "reported": {
+          "tools": [
+            "Edit",
+            "Glob",
+            "Grep",
+            "Read",
+            "Skill",
+            "Write"
+          ],
+          "skills": [
+            "audit-trail",
+            "design",
+            "doctor",
+            "plugin-authoring"
+          ],
+          "mcp_servers": [],
+          "model": "claude-fable-5-2"
+        },
+        "exit_code": 0,
+        "tokens": {
+          "input_tokens": 8,
+          "output_tokens": 65536,
+          "cache_read_input_tokens": 21214,
+          "cache_creation_input_tokens": 72176
+        },
+        "thinking_tokens": 52492,
+        "stop_reason": "end_turn",
+        "stopped": "end_turn",
+        "wall_time": 620.012377084,
+        "raw_paths": {
+          "transcript": "raw/audit-trail/2-with-1/subject-transcript.txt",
+          "stderr": "raw/audit-trail/2-with-1/subject-stderr.txt"
+        }
+      },
+      "grader": {
+        "invocation": {
+          "argv": [
+            "claude",
+            "-p",
+            "--output-format",
+            "json",
+            "--model",
+            "claude-sonnet-5-5",
+            "--effort",
+            "xhigh",
+            "--tools",
+            "",
+            "--setting-sources",
+            "project",
+            "--strict-mcp-config",
+            "--no-session-persistence"
+          ],
+          "cwd": "<project>",
+          "env": {
+            "CLAUDE_CODE_DISABLE_CLAUDE_MDS": "1",
+            "CLAUDE_CODE_DISABLE_BUNDLED_SKILLS": "1"
+          },
+          "stdin_path": "raw/audit-trail/2-with-1/grader-stdin.json"
+        },
+        "error": null,
+        "final_answer": "[\n  {\n    \"passed\": true,\n    \"evidence\": \"The final answer says: \\\"It can't be answered from the fee table or this code. `update_fee` overwrote `fee_bps` in place and never recorded an actor, so the earlier values and the person were never stored.\\\" It adds that `updated_at` can only show when a product was last changed, and that if the last change was after March, even the fact of a March change is gone.\"\n  },\n  {\n    \"passed\": true,\n    \"evidence\": \"`migrations/001_audit_events.sql` creates `audit_events` with actor_type/actor_id/on_behalf_of, `before`, `after`, reason, `occurred_at` and `recorded_at`. A BEFORE UPDATE/DELETE/TRUNCATE trigger rejects changes, and the app role gets INSERT and SELECT only. In `src/fee_table.py`, `update_fee` runs one `WITH changed AS (UPDATE fees ... RETURNING ...) INSERT INTO audit_events ...` statement, so the fee change and its event commit or fail together.\"\n  },\n  {\n    \"passed\": true,\n    \"evidence\": \"The answer states the March question cannot be answered from the table and offers only outside sources (backups, snapshots, logs, tickets). The migration's baseline row says: \\\"State when the audit trail was introduced. Changes before this point were not recorded.\\\" It also says it will not invent an actor for earlier changes.\"\n  },\n  {\n    \"passed\": true,\n    \"evidence\": \"`tests/test_fee_audit.py` includes `test_change_writes_exactly_one_event_with_who_what_why`, which checks one event with actor, before, after, reason and request id after `update_fee`. It also has `test_events_cannot_be_changed_or_removed`, which asserts UPDATE, DELETE and TRUNCATE raise InsufficientPrivilege, including when the role has been granted write access, and that the events remain. The answer says the tests are unrun and need `TEST_DATABASE_URL` and psycopg 3.\"\n  }\n]",
+        "reported": {},
+        "exit_code": 0,
+        "tokens": {
+          "input_tokens": 2,
+          "output_tokens": 1175,
+          "cache_read_input_tokens": 649,
+          "cache_creation_input_tokens": 316200
+        },
+        "thinking_tokens": 500,
+        "stop_reason": "end_turn",
+        "stopped": "end_turn",
+        "wall_time": 17.205440172001545,
+        "raw_paths": {
+          "transcript": "raw/audit-trail/2-with-1/grader-transcript.txt",
+          "stderr": "raw/audit-trail/2-with-1/grader-stderr.txt"
+        }
+      },
+      "verdicts": [
+        {
+          "expectation": "States that updated_at alone cannot answer who changed what or the prior value",
+          "status": "passed",
+          "grader_verdict": {
+            "passed": true,
+            "evidence": "The final answer says: \"It can't be answered from the fee table or this code. `update_fee` overwrote `fee_bps` in place and never recorded an actor, so the earlier values and the person were never stored.\" It adds that `updated_at` can only show when a product was last changed, and that if the last change was after March, even the fact of a March change is gone."
+          },
+          "evidence": "The final answer says: \"It can't be answered from the fee table or this code. `update_fee` overwrote `fee_bps` in place and never recorded an actor, so the earlier values and the person were never stored.\" It adds that `updated_at` can only show when a product was last changed, and that if the last change was after March, even the fact of a March change is gone.",
+          "code_checks": []
+        },
+        {
+          "expectation": "Adds an append-only history or event table with actor, time, before and after, written in the same transaction as the change",
+          "status": "passed",
+          "grader_verdict": {
+            "passed": true,
+            "evidence": "`migrations/001_audit_events.sql` creates `audit_events` with actor_type/actor_id/on_behalf_of, `before`, `after`, reason, `occurred_at` and `recorded_at`. A BEFORE UPDATE/DELETE/TRUNCATE trigger rejects changes, and the app role gets INSERT and SELECT only. In `src/fee_table.py`, `update_fee` runs one `WITH changed AS (UPDATE fees ... RETURNING ...) INSERT INTO audit_events ...` statement, so the fee change and its event commit or fail together."
+          },
+          "evidence": "`migrations/001_audit_events.sql` creates `audit_events` with actor_type/actor_id/on_behalf_of, `before`, `after`, reason, `occurred_at` and `recorded_at`. A BEFORE UPDATE/DELETE/TRUNCATE trigger rejects changes, and the app role gets INSERT and SELECT only. In `src/fee_table.py`, `update_fee` runs one `WITH changed AS (UPDATE fees ... RETURNING ...) INSERT INTO audit_events ...` statement, so the fee change and its event commit or fail together.",
+          "code_checks": []
+        },
+        {
+          "expectation": "Says plainly that history before the change cannot be reconstructed from the table",
+          "status": "passed",
+          "grader_verdict": {
+            "passed": true,
+            "evidence": "The answer states the March question cannot be answered from the table and offers only outside sources (backups, snapshots, logs, tickets). The migration's baseline row says: \"State when the audit trail was introduced. Changes before this point were not recorded.\" It also says it will not invent an actor for earlier changes."
+          },
+          "evidence": "The answer states the March question cannot be answered from the table and offers only outside sources (backups, snapshots, logs, tickets). The migration's baseline row says: \"State when the audit trail was introduced. Changes before this point were not recorded.\" It also says it will not invent an actor for earlier changes.",
+          "code_checks": []
+        },
+        {
+          "expectation": "Writes tests that a fee change produces a history row and that history rows are immutable",
+          "status": "passed",
+          "grader_verdict": {
+            "passed": true,
+            "evidence": "`tests/test_fee_audit.py` includes `test_change_writes_exactly_one_event_with_who_what_why`, which checks one event with actor, before, after, reason and request id after `update_fee`. It also has `test_events_cannot_be_changed_or_removed`, which asserts UPDATE, DELETE and TRUNCATE raise InsufficientPrivilege, including when the role has been granted write access, and that the events remain. The answer says the tests are unrun and need `TEST_DATABASE_URL` and psycopg 3."
+          },
+          "evidence": "`tests/test_fee_audit.py` includes `test_change_writes_exactly_one_event_with_who_what_why`, which checks one event with actor, before, after, reason and request id after `update_fee`. It also has `test_events_cannot_be_changed_or_removed`, which asserts UPDATE, DELETE and TRUNCATE raise InsufficientPrivilege, including when the role has been granted write access, and that the events remain. The answer says the tests are unrun and need `TEST_DATABASE_URL` and psycopg 3.",
+          "code_checks": []
+        }
+      ],
+      "files_raw_path": "raw/audit-trail/2-with-1/files.json"
+    },
+    {
+      "eval_id": 2,
+      "condition": "without",
+      "run": 1,
+      "installed_paths": [],
+      "files": [
+        {
+          "path": "migrations/001_fee_history.sql",
+          "size": 1057,
+          "sha256": "4ab1ab20ad65f2d607d294f0aea2f30172cde4433ac1fa09e0dab39bbf8ea593",
+          "raw_path": "raw/audit-trail/2-without-1/files/migrations/001_fee_history.sql"
+        },
+        {
+          "path": "src/fee_table.py",
+          "size": 1273,
+          "sha256": "a34c4a85c71ffe8c525b55d3b2c59d78fc77fdc724fadc401a8c59de4577e943",
+          "raw_path": "raw/audit-trail/2-without-1/files/src/fee_table.py"
+        }
+      ],
+      "subject": {
+        "invocation": {
+          "argv": [
+            "claude",
+            "-p",
+            "--output-format",
+            "json",
+            "--verbose",
+            "--model",
+            "claude-fable-5-2",
+            "--effort",
+            "xhigh",
+            "--max-turns",
+            "30",
+            "--tools",
+            "Read,Write,Edit,Glob,Grep,Skill",
+            "--setting-sources",
+            "project",
+            "--strict-mcp-config",
+            "--permission-mode",
+            "acceptEdits",
+            "--permission-prompts",
+            "none",
+            "--no-session-persistence"
+          ],
+          "cwd": "<project>",
+          "stdin": "Compliance asks who changed the fee schedule in March and what it looked like before. Our fee table only has updated_at. See src/fee_table.py.",
+          "env": {
+            "CLAUDE_CODE_DISABLE_CLAUDE_MDS": "1",
+            "CLAUDE_CODE_DISABLE_BUNDLED_SKILLS": "1"
+          }
+        },
+        "error": null,
+        "final_answer": "Files are written; here's where things stand.\n\n**The March question can't be answered from this table or code.** `update_fee` overwrote `fee_bps` in place and recorded no actor, so the old value and the author were never stored. `updated_at` only shows when each product was last touched, and any change since March has overwritten that too.\n\n## Where the March answer may still exist\n\n- **What it looked like before:**\n  - **Backups:** restore a database backup or snapshot from before the change and diff the `fees` table. It's been about eight months, so check retention now.\n  - **Copies:** warehouse or replica copies of `fees` may hold the old rows.\n  - **Transactions:** fees actually charged on February and March transactions give the old rate (fee amount \u00f7 notional).\n- **Who changed it:**\n  - **Database logs:** Postgres logs record the user and statement only if `log_statement` or pgaudit was enabled.\n  - **Application logs:** search application and admin access logs around the timestamp.\n  - **Change records:** check deploy history and change tickets for the same window.\n- **Narrowing the timestamp:** this query shows rows last touched in March, provided they haven't changed since:\n  ```sql\n  SELECT product, fee_bps, updated_at FROM fees\n  WHERE updated_at >= '2026-03-01' AND updated_at < '2026-04-01';\n  ```\n\nI have no database or log access from here, so I couldn't check any of these.\n\n## What I changed so this is answerable next time\n\nNothing here has been run: I have no shell or database in this session, so the SQL and Python are untested.\n\n- **`migrations/001_fee_history.sql`**: a new append-only `fee_history` table holding the old and new fee, `changed_by`, an optional `reason`, the timestamp and the database login.\n- **`src/fee_table.py`**: `update_fee` now updates the fee and writes the history row in a single statement, so neither can happen without the other.\n\nBefore deploying:\n\n1. **Apply the migration first.** Otherwise every fee update will fail on the missing table. It's a plain SQL file, so move it into whatever migration tool you use.\n2. **Update the callers.** `changed_by` is now a required keyword argument, so existing calls to `update_fee(db, product, fee_bps)` will raise a `TypeError` until they pass it. I couldn't see any callers; this directory contains only the one file.\n3. **Check the column type.** I used `numeric` for the old and new fee because I couldn't see the type of `fees.fee_bps`; adjust it to match.\n4. **Fill in the `REVOKE`.** The line that makes the table append-only for the application role is commented out, pending your role name.\n\nDecision for you: this only records changes made through `update_fee`. Someone running `UPDATE fees` by hand in SQL still leaves no trace, which may be what happened in March. A database trigger would close that gap, but it only knows the database login, not the person. Say if you want it added.",
+        "reported": {
+          "tools": [
+            "Edit",
+            "Glob",
+            "Grep",
+            "Read",
+            "Skill",
+            "Write"
+          ],
+          "skills": [
+            "design",
+            "doctor",
+            "plugin-authoring"
+          ],
+          "mcp_servers": [],
+          "model": "claude-fable-5-2"
+        },
+        "exit_code": 0,
+        "tokens": {
+          "input_tokens": 6,
+          "output_tokens": 9126,
+          "cache_read_input_tokens": 21322,
+          "cache_creation_input_tokens": 12295
+        },
+        "thinking_tokens": 6734,
+        "stop_reason": "end_turn",
+        "stopped": "end_turn",
+        "wall_time": 95.80335465099779,
+        "raw_paths": {
+          "transcript": "raw/audit-trail/2-without-1/subject-transcript.txt",
+          "stderr": "raw/audit-trail/2-without-1/subject-stderr.txt"
+        }
+      },
+      "grader": {
+        "invocation": {
+          "argv": [
+            "claude",
+            "-p",
+            "--output-format",
+            "json",
+            "--model",
+            "claude-sonnet-5-5",
+            "--effort",
+            "xhigh",
+            "--tools",
+            "",
+            "--setting-sources",
+            "project",
+            "--strict-mcp-config",
+            "--no-session-persistence"
+          ],
+          "cwd": "<project>",
+          "env": {
+            "CLAUDE_CODE_DISABLE_CLAUDE_MDS": "1",
+            "CLAUDE_CODE_DISABLE_BUNDLED_SKILLS": "1"
+          },
+          "stdin_path": "raw/audit-trail/2-without-1/grader-stdin.json"
+        },
+        "error": null,
+        "final_answer": "[\n  {\n    \"passed\": true,\n    \"evidence\": \"The final answer opens with \\\"The March question can't be answered from this table or code. `update_fee` overwrote `fee_bps` in place and recorded no actor, so the old value and the author were never stored. `updated_at` only shows when each product was last touched, and any change since March has overwritten that too.\\\" This covers both the missing actor and the missing prior value.\"\n  },\n  {\n    \"passed\": true,\n    \"evidence\": \"migrations/001_fee_history.sql creates `fee_history` with `old_fee_bps`, `new_fee_bps`, `changed_by`, `changed_at` and `db_role`. `update_fee` in src/fee_table.py uses one statement (a CTE with `FOR UPDATE`, then `UPDATE fees`, then `INSERT INTO fee_history`), so the change and its history row commit atomically. Caveat: append-only is by design only, because the `REVOKE UPDATE, DELETE, TRUNCATE` line is commented out pending a role name. The answer discloses this in its item 4.\"\n  },\n  {\n    \"passed\": true,\n    \"evidence\": \"The answer says the old value and author \\\"were never stored\\\" and that the March question \\\"can't be answered from this table or code.\\\" It then lists only external sources that might still hold the data (backups, warehouse copies, charged-fee transactions, database logs if enabled, application logs, change tickets), says it could not check any of them, and notes the new table only helps going forward.\"\n  },\n  {\n    \"passed\": false,\n    \"evidence\": \"No tests were written. produced_files holds only migrations/001_fee_history.sql and src/fee_table.py, and the transcript shows only two Write calls, both to those files. Nothing checks that a fee change produces a history row or that history rows are immutable. The answer says only \\\"Nothing here has been run... the SQL and Python are untested.\\\"\"\n  }\n]",
+        "reported": {},
+        "exit_code": 0,
+        "tokens": {
+          "input_tokens": 2,
+          "output_tokens": 1504,
+          "cache_read_input_tokens": 649,
+          "cache_creation_input_tokens": 54804
+        },
+        "thinking_tokens": 877,
+        "stop_reason": "end_turn",
+        "stopped": "end_turn",
+        "wall_time": 14.776375512999948,
+        "raw_paths": {
+          "transcript": "raw/audit-trail/2-without-1/grader-transcript.txt",
+          "stderr": "raw/audit-trail/2-without-1/grader-stderr.txt"
+        }
+      },
+      "verdicts": [
+        {
+          "expectation": "States that updated_at alone cannot answer who changed what or the prior value",
+          "status": "passed",
+          "grader_verdict": {
+            "passed": true,
+            "evidence": "The final answer opens with \"The March question can't be answered from this table or code. `update_fee` overwrote `fee_bps` in place and recorded no actor, so the old value and the author were never stored. `updated_at` only shows when each product was last touched, and any change since March has overwritten that too.\" This covers both the missing actor and the missing prior value."
+          },
+          "evidence": "The final answer opens with \"The March question can't be answered from this table or code. `update_fee` overwrote `fee_bps` in place and recorded no actor, so the old value and the author were never stored. `updated_at` only shows when each product was last touched, and any change since March has overwritten that too.\" This covers both the missing actor and the missing prior value.",
+          "code_checks": []
+        },
+        {
+          "expectation": "Adds an append-only history or event table with actor, time, before and after, written in the same transaction as the change",
+          "status": "passed",
+          "grader_verdict": {
+            "passed": true,
+            "evidence": "migrations/001_fee_history.sql creates `fee_history` with `old_fee_bps`, `new_fee_bps`, `changed_by`, `changed_at` and `db_role`. `update_fee` in src/fee_table.py uses one statement (a CTE with `FOR UPDATE`, then `UPDATE fees`, then `INSERT INTO fee_history`), so the change and its history row commit atomically. Caveat: append-only is by design only, because the `REVOKE UPDATE, DELETE, TRUNCATE` line is commented out pending a role name. The answer discloses this in its item 4."
+          },
+          "evidence": "migrations/001_fee_history.sql creates `fee_history` with `old_fee_bps`, `new_fee_bps`, `changed_by`, `changed_at` and `db_role`. `update_fee` in src/fee_table.py uses one statement (a CTE with `FOR UPDATE`, then `UPDATE fees`, then `INSERT INTO fee_history`), so the change and its history row commit atomically. Caveat: append-only is by design only, because the `REVOKE UPDATE, DELETE, TRUNCATE` line is commented out pending a role name. The answer discloses this in its item 4.",
+          "code_checks": []
+        },
+        {
+          "expectation": "Says plainly that history before the change cannot be reconstructed from the table",
+          "status": "passed",
+          "grader_verdict": {
+            "passed": true,
+            "evidence": "The answer says the old value and author \"were never stored\" and that the March question \"can't be answered from this table or code.\" It then lists only external sources that might still hold the data (backups, warehouse copies, charged-fee transactions, database logs if enabled, application logs, change tickets), says it could not check any of them, and notes the new table only helps going forward."
+          },
+          "evidence": "The answer says the old value and author \"were never stored\" and that the March question \"can't be answered from this table or code.\" It then lists only external sources that might still hold the data (backups, warehouse copies, charged-fee transactions, database logs if enabled, application logs, change tickets), says it could not check any of them, and notes the new table only helps going forward.",
+          "code_checks": []
+        },
+        {
+          "expectation": "Writes tests that a fee change produces a history row and that history rows are immutable",
+          "status": "failed",
+          "grader_verdict": {
+            "passed": false,
+            "evidence": "No tests were written. produced_files holds only migrations/001_fee_history.sql and src/fee_table.py, and the transcript shows only two Write calls, both to those files. Nothing checks that a fee change produces a history row or that history rows are immutable. The answer says only \"Nothing here has been run... the SQL and Python are untested.\""
+          },
+          "evidence": "No tests were written. produced_files holds only migrations/001_fee_history.sql and src/fee_table.py, and the transcript shows only two Write calls, both to those files. Nothing checks that a fee change produces a history row or that history rows are immutable. The answer says only \"Nothing here has been run... the SQL and Python are untested.\"",
+          "code_checks": []
+        }
+      ],
+      "files_raw_path": "raw/audit-trail/2-without-1/files.json"
+    }
+  ]
+}

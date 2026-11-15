@@ -1,32 +1,41 @@
 # fintech-skills
 
-Skills de engenharia fintech para agentes de código: um ponto de entrada de auditoria e doze
-skills que ensinam Claude Code, Codex, Cursor, Copilot e qualquer agente que leia `SKILL.md` a
-tratar dinheiro como sistemas fintech de produção tratam. Toda skill vem com evals e vetores de
-teste que rodam no CI.
+Agentes de código erram código de dinheiro: float para valor, chave de idempotência nova a cada
+retry, webhook tratado como verdade. Estas 13 skills ensinam Claude Code, Codex, Cursor e qualquer
+agente que leia `SKILL.md` a escrever como um engenheiro sênior de pagamentos, com os testes na
+mesma mudança.
 
-**Para** quem revisa o código de dinheiro que um agente escreveu, numa fintech ou num SaaS que
-movimenta dinheiro, e quer que o agente faça as escolhas que um engenheiro sênior de pagamentos
-faria, com os testes na mesma mudança. E para o time brasileiro que precisa de Pix, boleto, CPF e
-CNPJ e NF-e certos de primeira.
+**Em prompts reservados, o Opus 5.5 foi de 31% para 81%** das expectativas avaliadas atendidas com
+as skills ([execução](evals/results/20261109T110030Z-fa81209-heldout/summary.md)). Sonnet 5.5: de 24% para 70% ([execução](evals/results/20261108T194552Z-fa81209-heldout/summary.md)).
+
+```
+/plugin marketplace add felipealvarenga/fintech-skills
+/plugin install fintech-skills@felipealvarenga
+```
+
+Codex, a CLI de skills e cópia manual: [Instalação](#instalação).
+
+```python
+# dividir R$ 100,00 em três                        # repetir uma cobrança após timeout
+- shares = [round(total * r, 2) for r in ratios]  - key = uuid4()            # chave nova a cada tentativa
++ shares = allocate(10_000, [50, 30, 20])          + key = f"{tenant}:charge:{order_id}"
++ # -> [5000, 3000, 2000], soma sempre preservada  + # mesma chave em todo retry; o processador deduplica
+```
+
+A coluna da esquerda perde ou inventa centavos em proporções reais; a da direita preserva a soma
+por construção. A chave da esquerda cobra o cliente duas vezes depois de um timeout; com a da
+direita o retry é uma duplicata que o processador deduplica, enquanto o processador guardar a
+chave. As skills trazem as outras cem regras como essas, cada uma com um teste.
 
 [English](README.md)
 
-<!-- generated:headline -->
-**Medido.** Os mesmos 91 prompts rodaram no `claude-sonnet-5-5` e `claude-opus-5-5` com e sem as skills (skills em
-`fa81209`), e `claude-sonnet-5-5` avaliou cada transcrição contra expectativas escritas antes
-da execução. A nota é a fração das expectativas que o avaliador marcou como atendidas; o código do agente é
-lido, não executado. `claude-sonnet-5-5`: **81% com as skills, 24% sem** (299 contra 87 de 370); `claude-opus-5-5`: **89% com as skills, 35% sem** (328 contra 130 de 370). Por skill,
-método e transcrições brutas: [evals/results/20261108T180307Z-fa81209](evals/results/20261108T180307Z-fa81209/summary.md), [evals/results/20261109T103432Z-fa81209](evals/results/20261109T103432Z-fa81209/summary.md). Esses prompts são prompts de desenvolvimento: as skills foram revisadas
-contra as falhas das execuções anteriores neles. No conjunto reservado, prompts em `evals/heldout/` nunca lidos ao editar uma skill: `claude-sonnet-5-5`: **70% com, 24% sem** (73 contra 25 de 105, [evals/results/20261108T194552Z-fa81209-heldout](evals/results/20261108T194552Z-fa81209-heldout/summary.md)); `claude-opus-5-5`: **81% com, 31% sem** (85 contra 33 de 105, [evals/results/20261109T110030Z-fa81209-heldout](evals/results/20261109T110030Z-fa81209-heldout/summary.md)); `claude-fable-5-2`: **88% com, 35% sem** (92 contra 37 de 105, [evals/results/20261110T031626Z-fa81209-heldout](evals/results/20261110T031626Z-fa81209-heldout/summary.md)).
-<!-- /generated:headline -->
-
 ## Por que instalar
 
-Agentes escrevem código de pagamento rápido e errado do mesmo jeito que pessoas: float para
-valores, coluna de saldo atualizada no lugar, retry que cobra duas vezes, webhook tratado como
-verdade, conciliação que esconde diferenças atrás de uma tolerância. Cada skill corrige um
-desses, com regras testáveis, um checklist de revisão e os testes que a mudança precisa incluir.
+**Para** quem revisa o código de dinheiro que um agente escreveu, numa fintech ou num SaaS que
+movimenta dinheiro. E para o time brasileiro que precisa de Pix, boleto, CPF e CNPJ e NF-e certos
+de primeira. Cada skill cobre uma falha (coluna de saldo atualizada no lugar, retry que cobra duas
+vezes, conciliação que esconde diferenças atrás de uma tolerância) com regras testáveis, um
+checklist de revisão e os testes que a mudança precisa incluir.
 
 O que você ganha nos primeiros dez minutos:
 
@@ -43,6 +52,17 @@ O que você ganha nos primeiros dez minutos:
 Não é a ferramenta certa se você quer a API de um fornecedor documentada (use o plugin do
 fornecedor, veja Escopo) ou um framework de processo para todo o desenvolvimento; estas skills são
 regras de domínio e convivem com esses pacotes.
+
+## Resultados
+
+<!-- generated:headline -->
+**Medido.** Os mesmos 91 prompts rodaram no `claude-sonnet-5-5` e `claude-opus-5-5` com e sem as skills (skills em
+`fa81209`), e `claude-sonnet-5-5` avaliou cada transcrição contra expectativas escritas antes
+da execução. A nota é a fração das expectativas que o avaliador marcou como atendidas; o código do agente é
+lido, não executado. `claude-sonnet-5-5`: **81% com as skills, 24% sem** (299 contra 87 de 370); `claude-opus-5-5`: **89% com as skills, 35% sem** (328 contra 130 de 370). Por skill,
+método e transcrições brutas: [evals/results/20261108T180307Z-fa81209](evals/results/20261108T180307Z-fa81209/summary.md), [evals/results/20261109T103432Z-fa81209](evals/results/20261109T103432Z-fa81209/summary.md). Esses prompts são prompts de desenvolvimento: as skills foram revisadas
+contra as falhas das execuções anteriores neles. No conjunto reservado, prompts em `evals/heldout/` nunca lidos ao editar uma skill: `claude-sonnet-5-5`: **70% com, 24% sem** (73 contra 25 de 105, [evals/results/20261108T194552Z-fa81209-heldout](evals/results/20261108T194552Z-fa81209-heldout/summary.md)); `claude-opus-5-5`: **81% com, 31% sem** (85 contra 33 de 105, [evals/results/20261109T110030Z-fa81209-heldout](evals/results/20261109T110030Z-fa81209-heldout/summary.md)); `claude-fable-5-2`: **88% com, 35% sem** (92 contra 37 de 105, [evals/results/20261110T031626Z-fa81209-heldout](evals/results/20261110T031626Z-fa81209-heldout/summary.md)).
+<!-- /generated:headline -->
 
 ## Instalação
 

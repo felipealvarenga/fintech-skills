@@ -1,36 +1,18 @@
 # fintech-skills
 
-Fintech engineering skills for coding agents: an audit entry point and twelve skills that teach
-Claude Code, Codex, Cursor, Copilot and any agent that reads `SKILL.md` how to handle money the
-way production fintech systems do. Every skill ships evals and test vectors that run in CI.
+Coding agents get money code wrong: a float for an amount, a new idempotency key on every retry, a
+webhook trusted as truth. These 13 skills teach Claude Code, Codex, Cursor and any agent that reads
+`SKILL.md` to write it the way a senior payments engineer does, with the tests in the same change.
 
-**For** the engineer who reviews the money code a coding agent wrote, at a fintech or a SaaS that
-moves money, and wants the agent to make the choices a senior payments engineer makes, with the
-tests in the same change. Also for the Brazilian team that needs Pix, boleto, CPF and CNPJ and
-NF-e right the first time.
+**On held-out prompts, Opus 5.5 went from 31% to 81%** of graded expectations met with the skills
+([run](evals/results/20261109T110030Z-fa81209-heldout/summary.md)). Sonnet 5.5: 24% to 70% ([run](evals/results/20261108T194552Z-fa81209-heldout/summary.md)).
 
-[![ci](https://github.com/felipealvarenga/fintech-skills/actions/workflows/ci.yml/badge.svg)](https://github.com/felipealvarenga/fintech-skills/actions/workflows/ci.yml)
-[![license](https://img.shields.io/badge/license-MIT-111111)](LICENSE)
+```
+/plugin marketplace add felipealvarenga/fintech-skills
+/plugin install fintech-skills@felipealvarenga
+```
 
-[Português](README.pt-BR.md)
-
-<!-- generated:headline -->
-**Measured.** The same 91 prompts ran on `claude-sonnet-5-5` and `claude-opus-5-5` with and without the skills (skills at
-`fa81209`), and `claude-sonnet-5-5` graded each transcript against expectations written before
-the run. The score is the share of expectations the grader marked passed; the agent's code is read, not
-executed. `claude-sonnet-5-5`: **81% with the skills, 24% without** (299 against 87 of 370); `claude-opus-5-5`: **89% with the skills, 35% without** (328 against 130 of 370). Per skill,
-method and raw transcripts: [evals/results/20261108T180307Z-fa81209](evals/results/20261108T180307Z-fa81209/summary.md), [evals/results/20261109T103432Z-fa81209](evals/results/20261109T103432Z-fa81209/summary.md). Those prompts are development prompts: the skills were revised against
-earlier runs' failures on them. On the held-out set, prompts in `evals/heldout/` that are never read when editing a skill: `claude-sonnet-5-5`: **70% with, 24% without** (73 against 25 of 105, [evals/results/20261108T194552Z-fa81209-heldout](evals/results/20261108T194552Z-fa81209-heldout/summary.md)); `claude-opus-5-5`: **81% with, 31% without** (85 against 33 of 105, [evals/results/20261109T110030Z-fa81209-heldout](evals/results/20261109T110030Z-fa81209-heldout/summary.md)); `claude-fable-5-2`: **88% with, 35% without** (92 against 37 of 105, [evals/results/20261110T031626Z-fa81209-heldout](evals/results/20261110T031626Z-fa81209-heldout/summary.md)).
-<!-- /generated:headline -->
-
-## Why install this
-
-Agents write payment code fast and wrong in the same ways people do: floats for amounts, a
-balance column updated in place, a retry that charges twice, a webhook trusted as truth, a
-reconciliation that hides breaks behind a tolerance. Each skill fixes one of those, with rules
-that are testable, a review checklist, and the tests the change must include.
-
-What changes, in ten seconds:
+Codex, the skills CLI and manual copy: [Install](#install).
 
 ```python
 # split R$ 100,00 three ways                      # retry a charge after a timeout
@@ -43,6 +25,19 @@ The left column loses or invents cents on real ratios; the right column preserve
 construction. The left key charges the customer twice after one timeout; with the right key the
 retry is a duplicate the processor dedupes, for as long as the processor keeps the key. The skills
 carry the other hundred rules like these, each with a test.
+
+[![ci](https://github.com/felipealvarenga/fintech-skills/actions/workflows/ci.yml/badge.svg)](https://github.com/felipealvarenga/fintech-skills/actions/workflows/ci.yml)
+[![license](https://img.shields.io/badge/license-MIT-111111)](LICENSE)
+
+[Português](README.pt-BR.md)
+
+## Why install this
+
+**For** the engineer who reviews the money code a coding agent wrote, at a fintech or a SaaS that
+moves money. Also for the Brazilian team that needs Pix, boleto, CPF and CNPJ and NF-e right the
+first time. Each skill covers one failure (a balance column updated in place, a retry that charges
+twice, a reconciliation that hides breaks behind a tolerance) with testable rules, a review
+checklist and the tests the change must include.
 
 What you get in the first ten minutes:
 
@@ -59,6 +54,17 @@ What you get in the first ten minutes:
 Not the right tool if you want a vendor's API documented (use the vendor's plugin, see Scope) or a
 process framework for all of software development; these skills are domain rules and work beside
 such packs.
+
+## Results
+
+<!-- generated:headline -->
+**Measured.** The same 91 prompts ran on `claude-sonnet-5-5` and `claude-opus-5-5` with and without the skills (skills at
+`fa81209`), and `claude-sonnet-5-5` graded each transcript against expectations written before
+the run. The score is the share of expectations the grader marked passed; the agent's code is read, not
+executed. `claude-sonnet-5-5`: **81% with the skills, 24% without** (299 against 87 of 370); `claude-opus-5-5`: **89% with the skills, 35% without** (328 against 130 of 370). Per skill,
+method and raw transcripts: [evals/results/20261108T180307Z-fa81209](evals/results/20261108T180307Z-fa81209/summary.md), [evals/results/20261109T103432Z-fa81209](evals/results/20261109T103432Z-fa81209/summary.md). Those prompts are development prompts: the skills were revised against
+earlier runs' failures on them. On the held-out set, prompts in `evals/heldout/` that are never read when editing a skill: `claude-sonnet-5-5`: **70% with, 24% without** (73 against 25 of 105, [evals/results/20261108T194552Z-fa81209-heldout](evals/results/20261108T194552Z-fa81209-heldout/summary.md)); `claude-opus-5-5`: **81% with, 31% without** (85 against 33 of 105, [evals/results/20261109T110030Z-fa81209-heldout](evals/results/20261109T110030Z-fa81209-heldout/summary.md)); `claude-fable-5-2`: **88% with, 35% without** (92 against 37 of 105, [evals/results/20261110T031626Z-fa81209-heldout](evals/results/20261110T031626Z-fa81209-heldout/summary.md)).
+<!-- /generated:headline -->
 
 ## Install
 

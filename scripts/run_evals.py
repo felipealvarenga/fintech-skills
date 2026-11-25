@@ -36,13 +36,28 @@ def cli_parser():
     parser.add_argument("--timeout", type=float, default=900)
     parser.add_argument("--budget", type=int, default=80)
     parser.add_argument("--results-dir", type=Path, default=ROOT / "evals" / "results")
-    parser.add_argument("--agent", choices=("claude", "fake"), default="claude")
+    parser.add_argument("--agent", choices=("claude", "agy", "fake"), default="claude")
     parser.add_argument("--evals", choices=("dev", "heldout"), default="dev",
                         help="dev: skills/<skill>/evals/evals.json; heldout: evals/heldout/<skill>.json, never read when editing skills")
     return parser
 
 
-def session_invocation(args, role):
+def role_agent(args, role):
+    if args.agent == "agy" and role == "grader" and args.grader_model.startswith("claude"):
+        return "claude"
+    return args.agent
+
+
+def session_invocation(args, role, settings_path=None, prompt=None):
+    agent = role_agent(args, role)
+    if agent == "agy":
+        model = args.subject_model if role == "subject" else args.grader_model
+        command = ["agy", "--model", model, "--output-format", "stream-json", "--mode", "accept-edits",
+                   "--print-timeout", f"{max(1, int(args.timeout))}s"]
+        if settings_path is not None:
+            command += ["--settings", str(settings_path)]
+        command += ["-p", prompt or ""]
+        return command
     command = ["claude", "-p", "--output-format", "json"]
     if role == "subject":
         command += ["--verbose", "--model", args.subject_model, "--effort", args.effort, "--max-turns", str(args.max_turns),
@@ -88,31 +103,162 @@ def session_env(extra, environ=None):
     return env
 
 
+AGY_SETTINGS = {
+    "allowNonWorkspaceAccess": False,
+    "permissions": {
+        "allow": [
+            "command(ls)", "command(find)", "command(rg)", "command(grep)",
+            "command(tree)", "command(wc)", "command(head)", "command(tail)", "command(cat)",
+            "command(sort)", "command(uniq)", "command(cut)", "command(tr)", "command(diff)",
+            "command(pwd)", "command(echo)", "command(true)", "command(false)", "command(stat)",
+            "command(file)", "command(basename)", "command(dirname)", "command(realpath)",
+            "command(readlink)", "command(nl)", "command(printf)", "command(test)", "command([)",
+            "command(sed)", "command(awk)", "command(xargs)",
+        ],
+        "deny": [
+            "mcp(*)",
+            "command(which)", "command(type)", "command(whereis)", "command(command)",
+            "command(python)", "command(python3)", "command(pytest)", "command(pip)", "command(pip3)", "command(uv)",
+            "command(mutmut)", "command(cosmic-ray)",
+            "command(node)", "command(npm)", "command(npx)", "command(vitest)",
+            "command(go)", "command(cargo)", "command(ruby)", "command(java)", "command(php)", "command(perl)",
+            "command(psql)", "command(postgres)", "command(initdb)", "command(pg_dump)", "command(sqlite3)",
+            "command(bash)", "command(sh)", "command(zsh)", "command(fish)", "command(env)", "command(printenv)",
+            "command(curl)", "command(wget)", "command(gh)", "command(git)", "command(bwrap)", "command(make)",
+            "command(rm)", "command(mv)", "command(cp)", "command(chmod)", "command(chown)",
+            "command(mkdir)", "command(touch)", "command(tee)",
+        ],
+    },
+}
+
+
+def prepare_agy_home(base):
+    """Build an isolated HOME for agy with auth/config symlinked and no global ~/.agents or ~/.gemini/config skills."""
+    real_home = Path.home()
+    fake_home = base / "home"
+    (fake_home / ".gemini").mkdir(parents=True)
+    (fake_home / ".config").mkdir(parents=True)
+    for rel in (".gemini/antigravity-cli", ".config/antigravity"):
+        src = real_home / rel
+        if src.exists():
+            (fake_home / rel).symlink_to(src)
+    settings_path = base / "agy-settings.json"
+    settings_path.write_text(json.dumps(AGY_SETTINGS), encoding="utf-8")
+    return fake_home, settings_path
+
+
+def parse_agy_transcript(stdout):
+    """Parse `agy --output-format stream-json` NDJSON into (result, reported, usage, thinking, error)."""
+    init_ev, result_ev = {}, {}
+    parsed_any = False
+    for line in stdout.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            ev = json.loads(line)
+        except ValueError:
+            continue
+        if not isinstance(ev, dict):
+            continue
+        parsed_any = True
+        if ev.get("event") == "init" and isinstance(ev.get("init"), dict):
+            init_ev = ev
+        elif ev.get("event") == "result" and isinstance(ev.get("result"), dict):
+            result_ev = ev["result"]
+    if not parsed_any or not result_ev:
+        return {}, {}, {}, None, "invalid session JSON"
+    init_info = init_ev.get("init", {})
+    reported = {k: init_info[k] for k in ("model", "tools") if k in init_info}
+    if "conversation_id" in init_ev:
+        reported["conversation_id"] = init_ev["conversation_id"]
+    raw_usage = result_ev.get("usage")
+    if not isinstance(raw_usage, dict):
+        return result_ev, reported, {}, None, "invalid session usage"
+    usage = {
+        "input_tokens": raw_usage.get("input_tokens", 0),
+        "output_tokens": raw_usage.get("output_tokens", 0),
+        "cache_read_input_tokens": raw_usage.get("cache_read_tokens", 0),
+        "cache_creation_input_tokens": raw_usage.get("cache_creation_tokens", 0),
+    }
+    if any(type(usage[k]) is not int or usage[k] < 0 for k in TOKEN_KEYS):
+        return result_ev, reported, {}, None, "invalid session usage"
+    tk = raw_usage.get("thinking_tokens")
+    thinking = tk if type(tk) is int and tk >= 0 else None
+    err = None if result_ev.get("status") == "SUCCESS" else f"agy status: {result_ev.get('status')}"
+    return result_ev, reported, usage, thinking, err
+
+
 def call_session(args, role, project, prompt):
-    invocation = {"argv": session_invocation(args, role), "cwd": "<project>", "stdin": prompt,
-                  "env": dict(SESSION_ENV)}
+    agent = role_agent(args, role)
     start = time.monotonic()
     stdout, stderr, error = "", "", None
     exit_code = 0
-    try:
-        if args.agent == "fake":
-            stdout = fake_session(role, project, prompt)
-        else:
-            process = subprocess.run(invocation["argv"], input=prompt, text=True,
-                                     capture_output=True, cwd=project, timeout=args.timeout,
-                                     env=session_env(invocation["env"]))
-            stdout, stderr = process.stdout, process.stderr
-            exit_code = process.returncode
-    except subprocess.TimeoutExpired as exc:
-        stdout = exc.stdout or b""
-        stderr = exc.stderr or b""
-        stdout = stdout.decode(errors="replace") if isinstance(stdout, bytes) else stdout
-        stderr = stderr.decode(errors="replace") if isinstance(stderr, bytes) else stderr
-        error = "timeout"
-    except OSError as exc:
-        error = str(exc)
+    scrub_paths = [(str(project), "<project>")]
+    if agent == "agy":
+        with tempfile.TemporaryDirectory(prefix="fintech-agy-home-") as home_dir:
+            fake_home, settings_path = prepare_agy_home(Path(home_dir))
+            scrub_paths.append((str(fake_home), "<home>"))
+            scrub_paths.append((str(home_dir), "<tmp>"))
+            argv = session_invocation(args, role, settings_path=settings_path, prompt=prompt)
+            invocation = {"argv": [a.replace(str(home_dir), "<tmp>") for a in argv[:-1]] + ["<prompt>"],
+                          "cwd": "<project>", "stdin": prompt, "env": {"HOME": "<isolated-home>"}}
+            env = session_env({"HOME": str(fake_home)})
+            try:
+                process = subprocess.run(argv, stdin=subprocess.DEVNULL, text=True,
+                                         capture_output=True, cwd=project, timeout=args.timeout, env=env)
+                stdout, stderr = process.stdout, process.stderr
+                exit_code = process.returncode
+            except subprocess.TimeoutExpired as exc:
+                stdout = exc.stdout or b""
+                stderr = exc.stderr or b""
+                stdout = stdout.decode(errors="replace") if isinstance(stdout, bytes) else stdout
+                stderr = stderr.decode(errors="replace") if isinstance(stderr, bytes) else stderr
+                error = "timeout"
+            except OSError as exc:
+                error = str(exc)
+    else:
+        invocation = {"argv": session_invocation(args, role), "cwd": "<project>", "stdin": prompt,
+                      "env": dict(SESSION_ENV)}
+        try:
+            if agent == "fake":
+                stdout = fake_session(role, project, prompt)
+            else:
+                process = subprocess.run(invocation["argv"], input=prompt, text=True,
+                                         capture_output=True, cwd=project, timeout=args.timeout,
+                                         env=session_env(invocation["env"]))
+                stdout, stderr = process.stdout, process.stderr
+                exit_code = process.returncode
+        except subprocess.TimeoutExpired as exc:
+            stdout = exc.stdout or b""
+            stderr = exc.stderr or b""
+            stdout = stdout.decode(errors="replace") if isinstance(stdout, bytes) else stdout
+            stderr = stderr.decode(errors="replace") if isinstance(stderr, bytes) else stderr
+            error = "timeout"
+        except OSError as exc:
+            error = str(exc)
     elapsed = time.monotonic() - start
-    stdout, stderr = stdout.replace(str(project), "<project>"), stderr.replace(str(project), "<project>")
+    for old, new in scrub_paths:
+        stdout, stderr = stdout.replace(old, new), stderr.replace(old, new)
+        if error:
+            error = error.replace(old, new)
+    if agent == "agy":
+        result_ev, reported, usage, thinking, parse_err = parse_agy_transcript(stdout)
+        error = error or parse_err
+        stopped = "end_turn" if result_ev.get("status") == "SUCCESS" else result_ev.get("status")
+        if exit_code:
+            error = f"exit code {exit_code}: {stderr[-4000:]}"
+        final_answer = result_ev.get("response", "")
+        for old, new in scrub_paths:
+            final_answer = final_answer.replace(old, new)
+        if not error and not final_answer.strip() and "no output produced" in stderr:
+            error = f"headless permission abort: {stderr.strip()[:300]}"
+        return {"invocation": invocation, "transcript": stdout, "stderr": stderr,
+                "error": error, "final_answer": final_answer, "reported": reported,
+                "exit_code": exit_code,
+                "tokens": {key: usage.get(key, 0) for key in TOKEN_KEYS},
+                "thinking_tokens": thinking,
+                "stop_reason": stopped, "stopped": stopped, "wall_time": elapsed}
     result, reported = {}, {}
     try:
         transcript = json.loads(stdout)
@@ -151,7 +297,7 @@ def thinking_tokens(usage):
 def project_files(project):
     return {p.relative_to(project).as_posix(): p.read_bytes()
             for p in sorted(project.rglob("*"))
-            if p.relative_to(project).parts[0] != ".claude" and p.is_file() and not p.is_symlink()}
+            if p.relative_to(project).parts[0] not in (".claude", ".agents", ".git") and p.is_file() and not p.is_symlink()}
 
 
 def skill_folders():
@@ -178,7 +324,7 @@ def fixture_target(skill, name, files_root=None):
     return Path("src") / relative if len(relative.parts) == 1 else Path(*relative.parts[1:])
 
 
-def install_skill(skill, project):
+def install_skill(skill, project, skill_root=".claude/skills"):
     installed = []
     root = skill.resolve()
     for source in sorted(skill.rglob("*")):
@@ -189,14 +335,14 @@ def install_skill(skill, project):
             raise ValueError(f"{source} is a symlink or resolves outside {skill}: a skill installs plain files only")
         if not source.is_file():
             continue
-        target = project / ".claude/skills" / skill.name / relative
+        target = project / skill_root / skill.name / relative
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(source, target)
         installed.append(target.relative_to(project).as_posix())
     return installed
 
 
-def install_project(skill, evaluation, project, condition):
+def install_project(skill, evaluation, project, condition, agent="claude"):
     sources = {}
     files_root = Path(evaluation["files_root"]) if evaluation.get("files_root") else None
     for name in evaluation.get("files", []):
@@ -208,11 +354,14 @@ def install_project(skill, evaluation, project, condition):
         target = project / path
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(source, target)
+    if agent == "agy":
+        subprocess.run(["git", "init", "-q"], cwd=project, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     installed = []
     if condition == "with":
+        skill_root = ".agents/skills" if agent == "agy" else ".claude/skills"
         pack = skill_folders().values() if skill.name == "fintech-audit" else [skill]
         for folder in pack:
-            installed.extend(install_skill(folder, project))
+            installed.extend(install_skill(folder, project, skill_root=skill_root))
     return installed
 
 
@@ -263,18 +412,87 @@ def parse_verdicts(text):
     return json.loads(text)
 
 
-SKILL_DIR = ".claude/skills"
+SKILL_DIRS = (".claude/skills", ".agents/skills")
+
+
+def blind_agy_transcript(stdout):
+    """Blinded view of an agy stream-json transcript: strips reads/listings of .agents/skills/ and
+    coalesces streaming text_delta events so the grader gets compact, condition-blind evidence."""
+    events = []
+    for line in stdout.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            ev = json.loads(line)
+        except ValueError:
+            return None
+        if not isinstance(ev, dict) or "event" not in ev:
+            return None
+        events.append(ev)
+    if not events:
+        return None
+    out = []
+    text_by_step = {}
+    order = []
+    for ev in events:
+        kind = ev.get("event")
+        if kind == "init":
+            init_info = ev.get("init") if isinstance(ev.get("init"), dict) else {}
+            out.append({"event": "init", "model": init_info.get("model")})
+        elif kind == "step_update":
+            su = ev.get("step_update") if isinstance(ev.get("step_update"), dict) else {}
+            st = su.get("step_type")
+            idx = su.get("step_index")
+            if st == "tool":
+                blob = json.dumps(su.get("tool_info", {}))
+                if any(d in blob for d in SKILL_DIRS):
+                    # If a read/list targeted .agents/skills directly, drop it; if find/ls listed workspace
+                    # files including .agents, scrub .agents lines from its output so condition stays hidden.
+                    params_blob = json.dumps((su.get("tool_info") or {}).get("parameters", {}))
+                    if any(d in params_blob for d in SKILL_DIRS):
+                        continue
+                    info = dict(su.get("tool_info") or {})
+                    if isinstance(info.get("output"), str):
+                        info["output"] = "\n".join(
+                            ln for ln in info["output"].splitlines()
+                            if ".agents" not in ln and ".claude" not in ln
+                        )
+                    if su.get("state") in ("DONE", "ERROR"):
+                        out.append({"event": "tool", "step_index": idx, "state": su.get("state"),
+                                    "tool_name": su.get("tool_name"), "tool_info": info})
+                    continue
+                if su.get("state") in ("DONE", "ERROR"):
+                    out.append({"event": "tool", "step_index": idx, "state": su.get("state"),
+                                "tool_name": su.get("tool_name"), "tool_info": su.get("tool_info")})
+            elif st == "agent_response":
+                delta = su.get("text_delta", "")
+                if delta:
+                    if idx not in text_by_step:
+                        text_by_step[idx] = []
+                        order.append(idx)
+                    text_by_step[idx].append(delta)
+                if su.get("state") == "DONE" and idx in text_by_step:
+                    out.append({"event": "agent_response", "step_index": idx, "text": "".join(text_by_step.pop(idx))})
+        elif kind == "result":
+            res = ev.get("result") if isinstance(ev.get("result"), dict) else {}
+            out.append({"event": "result", "status": res.get("status"), "response": res.get("response", "")})
+    for idx in order:
+        if idx in text_by_step:
+            out.append({"event": "agent_response", "step_index": idx, "text": "".join(text_by_step[idx])})
+    return json.dumps(out)
 
 
 def blind_transcript(stdout):
     """What the grader reads: the subject transcript without the installed-skill list in the session
-    header, without the Skill tool calls and without the reads of files under .claude/skills/ (and
-    their results), so the condition is not shown to it. The subject's own prose can still name the
-    skill. The stored raw transcript is untouched."""
+    header, without the Skill tool calls and without the reads of files under .claude/skills/ or
+    .agents/skills/ (and their results), so the condition is not shown to it. The subject's own prose
+    can still name the skill. The stored raw transcript is untouched."""
     try:
         messages = json.loads(stdout)
     except (ValueError, TypeError):
-        return stdout
+        agy_blinded = blind_agy_transcript(stdout)
+        return agy_blinded if agy_blinded is not None else stdout
     if not isinstance(messages, list):
         return stdout
     hidden, out = set(), []
@@ -290,7 +508,8 @@ def blind_transcript(stdout):
             kept = []
             for block in content:
                 if isinstance(block, dict) and block.get("type") == "tool_use":
-                    if block.get("name") == "Skill" or SKILL_DIR in json.dumps(block.get("input", {})):
+                    serialized = json.dumps(block.get("input", {}))
+                    if block.get("name") == "Skill" or any(d in serialized for d in SKILL_DIRS):
                         hidden.add(block.get("id"))
                         continue
                 if isinstance(block, dict) and block.get("type") == "tool_result" and block.get("tool_use_id") in hidden:
@@ -337,7 +556,10 @@ def evaluate_prompt(args, skill, evaluation, condition, run, run_dir):
     with tempfile.TemporaryDirectory(prefix="fintech-eval-") as directory:
         project = Path(directory)
         try:
-            record["installed_paths"] = install_project(skill, evaluation, project, condition)
+            record["installed_paths"] = (
+                install_project(skill, evaluation, project, condition, agent=args.agent)
+                if args.agent == "agy" else install_project(skill, evaluation, project, condition)
+            )
         except (ValueError, OSError) as exc:
             error = str(exc).replace(directory, "<project>")
         if not error:

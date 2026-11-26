@@ -25,7 +25,7 @@ in-process fake agents, not Claude. Fake results measure the runner, not a skill
 | `--timeout` | `900` | Seconds per subject or grader session; timed-out processes are killed. |
 | `--budget` | `80` | Maximum planned sessions, including graders. |
 | `--results-dir` | `evals/results` | Parent of the new append-only run folder; default is relative to the repository root. |
-| `--agent` | `claude` | `claude` or deterministic, in-process `fake`. |
+| `--agent` | `claude` | `claude`, `agy` (Antigravity CLI, e.g. Gemini 4 Neon; grades with `claude` when `--grader-model` starts with `claude`), or deterministic, in-process `fake`. |
 | `--help` | off | Show CLI help. |
 
 The plan prints before any session or result write. Total sessions = prompts × 2 conditions ×

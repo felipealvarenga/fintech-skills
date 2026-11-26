@@ -6,7 +6,7 @@ agente que leia `SKILL.md` a escrever como um engenheiro sênior de pagamentos, 
 mesma mudança.
 
 **Em prompts reservados, o Opus 5.5 foi de 31% para 81%** das expectativas avaliadas atendidas com
-as skills ([execução](evals/results/20261109T110030Z-fa81209-heldout/summary.md)). Sonnet 5.5: de 24% para 70% ([execução](evals/results/20261108T194552Z-fa81209-heldout/summary.md)).
+as skills ([execução](evals/results/20261109T110030Z-fa81209-heldout/summary.md)). Gemini 4 Neon (High): de 36% para 86% ([execução](evals/results/20261125T210621Z-fa81209-heldout/summary.md)). Sonnet 5.5: de 24% para 70% ([execução](evals/results/20261108T194552Z-fa81209-heldout/summary.md)).
 
 ```
 /plugin marketplace add felipealvarenga/fintech-skills
@@ -56,12 +56,12 @@ regras de domínio e convivem com esses pacotes.
 ## Resultados
 
 <!-- generated:headline -->
-**Medido.** Os mesmos 91 prompts rodaram no `claude-sonnet-5-5` e `claude-opus-5-5` com e sem as skills (skills em
+**Medido.** Os mesmos 91 prompts rodaram no `claude-sonnet-5-5`, `claude-opus-5-5` e `gemini-4-neon-high` com e sem as skills (skills em
 `fa81209`), e `claude-sonnet-5-5` avaliou cada transcrição contra expectativas escritas antes
 da execução. A nota é a fração das expectativas que o avaliador marcou como atendidas; o código do agente é
-lido, não executado. `claude-sonnet-5-5`: **81% com as skills, 24% sem** (299 contra 87 de 370); `claude-opus-5-5`: **89% com as skills, 35% sem** (328 contra 130 de 370). Por skill,
-método e transcrições brutas: [evals/results/20261108T180307Z-fa81209](evals/results/20261108T180307Z-fa81209/summary.md), [evals/results/20261109T103432Z-fa81209](evals/results/20261109T103432Z-fa81209/summary.md). Esses prompts são prompts de desenvolvimento: as skills foram revisadas
-contra as falhas das execuções anteriores neles. No conjunto reservado, prompts em `evals/heldout/` nunca lidos ao editar uma skill: `claude-sonnet-5-5`: **70% com, 24% sem** (73 contra 25 de 105, [evals/results/20261108T194552Z-fa81209-heldout](evals/results/20261108T194552Z-fa81209-heldout/summary.md)); `claude-opus-5-5`: **81% com, 31% sem** (85 contra 33 de 105, [evals/results/20261109T110030Z-fa81209-heldout](evals/results/20261109T110030Z-fa81209-heldout/summary.md)); `claude-fable-5-2`: **88% com, 35% sem** (92 contra 37 de 105, [evals/results/20261110T031626Z-fa81209-heldout](evals/results/20261110T031626Z-fa81209-heldout/summary.md)).
+lido, não executado. `claude-sonnet-5-5`: **81% com as skills, 24% sem** (299 contra 87 de 370); `claude-opus-5-5`: **89% com as skills, 35% sem** (328 contra 130 de 370); `gemini-4-neon-high`: **92% com as skills, 43% sem** (342 contra 155 de 370). Por skill,
+método e transcrições brutas: [evals/results/20261108T180307Z-fa81209](evals/results/20261108T180307Z-fa81209/summary.md), [evals/results/20261109T103432Z-fa81209](evals/results/20261109T103432Z-fa81209/summary.md), [evals/results/20261125T151436Z-fa81209](evals/results/20261125T151436Z-fa81209/summary.md). Esses prompts são prompts de desenvolvimento: as skills foram revisadas
+contra as falhas das execuções anteriores neles. No conjunto reservado, prompts em `evals/heldout/` nunca lidos ao editar uma skill: `claude-sonnet-5-5`: **70% com, 24% sem** (73 contra 25 de 105, [evals/results/20261108T194552Z-fa81209-heldout](evals/results/20261108T194552Z-fa81209-heldout/summary.md)); `claude-opus-5-5`: **81% com, 31% sem** (85 contra 33 de 105, [evals/results/20261109T110030Z-fa81209-heldout](evals/results/20261109T110030Z-fa81209-heldout/summary.md)); `claude-fable-5-2`: **88% com, 35% sem** (92 contra 37 de 105, [evals/results/20261110T031626Z-fa81209-heldout](evals/results/20261110T031626Z-fa81209-heldout/summary.md)); `gemini-4-neon-high`: **86% com, 36% sem** (90 contra 38 de 105, [evals/results/20261125T210621Z-fa81209-heldout](evals/results/20261125T210621Z-fa81209-heldout/summary.md)).
 <!-- /generated:headline -->
 
 ## Instalação
@@ -119,21 +119,21 @@ plantados: 12 achados em 8 arquivos, 4 críticos, cada um com arquivo, linha, re
 teste. Sonnet 5.5, 7 turnos, USD 0,21.
 
 <!-- generated:skills-table -->
-| Skill | Use quando | `claude-sonnet-5-5` com / sem | `claude-opus-5-5` com / sem | `claude-fable-5-2` com / sem, reservado | Vetores |
-|---|---|---|---|---|---|
-| [fintech-audit](skills/fintech-audit/SKILL.md)† | Auditar um repositório ou um PR que mexe com dinheiro; o ponto de entrada | 77% / 33% | 83% / 40% | 100% / 88% | py |
-| [money-arithmetic](skills/money-arithmetic/SKILL.md) | Guardar, somar, ratear, converter, arredondar ou formatar valores | 83% / 33% | 90% / 47% | 100% / 62% | py, ts |
-| [double-entry-ledger](skills/double-entry-ledger/SKILL.md) | Qualquer tabela que responde "quanto X tem ou deve" | 82% / 25% | 93% / 39% | 100% / 38% | py, ts |
-| [idempotent-payments](skills/idempotent-payments/SKILL.md) | Criar, capturar, estornar ou pagar; chamar um processador | 86% / 21% | 100% / 36% | 75% / 25% | py, ts |
-| [webhook-handling](skills/webhook-handling/SKILL.md) | Receber callbacks de processadores, bancos e PSPs | 86% / 7% | 86% / 28% | 100% / 22% | py, ts |
-| [reconciliation](skills/reconciliation/SKILL.md) | Conciliar ledger, relatório do processador e extrato bancário | 72% / 10% | 86% / 24% | 88% / 25% | py |
-| [accounting-sync](skills/accounting-sync/SKILL.md) | Integrar com QuickBooks, Xero, NetSuite, Omie, Conta Azul | 68% / 21% | 86% / 29% | 88% / 38% | py |
-| [transaction-classification](skills/transaction-classification/SKILL.md) | Categorizar transações com regras, ML ou LLM, em especial com lançamento automático | 100% / 22% | 96% / 26% | 100% / 25% | py |
-| [pii-and-card-data](skills/pii-and-card-data/SKILL.md) | Coletar, logar, exibir ou exportar dados pessoais, bancários ou de cartão | 63% / 37% | 81% / 44% | 75% / 62% | py |
-| [audit-trail](skills/audit-trail/SKILL.md) | Qualquer mutação de dinheiro, limites, permissões ou dados de cliente; ações de agentes | 74% / 26% | 85% / 33% | 88% / 38% | py |
-| [interest-and-amortization](skills/interest-and-amortization/SKILL.md) | Juros, parcelas, tabelas Price e SAC, provisões, taxa efetiva | 71% / 18% | 79% / 32% | 75% / 38% | py |
-| [brazil-payment-rails](skills/brazil-payment-rails/SKILL.md) | Pix, boleto, parcelamento no cartão, CPF e CNPJ, NF-e | 90% / 21% | 86% / 31% | 100% / 0% | py, ts |
-| [money-tests](skills/money-tests/SKILL.md) | Escrever ou revisar testes para qualquer item acima | 97% / 30% | 100% / 47% | 50% / 0% | py |
+| Skill | Use quando | `claude-sonnet-5-5` com / sem | `claude-opus-5-5` com / sem | `gemini-4-neon-high` com / sem | `claude-fable-5-2` com / sem, reservado | Vetores |
+|---|---|---|---|---|---|---|
+| [fintech-audit](skills/fintech-audit/SKILL.md)† | Auditar um repositório ou um PR que mexe com dinheiro; o ponto de entrada | 77% / 33% | 83% / 40% | 87% / 23% | 100% / 88% | py |
+| [money-arithmetic](skills/money-arithmetic/SKILL.md) | Guardar, somar, ratear, converter, arredondar ou formatar valores | 83% / 33% | 90% / 47% | 90% / 70% | 100% / 62% | py, ts |
+| [double-entry-ledger](skills/double-entry-ledger/SKILL.md) | Qualquer tabela que responde "quanto X tem ou deve" | 82% / 25% | 93% / 39% | 96% / 50% | 100% / 38% | py, ts |
+| [idempotent-payments](skills/idempotent-payments/SKILL.md) | Criar, capturar, estornar ou pagar; chamar um processador | 86% / 21% | 100% / 36% | 100% / 39% | 75% / 25% | py, ts |
+| [webhook-handling](skills/webhook-handling/SKILL.md) | Receber callbacks de processadores, bancos e PSPs | 86% / 7% | 86% / 28% | 97% / 41% | 100% / 22% | py, ts |
+| [reconciliation](skills/reconciliation/SKILL.md) | Conciliar ledger, relatório do processador e extrato bancário | 72% / 10% | 86% / 24% | 93% / 24% | 88% / 25% | py |
+| [accounting-sync](skills/accounting-sync/SKILL.md) | Integrar com QuickBooks, Xero, NetSuite, Omie, Conta Azul | 68% / 21% | 86% / 29% | 86% / 29% | 88% / 38% | py |
+| [transaction-classification](skills/transaction-classification/SKILL.md) | Categorizar transações com regras, ML ou LLM, em especial com lançamento automático | 100% / 22% | 96% / 26% | 93% / 37% | 100% / 25% | py |
+| [pii-and-card-data](skills/pii-and-card-data/SKILL.md) | Coletar, logar, exibir ou exportar dados pessoais, bancários ou de cartão | 63% / 37% | 81% / 44% | 85% / 67% | 75% / 62% | py |
+| [audit-trail](skills/audit-trail/SKILL.md) | Qualquer mutação de dinheiro, limites, permissões ou dados de cliente; ações de agentes | 74% / 26% | 85% / 33% | 89% / 48% | 88% / 38% | py |
+| [interest-and-amortization](skills/interest-and-amortization/SKILL.md) | Juros, parcelas, tabelas Price e SAC, provisões, taxa efetiva | 71% / 18% | 79% / 32% | 89% / 36% | 75% / 38% | py |
+| [brazil-payment-rails](skills/brazil-payment-rails/SKILL.md) | Pix, boleto, parcelamento no cartão, CPF e CNPJ, NF-e | 90% / 21% | 86% / 31% | 100% / 38% | 100% / 0% | py, ts |
+| [money-tests](skills/money-tests/SKILL.md) | Escrever ou revisar testes para qualquer item acima | 97% / 30% | 100% / 47% | 97% / 50% | 50% / 0% | py |
 
 Uma execução por prompt. Uma célula de cerca de 28 expectativas carrega até cerca de ±14 pontos (intervalo de Wilson a 95%); os números do pacote carregam até cerca de ±4. A coluna `claude-fable-5-2` é a execução reservada desse modelo (dois prompts por skill, células de cerca de 8 expectativas, cerca de ±22 pontos cada); leia no nível do pacote: 88% com, 35% sem. † fintech-audit foi medida sem o lint que ela roda: o sandbox do eval não tem shell, então a linha e o relatório de exemplo (produzido com shell) não são o mesmo arranjo.
 <!-- /generated:skills-table -->
@@ -164,8 +164,10 @@ arquivos que o agente escreveu. Pastas antigas nunca são editadas. Método e fl
 | [20261109T103432Z-fa81209](evals/results/20261109T103432Z-fa81209/summary.md) | `fa81209` | desenvolvimento | `claude-opus-5-5` | 89% | 35% | 53.5 |
 | [20261109T110030Z-fa81209-heldout](evals/results/20261109T110030Z-fa81209-heldout/summary.md) | `fa81209` | reservado | `claude-opus-5-5` | 81% | 31% | 49.5 |
 | [20261110T031626Z-fa81209-heldout](evals/results/20261110T031626Z-fa81209-heldout/summary.md) | `fa81209` | reservado | `claude-fable-5-2` | 88% | 35% | 52.4 |
+| [20261125T151436Z-fa81209](evals/results/20261125T151436Z-fa81209/summary.md) | `fa81209` | desenvolvimento | `gemini-4-neon-high` | 92% | 43% | 49.6 |
+| [20261125T210621Z-fa81209-heldout](evals/results/20261125T210621Z-fa81209-heldout/summary.md) | `fa81209` | reservado | `gemini-4-neon-high` | 86% | 36% | 49.5 |
 
-Em 2 das 91 sessões com skill da execução `claude-sonnet-5-5` em `fa81209` o agente nunca abriu a skill; essas sessões contam contra as skills. Em todas as 91 sessões com skill da execução `claude-opus-5-5` em `fa81209` o agente abriu a skill.
+Em 2 das 91 sessões com skill da execução `claude-sonnet-5-5` em `fa81209` o agente nunca abriu a skill; essas sessões contam contra as skills. Em todas as 91 sessões com skill da execução `claude-opus-5-5` em `fa81209` o agente abriu a skill. Em todas as 91 sessões com skill da execução `gemini-4-neon-high` em `fa81209` o agente abriu a skill.
 <!-- /generated:runs -->
 
 ## Escopo
@@ -186,7 +188,7 @@ skills para a seguinte; os resumos das execuções registram o que mudou e por q
 
 <!-- generated:cut-rule -->
 A regra de corte declarada antes da primeira execução: skill que não move os próprios evals em pelo menos
-10 pontos é incorporada a outra ou removida. Na execução `claude-sonnet-5-5` em `fa81209` o menor ganho foi de 25.9 pontos (pii-and-card-data) e o maior de 79.3 (webhook-handling); na execução `claude-opus-5-5` em `fa81209` o menor ganho foi de 37.0 pontos (pii-and-card-data) e o maior de 70.4 (transaction-classification).
+10 pontos é incorporada a outra ou removida. Na execução `claude-sonnet-5-5` em `fa81209` o menor ganho foi de 25.9 pontos (pii-and-card-data) e o maior de 79.3 (webhook-handling); na execução `claude-opus-5-5` em `fa81209` o menor ganho foi de 37.0 pontos (pii-and-card-data) e o maior de 70.4 (transaction-classification); na execução `gemini-4-neon-high` em `fa81209` o menor ganho foi de 18.5 pontos (pii-and-card-data) e o maior de 69.0 (reconciliation).
 O ruído de uma célula é de cerca de ±14 pontos, então a regra é aplicada sobre execuções repetidas, não sobre uma.
 <!-- /generated:cut-rule -->
 

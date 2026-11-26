@@ -641,3 +641,76 @@ def test_thinking_tokens_recorded_beside_the_token_counts(usage, expected, runne
     session = runner.call_session(runner_args, "subject", tmp_path, "prompt")
     assert session["thinking_tokens"] == expected
     assert set(session["tokens"]) == set(runner.TOKEN_KEYS)  # thinking is not added to the summed counts
+
+
+def test_agy_parse_and_blind_transcript():
+    ndjson = "\n".join([
+        json.dumps({"event": "init", "conversation_id": "c1", "init": {"model": "gemini-4-neon-high", "cwd": "<project>", "tools": ["read_file", "write_file"]}}),
+        json.dumps({"event": "step_update", "step_update": {"step_index": 2, "state": "DONE", "step_type": "tool", "tool_name": "read_file",
+                    "tool_info": {"name": "read_file", "parameters": {"Path": "<project>/.agents/skills/money-arithmetic/SKILL.md"}, "output": "secret skill"}}}),
+        json.dumps({"event": "step_update", "step_update": {"step_index": 3, "state": "DONE", "step_type": "tool", "tool_name": "write_file",
+                    "tool_info": {"name": "write_file", "parameters": {"Path": "<project>/src/money.py"}}}}),
+        json.dumps({"event": "step_update", "step_update": {"step_index": 4, "state": "ACTIVE", "step_type": "agent_response", "text_delta": "All "}}),
+        json.dumps({"event": "step_update", "step_update": {"step_index": 4, "state": "DONE", "step_type": "agent_response", "text_delta": "done."}}),
+        json.dumps({"event": "result", "result": {"conversation_id": "c1", "status": "SUCCESS", "response": "All done.",
+                    "usage": {"input_tokens": 100, "output_tokens": 50, "thinking_tokens": 30, "cache_read_tokens": 20, "total_tokens": 150}}}),
+    ])
+    res, reported, usage, thinking, err = runner.parse_agy_transcript(ndjson)
+    assert err is None and res["response"] == "All done."
+    assert reported == {"model": "gemini-4-neon-high", "tools": ["read_file", "write_file"], "conversation_id": "c1"}
+    assert usage == {"input_tokens": 100, "output_tokens": 50, "cache_read_input_tokens": 20, "cache_creation_input_tokens": 0}
+    assert thinking == 30
+    blinded = runner.blind_transcript(ndjson)
+    assert ".agents/skills" not in blinded and "secret skill" not in blinded
+    assert "src/money.py" in blinded and "All done." in blinded
+
+
+def test_agy_uses_claude_grader_and_installs_under_agents(tmp_path, monkeypatch):
+    args = runner.cli_parser().parse_args([
+        "--skill", "money-arithmetic", "--agent", "agy",
+        "--subject-model", "gemini-4-neon-high", "--grader-model", "claude-sonnet-5-5",
+        "--results-dir", str(tmp_path / "results"),
+    ])
+    assert runner.role_agent(args, "subject") == "agy"
+    assert runner.role_agent(args, "grader") == "claude"
+    seen = []
+    def fake_run(argv, **kwargs):
+        if argv[:2] == ["git", "init"]:
+            (kwargs["cwd"] / ".git").mkdir(exist_ok=True)
+            return SimpleNamespace(returncode=0, stdout="", stderr="")
+        seen.append((argv[0], kwargs["cwd"], kwargs["env"]))
+        if argv[0] == "agy":
+            (kwargs["cwd"] / "test_money.py").write_text("def test_ok(): assert True\n")
+            out = "\n".join([
+                json.dumps({"event": "init", "conversation_id": "c1", "init": {"model": "gemini-4-neon-high", "tools": []}}),
+                json.dumps({"event": "result", "result": {"status": "SUCCESS", "response": "done",
+                            "usage": {"input_tokens": 10, "output_tokens": 5, "thinking_tokens": 2, "cache_read_tokens": 0}}}),
+            ])
+            return SimpleNamespace(returncode=0, stdout=out, stderr="")
+        return SimpleNamespace(returncode=0, stdout=json.dumps({"type": "result", "result": '[{"passed":true,"evidence":"ok"}]',
+                                                                "usage": {"input_tokens": 4, "output_tokens": 2}}), stderr="")
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    record, count = runner.evaluate_prompt(args, runner.ROOT / "skills/money-arithmetic",
+                                           {"id": 1, "prompt": "Synthetic", "expectations": ["Tests pass"]}, "with", 1, tmp_path)
+    assert count == 2
+    assert [s[0] for s in seen] == ["agy", "claude"]
+    assert ".agents/skills/money-arithmetic/SKILL.md" in record["installed_paths"]
+    assert not any(f["path"].startswith((".git", ".agents")) for f in record["files"])
+    assert record["verdicts"][0]["status"] == "passed"
+
+
+def test_agy_headless_permission_abort_records_error(tmp_path, monkeypatch):
+    args = runner.cli_parser().parse_args([
+        "--skill", "money-arithmetic", "--agent", "agy",
+        "--subject-model", "gemini-4-neon-high", "--grader-model", "claude-sonnet-5-5",
+        "--results-dir", str(tmp_path / "results"),
+    ])
+    out = "\n".join([
+        json.dumps({"event": "init", "conversation_id": "c1", "init": {"model": "gemini-4-neon-high", "tools": []}}),
+        json.dumps({"event": "result", "result": {"status": "SUCCESS", "response": "",
+                    "usage": {"input_tokens": 10, "output_tokens": 5, "thinking_tokens": 2, "cache_read_tokens": 0}}}),
+    ])
+    monkeypatch.setattr(subprocess, "run", lambda *a, **k: SimpleNamespace(
+        returncode=0, stdout=out, stderr='jetski: no output produced — a tool required the "command" permission'))
+    session = runner.call_session(args, "subject", tmp_path, "prompt")
+    assert session["error"] and session["error"].startswith("headless permission abort:")

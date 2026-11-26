@@ -113,7 +113,9 @@ def headline(lang, latest, prompts, all_runs=()):
     graders = {r["meta"]["grader_model"] for r in runs_here}
     grader = next(iter(graders)) if len(graders) == 1 else None
     links = ", ".join(f"[evals/results/{r['id']}](evals/results/{r['id']}/summary.md)" for r in runs_here)
-    models = " and ".join(f"`{m}`" for m in per_model) if lang == "en" else " e ".join(f"`{m}`" for m in per_model)
+    model_tags = [f"`{m}`" for m in per_model]
+    conj = " and " if lang == "en" else " e "
+    models = (", ".join(model_tags[:-1]) + conj + model_tags[-1]) if len(model_tags) > 2 else conj.join(model_tags)
     if lang == "en":
         scores = "; ".join(f"`{m}`: **{nums(r)[0]} with the skills, {nums(r)[1]} without** ({nums(r)[2]} against {nums(r)[3]} of {nums(r)[4]})" for m, r in per_model.items()) if len(per_model) > 1 else \
                  f"**With the skills, {nums(latest)[0]}. Without them, {nums(latest)[1]}** ({nums(latest)[2]} against {nums(latest)[3]} of {nums(latest)[4]})"
